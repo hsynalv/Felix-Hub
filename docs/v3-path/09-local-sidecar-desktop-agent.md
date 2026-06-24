@@ -1,6 +1,6 @@
 # 09 — Local Sidecar / Desktop Agent
 
-> **Status:** not_started  
+> **Status:** faz_a_e_mvp_done  
 > **Öncelik:** P3 (Faz 4)  
 > **Bağımlılık:** [02-policy-approval-center.md](./02-policy-approval-center.md), [10-production-hardening.md](./10-production-hardening.md)
 

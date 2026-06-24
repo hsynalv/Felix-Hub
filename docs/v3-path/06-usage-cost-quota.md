@@ -1,6 +1,6 @@
 # 06 — Usage, Cost ve Quota
 
-> **Status:** not_started  
+> **Status:** faz_a_b_done (Faz 2 exit)  
 > **Öncelik:** P1 (Faz 2)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md) (`run_id` join)
 

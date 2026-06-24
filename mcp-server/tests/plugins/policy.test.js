@@ -163,6 +163,9 @@ describe("Policy Engine", () => {
         method: "DELETE",
         body: {},
         requestedBy: "test",
+        toolName: undefined,
+        runId: null,
+        riskLevel: "write",
       });
     });
 

@@ -1,6 +1,6 @@
 # 03 — Project Workspace Intelligence
 
-> **Status:** not_started  
+> **Status:** faz_a_done (Faz 2 exit)  
 > **Öncelik:** P1 (Faz 2)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md), brain/RAG stabilitesi
 

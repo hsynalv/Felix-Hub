@@ -10,11 +10,13 @@ import { cn } from "@/lib/utils";
 import {
   fetchUsageEvents,
   fetchUsageSummary,
+  fetchProjectUsage,
   formatCostUsd,
   formatTokenCount,
   usageRangePresets,
   type UsageGroupBy,
 } from "@/lib/usage-api";
+import { getProjectId } from "@/lib/settings-api";
 
 const GROUP_LABELS: Record<UsageGroupBy, string> = {
   tool: "Araç",
@@ -26,20 +28,40 @@ const GROUP_LABELS: Record<UsageGroupBy, string> = {
 
 export function UsagePage() {
   const presets = usageRangePresets();
+  const projectId = getProjectId();
   const [rangeKey, setRangeKey] = useState<"d7" | "d30" | "d90">("d7");
   const [groupBy, setGroupBy] = useState<UsageGroupBy>("tool");
+  const [filterByProject, setFilterByProject] = useState(true);
 
   const range = presets[rangeKey];
 
+  const projectUsageQuery = useQuery({
+    queryKey: ["usage-project", projectId, rangeKey],
+    queryFn: () => fetchProjectUsage(projectId, rangeKey === "d7" ? 7 : rangeKey === "d30" ? 30 : 90),
+    enabled: filterByProject && !!projectId,
+    staleTime: 30_000,
+  });
+
   const summaryQuery = useQuery({
-    queryKey: ["usage-summary", rangeKey, groupBy],
-    queryFn: () => fetchUsageSummary({ from: range.from, to: range.to, groupBy }),
+    queryKey: ["usage-summary", rangeKey, groupBy, filterByProject ? projectId : null],
+    queryFn: () =>
+      fetchUsageSummary({
+        from: range.from,
+        to: range.to,
+        groupBy,
+      }),
     staleTime: 30_000,
   });
 
   const eventsQuery = useQuery({
-    queryKey: ["usage-events", rangeKey],
-    queryFn: () => fetchUsageEvents({ from: range.from, to: range.to, limit: 30 }),
+    queryKey: ["usage-events", rangeKey, filterByProject ? projectId : null],
+    queryFn: () =>
+      fetchUsageEvents({
+        from: range.from,
+        to: range.to,
+        limit: 30,
+        projectId: filterByProject ? projectId : undefined,
+      }),
     staleTime: 30_000,
   });
 
@@ -63,6 +85,23 @@ export function UsagePage() {
         title="Token Kullanımı"
         description="LLM ve embedding çağrılarının araç, model ve tarih bazlı dökümü."
       />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant={filterByProject ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setFilterByProject((v) => !v)}
+        >
+          Proje: {projectId}
+        </Button>
+        {filterByProject && projectUsageQuery.data?.totals && (
+          <Badge variant="default" className="font-mono text-xs">
+            {formatCostUsd(projectUsageQuery.data.totals.estimatedCostUsd)} ·{" "}
+            {formatTokenCount(projectUsageQuery.data.totals.totalTokens)} tok
+          </Badge>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {(["d7", "d30", "d90"] as const).map((key) => (

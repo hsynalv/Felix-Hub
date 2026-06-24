@@ -8,6 +8,7 @@ import { ConnectionsSettingsPanel } from "@/components/settings/ConnectionsSetti
 import { PluginEnvPanel } from "@/components/settings/PluginEnvPanel";
 import { LlmRoutingPanel } from "@/components/settings/LlmRoutingPanel";
 import { ProjectSettingsPanel } from "@/components/settings/ProjectSettingsPanel";
+import { UsageQuotaPanel } from "@/components/settings/UsageQuotaPanel";
 import { SettingsNav, type SettingsSectionId } from "@/components/settings/SettingsNav";
 import { fetchSettings } from "@/lib/settings-api";
 import { ApiError } from "@/lib/api-client";
@@ -63,7 +64,12 @@ export function SettingsPage() {
         )}
 
         {section === "appearance" && <AppearanceSettingsPanel />}
-        {section === "project" && <ProjectSettingsPanel />}
+        {section === "project" && (
+          <>
+            <ProjectSettingsPanel />
+            <UsageQuotaPanel />
+          </>
+        )}
 
         {isForbidden && needsAdmin && (
           <Card className="border-amber-500/40">

@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/index.js",
   "bin": {
-    "mcp-hub-stdio": "./bin/mcp-hub-stdio.js"
+    "mcp-hub-stdio": "./bin/mcp-hub-stdio.js",
+    "mcp-hub-sidecar": "./bin/sidecar-daemon.js"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -31,7 +32,9 @@
     "sync:plugin-meta-env": "node scripts/sync-plugin-meta-env.js",
     "scaffold:plugin-meta": "node scripts/scaffold-plugin-meta.js",
     "test:integration": "vitest run --config vitest.integration.config.js",
-    "test:integration:stable": "vitest run --config vitest.integration.stable.config.js"
+    "test:integration:stable": "vitest run --config vitest.integration.stable.config.js",
+    "eval:smoke": "vitest run tests/eval/trace-regression.test.js",
+    "sidecar:daemon": "node bin/sidecar-daemon.js"
   },
   "keywords": [
     "ai",

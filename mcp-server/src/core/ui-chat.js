@@ -18,6 +18,7 @@ import {
   getApprovalWaiter,
   selectChatTools,
   getChatProvider,
+  assertChatQuota,
 } from "./chat-orchestrator.js";
 import { buildCompactContext } from "../plugins/brain/brain.context.js";
 import { isPersistenceHealthy } from "./persistence/index.js";
@@ -301,6 +302,23 @@ export function registerUiChatRoutes(app) {
       const status = await checkProviderAvailable();
       if (!status.available) {
         sseWrite(res, "error", { message: status.hint || "LLM provider unavailable" });
+        res.end();
+        return;
+      }
+    }
+
+    try {
+      const quota = await assertChatQuota(context.projectId);
+      if (quota.warning) {
+        sseWrite(res, "quota_warning", {
+          message: "Project approaching usage quota",
+          usage: quota.usage,
+          quota: quota.quota,
+        });
+      }
+    } catch (err) {
+      if (err.code === "quota_exceeded") {
+        sseWrite(res, "error", { code: "quota_exceeded", message: err.message });
         res.end();
         return;
       }

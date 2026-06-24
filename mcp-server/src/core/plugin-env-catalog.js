@@ -159,6 +159,22 @@ export function getMissingCatalogEnvVars(pluginName, envVars) {
   return catalog.filter((expected) => !declared.has(expected.name)).map((e) => e.name);
 }
 
+/**
+ * Check whether required catalog env vars are configured at runtime.
+ * @param {string} pluginName
+ */
+export function getPluginEnvCompleteness(pluginName) {
+  const catalog = PLUGIN_ENV_CATALOG[pluginName];
+  if (!catalog?.length) return { complete: true, missing: [] };
+
+  const missing = catalog
+    .filter((v) => v.required)
+    .filter((v) => !getVarRuntimeState(v.name).configured)
+    .map((v) => v.name);
+
+  return { complete: missing.length === 0, missing };
+}
+
 function maskKeyValue(key, value) {
   if (!value) return null;
   if (SENSITIVE_KEY.test(key)) return maskSecret(value);

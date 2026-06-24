@@ -105,3 +105,12 @@ export function deleteProject(key) {
   save(all);
   return true;
 }
+
+export function updateProjectLinks(projectKey, links) {
+  const all = load();
+  if (!all[projectKey]) throw new Error(`Project "${projectKey}" not found`);
+  all[projectKey].links = { ...(all[projectKey].links || {}), ...links };
+  all[projectKey].updatedAt = new Date().toISOString();
+  save(all);
+  return all[projectKey].links;
+}

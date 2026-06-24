@@ -272,6 +272,18 @@ export function unregisterTool(name) {
 }
 
 /**
+ * Remove all tools registered for a plugin.
+ * @param {string} pluginName
+ */
+export function unregisterToolsForPlugin(pluginName) {
+  for (const [name, tool] of tools.entries()) {
+    if (tool.plugin === pluginName) {
+      tools.delete(name);
+    }
+  }
+}
+
+/**
  * Get a tool by name.
  * @param {string} name
  * @returns {Object|undefined}

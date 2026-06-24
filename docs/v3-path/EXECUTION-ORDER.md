@@ -58,40 +58,52 @@
 
 ---
 
-## Faz 2 — Zeka ve maliyet — **next**
+## Faz 2 — Zeka ve maliyet — **done** ✅
 
-| Sıra | Pillar | Süre |
-|------|--------|------|
-| 2.1 | [03-project-workspace-intelligence.md](./03-project-workspace-intelligence.md) — Faz A | 3 hafta |
-| 2.2 | [06-usage-cost-quota.md](./06-usage-cost-quota.md) — Faz A–B | 2 hafta |
-| 2.3 | [04-visual-run-dashboard.md](./04-visual-run-dashboard.md) — cost join (Faz 2) | 1 hafta |
+| Sıra | Pillar | Durum |
+|------|--------|-------|
+| 2.1 | [03-project-workspace-intelligence.md](./03-project-workspace-intelligence.md) — Faz A | done |
+| 2.2 | [06-usage-cost-quota.md](./06-usage-cost-quota.md) — Faz A–B | done |
+| 2.3 | [04-visual-run-dashboard.md](./04-visual-run-dashboard.md) — cost join (Faz 2) | done |
 
 **Exit gate:**
-- [ ] Proje seçildiğinde context graph sorgulanabilir
-- [ ] Run başına maliyet görünür; proje bazlı quota uyarısı çalışır
+- [x] Proje seçildiğinde context graph sorgulanabilir
+- [x] Run başına maliyet görünür; proje bazlı quota uyarısı çalışır
+
+> **Milestone:** `v3.1-beta` — Faz 2 tamamlandı, Faz 3'e geçilebilir.
 
 ---
 
-## Faz 3 — Ekosistem ve kalite
+## Faz 3 — Ekosistem ve kalite — **done** ✅
 
-| Sıra | Pillar | Süre |
-|------|--------|------|
-| 3.1 | [08-secrets-env-management.md](./08-secrets-env-management.md) | 2 hafta |
-| 3.2 | [05-connector-marketplace.md](./05-connector-marketplace.md) | 2 hafta |
-| 3.3 | [07-eval-regression.md](./07-eval-regression.md) — Faz A | 2 hafta |
+| Sıra | Pillar | Durum |
+|------|--------|-------|
+| 3.1 | [08-secrets-env-management.md](./08-secrets-env-management.md) Faz A–B | done (test + catalog) |
+| 3.2 | [05-connector-marketplace.md](./05-connector-marketplace.md) Faz A–B | done |
+| 3.3 | [07-eval-regression.md](./07-eval-regression.md) Faz A | done |
 
 **Exit gate:**
-- [ ] Plugin enable/disable + connection test wizard
-- [ ] En az 1 golden agent trace regression CI'da
+- [x] Plugin enable/disable + connection test wizard
+- [x] En az 1 golden agent trace regression CI'da (`eval:smoke`)
+
+> **Milestone:** `v3.2-beta` — Faz 3 tamamlandı, Faz 4'e geçilebilir.
 
 ---
 
-## Faz 4 — Uzantı
+## Faz 4 — Uzantı — **done** ✅
 
-| Sıra | Pillar | Süre |
-|------|--------|------|
-| 4.1 | [09-local-sidecar-desktop-agent.md](./09-local-sidecar-desktop-agent.md) | 3+ hafta |
-| 4.2 | [03-project-workspace-intelligence.md](./03-project-workspace-intelligence.md) — Faz B | sürekli |
+| Sıra | Pillar | Durum |
+|------|--------|-------|
+| 4.1 | [09-local-sidecar-desktop-agent.md](./09-local-sidecar-desktop-agent.md) Faz A–E (MVP) | done |
+| 4.2 | [03-project-workspace-intelligence.md](./03-project-workspace-intelligence.md) Faz B–C (MVP) | done |
+
+**Exit gate:**
+- [x] Sidecar delegation + pairing + auth token
+- [x] Terminal session + desktop notify
+- [x] Obsidian vault ↔ brain sync on index
+- [x] [docs/sidecar.md](../sidecar.md) + `mcp-hub-sidecar` bin
+
+> **Milestone:** `v3.3` — Faz 4 tamamlandı.
 
 ---
 

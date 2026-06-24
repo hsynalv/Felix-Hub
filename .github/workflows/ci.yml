@@ -51,6 +51,12 @@ jobs:
         env:
           NODE_ENV: test
 
+      - name: Golden trace regression (eval smoke)
+        working-directory: mcp-server
+        run: pnpm run eval:smoke
+        env:
+          NODE_ENV: test
+
       - name: Check coverage
         working-directory: mcp-server
         run: pnpm run test:coverage

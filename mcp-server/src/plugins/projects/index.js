@@ -8,7 +8,15 @@ import {
   createProject,
   upsertProjectEnv,
   deleteProject,
+  updateProjectLinks,
 } from "./projects.store.js";
+import {
+  getProjectContext,
+  getProjectChanges,
+} from "../../core/project-context/project-context.service.js";
+import { syncProjectIndex } from "../../core/project-context/project-indexer.js";
+import { submitJob } from "../../core/jobs.js";
+import { PROJECT_INDEX_JOB_TYPE } from "../../core/project-context/project-index-job.js";
 
 export const name = "projects";
 export const version = "1.0.0";
@@ -20,6 +28,10 @@ export const endpoints = [
   { method: "GET",    path: "/projects/validate",   description: "Validate project config",      scope: "read"   },
   { method: "POST",   path: "/projects",            description: "Create a new project",          scope: "write"  },
   { method: "GET",    path: "/projects/:name",      description: "Get project detail",            scope: "read"   },
+  { method: "GET",    path: "/projects/:name/context", description: "Project context graph",     scope: "read"   },
+  { method: "GET",    path: "/projects/:name/changes", description: "Recent project changes",   scope: "read"   },
+  { method: "PUT",    path: "/projects/:name/links", description: "Update project links",        scope: "write"  },
+  { method: "POST",   path: "/projects/:name/sync", description: "Sync project index",         scope: "write"  },
   { method: "GET",    path: "/projects/:name/:env", description: "Get resolved env config",      scope: "read"   },
   { method: "PUT",    path: "/projects/:name/:env", description: "Update env config",             scope: "write"  },
   { method: "DELETE", path: "/projects/:name",      description: "Delete a project",              scope: "danger" },
@@ -45,6 +57,13 @@ const envConfigSchema = z.object({
   slackWebhook:     z.string().optional(),
   description:      z.string().optional(),
 }).catchall(z.string());
+
+const linksSchema = z.object({
+  githubRepo: z.string().optional(),
+  notionProjectId: z.string().optional(),
+  obsidianVaultPath: z.string().optional(),
+  defaultBranch: z.string().optional(),
+});
 
 function validate(schema, body, res) {
   const result = schema.safeParse(body);
@@ -131,6 +150,58 @@ export function register(app) {
    * GET /projects/:name
    * Get full project detail (all envs, raw config).
    */
+  router.get("/:name/context", requireScope("read"), async (req, res) => {
+    try {
+      const data = await getProjectContext(req.params.name);
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: "context_failed", message: err.message });
+    }
+  });
+
+  router.get("/:name/changes", requireScope("read"), async (req, res) => {
+    try {
+      const sinceDays = Math.min(parseInt(req.query.sinceDays, 10) || 14, 90);
+      const data = await getProjectChanges(req.params.name, { sinceDays });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: "changes_failed", message: err.message });
+    }
+  });
+
+  router.put("/:name/links", requireScope("write"), (req, res) => {
+    const data = validate(linksSchema, req.body, res);
+    if (!data) return;
+    try {
+      const links = updateProjectLinks(req.params.name, data);
+      res.json({ ok: true, project: req.params.name, links });
+    } catch (err) {
+      res.status(404).json({ ok: false, error: "project_not_found", message: err.message });
+    }
+  });
+
+  router.post("/:name/sync", requireScope("write"), async (req, res) => {
+    try {
+      const sinceDays = Math.min(parseInt(req.body?.sinceDays, 10) || 14, 90);
+      const async = req.body?.async !== false;
+      if (async) {
+        const job = submitJob(
+          PROJECT_INDEX_JOB_TYPE,
+          { projectId: req.params.name, sinceDays },
+          { projectId: req.params.name }
+        );
+        return res.json({ ok: true, data: { async: true, jobId: job.id, projectId: req.params.name } });
+      }
+      const result = await syncProjectIndex(req.params.name, { sinceDays });
+      if (!result.ok) {
+        return res.status(404).json({ ok: false, error: result.error });
+      }
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "sync_failed", message: err.message } });
+    }
+  });
+
   router.get("/:name", requireScope("read"), (req, res) => {
     const project = getProject(req.params.name);
     if (!project) return res.status(404).json({ ok: false, error: "not_found" });

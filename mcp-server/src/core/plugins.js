@@ -2,9 +2,10 @@ import { readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { config } from "./config.js";
-import { registerTool, clearTools } from "./tool-registry.js";
+import { registerTool, clearTools, unregisterToolsForPlugin } from "./tool-registry.js";
 import { validatePluginMeta, getQualitySummary } from "./plugin-meta.js";
 import { isStrictPluginLoading } from "./plugin-strict.js";
+import { isPluginEnabled, setPluginEnabled as persistPluginEnabled } from "./plugin-state.service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -17,6 +18,31 @@ function resolvePluginsDir() {
 
 const loaded = [];
 const failedPlugins = [];
+
+/** @type {Map<string, object[]>} Cached tool defs for runtime re-enable */
+const pluginToolCache = new Map();
+
+function registerPluginTools(plugin, dir) {
+  const pluginName = plugin.name || dir;
+  const toolDefs = Array.isArray(plugin.tools) ? plugin.tools : [];
+  pluginToolCache.set(pluginName, toolDefs);
+
+  let registered = 0;
+  let failed = 0;
+  for (const tool of toolDefs) {
+    try {
+      registerTool({
+        ...tool,
+        plugin: pluginName,
+      });
+      registered++;
+    } catch (err) {
+      console.warn(`[plugins] failed to register tool "${tool.name}" from "${dir}": ${err.message}`);
+      failed++;
+    }
+  }
+  return { registered, failed };
+}
 
 /**
  * Discover and load plugins from src/plugins/<name>/index.js.
@@ -39,6 +65,7 @@ export async function loadPlugins(app) {
   loaded.length = 0;
   failedPlugins.length = 0;
   clearTools();
+  pluginToolCache.clear();
   const dirs = readdirSync(resolvePluginsDir(), { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name);
@@ -125,24 +152,21 @@ export async function loadPlugins(app) {
       continue;
     }
 
-    // Register MCP tools from plugin
+    const pluginName = plugin.name ?? plugin.metadata?.name ?? dir;
+    const enabled = await isPluginEnabled(pluginName);
+
+    // Register MCP tools from plugin (skip when disabled)
     let pluginToolsRegistered = 0;
     let pluginToolsFailed = 0;
-    if (Array.isArray(plugin.tools)) {
-      for (const tool of plugin.tools) {
-        try {
-          registerTool({
-            ...tool,
-            plugin: plugin.name || plugin.metadata?.name || dir,
-          });
-          stats.toolsRegistered++;
-          pluginToolsRegistered++;
-        } catch (err) {
-          console.warn(`[plugins] failed to register tool "${tool.name}" from "${dir}": ${err.message}`);
-          stats.toolsFailed++;
-          pluginToolsFailed++;
-        }
-      }
+    if (enabled) {
+      const toolResult = registerPluginTools(plugin, dir);
+      pluginToolsRegistered = toolResult.registered;
+      pluginToolsFailed = toolResult.failed;
+      stats.toolsRegistered += pluginToolsRegistered;
+      stats.toolsFailed += pluginToolsFailed;
+    } else {
+      pluginToolCache.set(pluginName, Array.isArray(plugin.tools) ? plugin.tools : []);
+      console.log(`[plugins] "${pluginName}" disabled — tools not registered`);
     }
 
     // Prefer flat exports; fall back to plugin.metadata for standardized plugins
@@ -162,7 +186,6 @@ export async function loadPlugins(app) {
       })) ?? [],
       requires:     plugin.requires     ?? pm.requires    ?? [],
       examples:     plugin.examples     ?? pm.examples    ?? [],
-      // Include metadata from plugin.meta.json
       status:       pluginMeta.status,
       owner:        pluginMeta.owner,
       testLevel:    pluginMeta.testLevel,
@@ -171,11 +194,12 @@ export async function loadPlugins(app) {
       resilience:   pluginMeta.resilience,
       security:     pluginMeta.security,
       documentation: pluginMeta.documentation,
+      enabled,
     };
 
     loaded.push(manifest);
     stats.pluginsLoaded++;
-    console.log(`[plugins] loaded ${manifest.name}@${manifest.version} (${pluginToolsRegistered} tools${pluginToolsFailed > 0 ? `, ${pluginToolsFailed} failed` : ""})`);
+    console.log(`[plugins] loaded ${manifest.name}@${manifest.version} (${pluginToolsRegistered} tools${pluginToolsFailed > 0 ? `, ${pluginToolsFailed} failed` : ""}${!enabled ? ", disabled" : ""})`);
   }
 
   // Print startup validation summary with diagnostics
@@ -247,4 +271,31 @@ export function getPlugins() {
 /** Returns list of plugins that failed to load. */
 export function getFailedPlugins() {
   return [...failedPlugins];
+}
+
+/**
+ * Runtime enable/disable without full server restart.
+ * @param {string} pluginName
+ * @param {boolean} enabled
+ * @param {{ actor?: string, envComplete?: boolean }} opts
+ */
+export async function togglePluginRuntime(pluginName, enabled, { actor = "api", envComplete = true } = {}) {
+  const manifest = loaded.find((p) => p.name === pluginName);
+  if (!manifest) {
+    throw new Error(`Plugin "${pluginName}" is not loaded`);
+  }
+
+  await persistPluginEnabled(pluginName, enabled, { actor, envComplete });
+  manifest.enabled = enabled;
+
+  if (!enabled) {
+    unregisterToolsForPlugin(pluginName);
+    return manifest;
+  }
+
+  const cached = pluginToolCache.get(pluginName) || [];
+  for (const tool of cached) {
+    registerTool({ ...tool, plugin: pluginName });
+  }
+  return manifest;
 }

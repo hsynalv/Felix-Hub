@@ -1,4 +1,4 @@
-import { apiGet } from "./api-client";
+import { apiGet, apiPut } from "./api-client";
 
 export interface UsageGroup {
   key: string;
@@ -24,6 +24,36 @@ export interface UsageEvent {
   completionTokens: number;
   totalTokens: number;
   estimatedCostUsd?: number | null;
+  runId?: string | null;
+  projectId?: string | null;
+}
+
+export interface UsageTotals {
+  callCount: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
+export interface UsageQuota {
+  id: string;
+  scopeType: string;
+  scopeId: string;
+  period: string;
+  limitTokens?: number | null;
+  limitUsd?: number | null;
+  alertThreshold: number;
+  hardStop: boolean;
+  enabled: boolean;
+}
+
+export interface QuotaCheckResult {
+  allowed: boolean;
+  warning?: boolean;
+  reason?: string;
+  usage?: UsageTotals;
+  quota?: UsageQuota;
 }
 
 export interface UsageStats {
@@ -55,6 +85,8 @@ export async function fetchUsageEvents(opts: {
   from?: string;
   to?: string;
   tool?: string;
+  runId?: string;
+  projectId?: string;
   limit?: number;
   offset?: number;
 }) {
@@ -62,10 +94,44 @@ export async function fetchUsageEvents(opts: {
   if (opts.from) params.set("from", opts.from);
   if (opts.to) params.set("to", opts.to);
   if (opts.tool) params.set("tool", opts.tool);
+  if (opts.runId) params.set("runId", opts.runId);
+  if (opts.projectId) params.set("projectId", opts.projectId);
   if (opts.limit) params.set("limit", String(opts.limit));
   if (opts.offset) params.set("offset", String(opts.offset));
   const q = params.toString();
   return apiGet<{ events: UsageEvent[]; total: number }>(`/usage/events${q ? `?${q}` : ""}`);
+}
+
+export async function fetchRunUsage(runId: string) {
+  return apiGet<{ runId: string; events: UsageEvent[]; totals: UsageTotals | null }>(
+    `/usage/runs/${encodeURIComponent(runId)}`
+  );
+}
+
+export async function fetchProjectUsage(projectId: string, days = 30) {
+  return apiGet<{ projectId: string; days: number; events: UsageEvent[]; totals: UsageTotals }>(
+    `/usage/projects/${encodeURIComponent(projectId)}?days=${days}`
+  );
+}
+
+export async function fetchUsageQuotas() {
+  return apiGet<{ quotas: UsageQuota[] }>("/usage/quotas");
+}
+
+export async function upsertUsageQuota(body: {
+  scopeType?: string;
+  scopeId?: string;
+  period?: string;
+  limitTokens?: number | null;
+  limitUsd?: number | null;
+  alertThreshold?: number;
+  hardStop?: boolean;
+}) {
+  return apiPut<UsageQuota>("/usage/quotas", body);
+}
+
+export async function checkProjectQuota(projectId: string) {
+  return apiGet<QuotaCheckResult>(`/usage/quotas/check?projectId=${encodeURIComponent(projectId)}`);
 }
 
 export async function fetchUsageStats(days = 7) {

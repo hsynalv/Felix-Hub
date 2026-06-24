@@ -1,6 +1,6 @@
 # 07 — Eval ve Regression Sistemi
 
-> **Status:** not_started  
+> **Status:** faz_a_done (Faz 3 exit)  
 > **Öncelik:** P2 (Faz 3)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md), [05-connector-marketplace.md](./05-connector-marketplace.md)
 

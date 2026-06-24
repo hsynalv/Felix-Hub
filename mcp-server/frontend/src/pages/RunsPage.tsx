@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Coins,
   Loader2,
   MessageSquare,
   XCircle,
@@ -24,6 +25,7 @@ import {
   OpsStatGrid,
 } from "@/components/ops/OpsPrimitives";
 import { getRun, getRunSteps, listRuns, cancelRun, replayRun, listWorkflowTemplates, startWorkflowTemplate, type AgentRun, type RunStep } from "@/lib/runs-api";
+import { formatCostUsd } from "@/lib/usage-api";
 import { useToast } from "@/providers/ToastProvider";
 import { cn, formatDuration, formatTime } from "@/lib/utils";
 
@@ -353,6 +355,13 @@ export function RunsPage() {
                 <span>{runAnalytics.toolCount} tool</span>
                 <span>{runAnalytics.errors} hata</span>
                 <span>{formatDuration(runAnalytics.totalMs)} toplam</span>
+                {detail?.usage?.estimatedCostUsd != null && (
+                  <span className="inline-flex items-center gap-1 text-foreground">
+                    <Coins className="h-3 w-3" />
+                    {formatCostUsd(detail.usage.estimatedCostUsd)}
+                    {detail.usage.totalTokens != null && ` · ${detail.usage.totalTokens.toLocaleString()} tok`}
+                  </span>
+                )}
               </div>
               <div className="space-y-2">
                 {steps.map((step, i) => (

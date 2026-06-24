@@ -23,6 +23,11 @@ export interface AgentRun {
   createdAt?: string;
   updatedAt?: string;
   error?: { code?: string; message?: string } | null;
+  usage?: {
+    callCount?: number;
+    totalTokens?: number;
+    estimatedCostUsd?: number;
+  } | null;
 }
 
 export interface RunStep {

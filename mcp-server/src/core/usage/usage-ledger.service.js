@@ -12,6 +12,9 @@ import { computeCostUsd } from "./usage-pricing.js";
 const DEFAULT_NS = "default";
 const DEFAULT_RETENTION_DAYS = 90;
 
+/** In-memory fallback when MSSQL unavailable */
+const memoryEvents = [];
+
 function parseJson(val) {
   if (!val) return null;
   try {
@@ -43,6 +46,8 @@ function rowToEvent(row) {
     correlationId: row.correlation_id,
     parentCorrelationId: row.parent_correlation_id,
     conversationId: row.conversation_id,
+    runId: row.run_id || null,
+    projectId: row.project_id || null,
     durationMs: row.duration_ms,
     success: !!row.success,
     metadata: parseJson(row.metadata_json),
@@ -53,8 +58,6 @@ function rowToEvent(row) {
  * @param {object} event
  */
 export async function recordUsageEvent(event) {
-  if (!isPersistenceHealthy()) return null;
-
   const promptTokens = event.promptTokens ?? 0;
   const completionTokens = event.completionTokens ?? 0;
   const totalTokens = event.totalTokens ?? promptTokens + completionTokens;
@@ -63,49 +66,82 @@ export async function recordUsageEvent(event) {
     computeCostUsd(event.model, promptTokens, completionTokens);
 
   const eventId = event.eventId || randomUUID();
+  const stored = {
+    eventId,
+    namespace: event.namespace || DEFAULT_NS,
+    source: event.source || "unknown",
+    channel: event.channel || null,
+    toolName: event.toolName || null,
+    pluginName: event.pluginName || null,
+    operationType: event.operationType || "chat_completion",
+    provider: event.provider || null,
+    model: event.model || null,
+    task: event.task || null,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    estimatedCostUsd: cost,
+    actor: event.actor || null,
+    correlationId: event.correlationId || null,
+    parentCorrelationId: event.parentCorrelationId || null,
+    conversationId: event.conversationId || null,
+    runId: event.runId || null,
+    projectId: event.projectId || null,
+    durationMs: event.durationMs ?? null,
+    success: event.success !== false,
+    metadata: event.metadata || null,
+    occurredAt: event.occurredAt || new Date().toISOString(),
+  };
+
+  memoryEvents.push(stored);
+  if (memoryEvents.length > 5000) memoryEvents.shift();
+
+  if (!isPersistenceHealthy()) return eventId;
 
   try {
     await persistenceQuery(
       `INSERT INTO llm_usage_events (
         event_id, namespace, source, channel, tool_name, plugin_name, operation_type,
         provider, model, task, prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd,
-        actor, correlation_id, parent_correlation_id, conversation_id,
+        actor, correlation_id, parent_correlation_id, conversation_id, run_id, project_id,
         duration_ms, success, metadata_json, occurred_at
       ) VALUES (
         @eventId, @namespace, @source, @channel, @toolName, @pluginName, @operationType,
         @provider, @model, @task, @promptTokens, @completionTokens, @totalTokens, @estimatedCostUsd,
-        @actor, @correlationId, @parentCorrelationId, @conversationId,
+        @actor, @correlationId, @parentCorrelationId, @conversationId, @runId, @projectId,
         @durationMs, @success, @metadataJson, @occurredAt
       )`,
       {
         eventId,
-        namespace: event.namespace || DEFAULT_NS,
-        source: event.source || "unknown",
-        channel: event.channel || null,
-        toolName: event.toolName || null,
-        pluginName: event.pluginName || null,
-        operationType: event.operationType || "chat_completion",
-        provider: event.provider || null,
-        model: event.model || null,
-        task: event.task || null,
+        namespace: stored.namespace,
+        source: stored.source,
+        channel: stored.channel,
+        toolName: stored.toolName,
+        pluginName: stored.pluginName,
+        operationType: stored.operationType,
+        provider: stored.provider,
+        model: stored.model,
+        task: stored.task,
         promptTokens,
         completionTokens,
         totalTokens,
         estimatedCostUsd: cost,
-        actor: event.actor || null,
-        correlationId: event.correlationId || null,
-        parentCorrelationId: event.parentCorrelationId || null,
-        conversationId: event.conversationId || null,
-        durationMs: event.durationMs ?? null,
-        success: event.success !== false ? 1 : 0,
-        metadataJson: event.metadata ? JSON.stringify(event.metadata) : null,
-        occurredAt: event.occurredAt ? new Date(event.occurredAt) : new Date(),
+        actor: stored.actor,
+        correlationId: stored.correlationId,
+        parentCorrelationId: stored.parentCorrelationId,
+        conversationId: stored.conversationId,
+        runId: stored.runId,
+        projectId: stored.projectId,
+        durationMs: stored.durationMs,
+        success: stored.success ? 1 : 0,
+        metadataJson: stored.metadata ? JSON.stringify(stored.metadata) : null,
+        occurredAt: stored.occurredAt ? new Date(stored.occurredAt) : new Date(),
       }
     );
     return eventId;
   } catch (err) {
     console.warn("[usage-ledger] record failed:", err.message);
-    return null;
+    return eventId;
   }
 }
 
@@ -135,12 +171,26 @@ export async function queryEvents({
   source,
   model,
   conversationId,
+  runId,
+  projectId,
   namespace = DEFAULT_NS,
   limit = 50,
   offset = 0,
 } = {}) {
   if (!isPersistenceHealthy()) {
-    return { events: [], total: 0 };
+    let events = memoryEvents.filter((e) => e.namespace === namespace && e.success);
+    const { fromDate, toDate } = defaultDateRange(from, to);
+    events = events.filter((e) => {
+      const t = new Date(e.occurredAt);
+      return t >= fromDate && t < toDate;
+    });
+    if (tool) events = events.filter((e) => e.toolName === tool);
+    if (source) events = events.filter((e) => e.source === source);
+    if (model) events = events.filter((e) => e.model === model);
+    if (conversationId) events = events.filter((e) => e.conversationId === conversationId);
+    if (runId) events = events.filter((e) => e.runId === runId);
+    if (projectId) events = events.filter((e) => e.projectId === projectId);
+    return { events: events.slice(offset, offset + limit), total: events.length };
   }
 
   const { fromDate, toDate } = defaultDateRange(from, to);
@@ -170,6 +220,14 @@ export async function queryEvents({
   if (conversationId) {
     conditions.push("conversation_id = @conversationId");
     params.conversationId = conversationId;
+  }
+  if (runId) {
+    conditions.push("run_id = @runId");
+    params.runId = runId;
+  }
+  if (projectId) {
+    conditions.push("project_id = @projectId");
+    params.projectId = projectId;
   }
 
   const where = conditions.join(" AND ");
@@ -283,6 +341,61 @@ export async function queryConversationUsage(conversationId, namespace = DEFAULT
   );
 
   return { conversationId, events, totals };
+}
+
+function sumUsageEvents(events) {
+  return events.reduce(
+    (acc, e) => ({
+      callCount: acc.callCount + 1,
+      promptTokens: acc.promptTokens + (e.promptTokens || 0),
+      completionTokens: acc.completionTokens + (e.completionTokens || 0),
+      totalTokens: acc.totalTokens + (e.totalTokens || 0),
+      estimatedCostUsd: acc.estimatedCostUsd + (e.estimatedCostUsd || 0),
+    }),
+    { callCount: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, estimatedCostUsd: 0 }
+  );
+}
+
+export async function queryRunUsage(runId, namespace = DEFAULT_NS) {
+  if (!runId) return { runId, events: [], totals: null };
+  if (!isPersistenceHealthy()) {
+    const events = memoryEvents.filter((e) => e.runId === runId && e.namespace === namespace);
+    return { runId, events, totals: events.length ? sumUsageEvents(events) : null };
+  }
+  const result = await persistenceQuery(
+    `SELECT * FROM llm_usage_events WHERE run_id = @runId AND namespace = @namespace AND success = 1 ORDER BY occurred_at ASC`,
+    { runId, namespace }
+  );
+  const events = (result.recordset || []).map(rowToEvent);
+  return { runId, events, totals: events.length ? sumUsageEvents(events) : null };
+}
+
+export async function queryProjectUsage(projectId, { days = 30, namespace = DEFAULT_NS } = {}) {
+  const toDate = new Date();
+  const fromDate = new Date(toDate.getTime() - days * 24 * 60 * 60 * 1000);
+  if (!isPersistenceHealthy()) {
+    const events = memoryEvents.filter(
+      (e) =>
+        e.projectId === projectId &&
+        e.namespace === namespace &&
+        e.success &&
+        new Date(e.occurredAt) >= fromDate
+    );
+    return { projectId, days, events, totals: sumUsageEvents(events) };
+  }
+  const result = await persistenceQuery(
+    `SELECT * FROM llm_usage_events
+     WHERE project_id = @projectId AND namespace = @namespace AND success = 1
+       AND occurred_at >= @fromDate AND occurred_at < @toDate
+     ORDER BY occurred_at DESC`,
+    { projectId, namespace, fromDate, toDate }
+  );
+  const events = (result.recordset || []).map(rowToEvent);
+  return { projectId, days, events, totals: sumUsageEvents(events) };
+}
+
+export function resetUsageLedgerForTests() {
+  memoryEvents.length = 0;
 }
 
 export async function purgeOlderThan(days = DEFAULT_RETENTION_DAYS) {

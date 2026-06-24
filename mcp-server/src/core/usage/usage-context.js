@@ -12,6 +12,8 @@ export function usageContextFromRequest(context = {}, overrides = {}) {
     correlationId: context.requestId || context.correlationId || null,
     parentCorrelationId: context.parentCorrelationId || null,
     conversationId: context.conversationId || null,
+    runId: context.runId || null,
+    projectId: context.projectId || null,
     namespace: context.namespace || "default",
     ...overrides,
   };

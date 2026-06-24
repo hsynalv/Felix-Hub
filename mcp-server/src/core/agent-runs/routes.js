@@ -19,6 +19,7 @@ import { AGENT_RUN_JOB_TYPE } from "./agent-run-job.js";
 import { WORKFLOW_RUN_JOB_TYPE } from "./workflow-run-job.js";
 import { listWorkflowTemplates } from "./workflow-templates.js";
 import { createRunFromTemplate, replayRun } from "./run-orchestrator.js";
+import { queryRunUsage } from "../usage/usage-ledger.service.js";
 
 export function registerAgentRunRoutes(app) {
   app.post("/runs", requireScope("write"), async (req, res) => {
@@ -86,7 +87,14 @@ export function registerAgentRunRoutes(app) {
       if (!run) {
         return res.status(404).json({ ok: false, error: { code: "not_found", message: "Run not found" } });
       }
-      res.json({ ok: true, data: run });
+      let usage = null;
+      try {
+        const ledger = await queryRunUsage(req.params.id);
+        usage = ledger.totals;
+      } catch {
+        /* ignore */
+      }
+      res.json({ ok: true, data: { ...run, usage } });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "get_failed", message: err.message } });
     }

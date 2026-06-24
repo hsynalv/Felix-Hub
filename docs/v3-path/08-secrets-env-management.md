@@ -1,6 +1,6 @@
 # 08 — Secrets ve Env Yönetimini Ürünleştir
 
-> **Status:** in_progress (kısmen)  
+> **Status:** faz_a_b_done (Faz 3 exit)  
 > **Öncelik:** P1 (Faz 2–3)  
 > **Bağımlılık:** [05-connector-marketplace.md](./05-connector-marketplace.md)
 

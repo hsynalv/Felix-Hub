@@ -9,6 +9,7 @@ import { buildCompactContext } from "../plugins/brain/brain.context.js";
 import { recordUsageEvent } from "./usage/usage-ledger.service.js";
 import { computeCostUsd } from "./usage/usage-pricing.js";
 import { mergeUsageTotals, normalizeUsageFromResponse, usageContextFromRequest } from "./usage/usage-context.js";
+import { checkQuota } from "./usage/quota.service.js";
 import { buildSystemPrompt, buildToolCatalogSummary } from "./chat/chat-system-prompt.js";
 import {
   getLlmKeyMode,
@@ -283,6 +284,7 @@ async function recordChatUsage(context, { model, provider, usage, iteration, dur
   await recordUsageEvent({
     ...base,
     runId: context.runId || null,
+    projectId: context.projectId || null,
     provider,
     model,
     promptTokens: u.promptTokens,
@@ -522,6 +524,18 @@ async function chatWithOllama({ messages, model, tools, context, handlers }) {
 /**
  * Non-SSE chat turn for Telegram and other integrations.
  */
+export async function assertChatQuota(projectId) {
+  const pid = projectId || "default";
+  const result = await checkQuota({ projectId: pid });
+  if (!result.allowed) {
+    const err = new Error(result.reason || "Project quota exceeded");
+    err.code = "quota_exceeded";
+    err.quota = result.quota;
+    throw err;
+  }
+  return result;
+}
+
 export async function runChatTurn({
   message,
   history = [],
@@ -536,6 +550,8 @@ export async function runChatTurn({
   if (!message || typeof message !== "string") {
     throw new Error("message string required");
   }
+
+  await assertChatQuota(projectId || context.projectId);
 
   const chatContext = {
     method: context.method || "CHAT_TURN",

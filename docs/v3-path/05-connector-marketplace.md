@@ -1,6 +1,6 @@
 # 05 — Connector Marketplace (Kontrollü)
 
-> **Status:** not_started  
+> **Status:** faz_a_b_done (Faz 3 exit)  
 > **Öncelik:** P2 (Faz 3)  
 > **Bağımlılık:** [08-secrets-env-management.md](./08-secrets-env-management.md), [10-production-hardening.md](./10-production-hardening.md)
 

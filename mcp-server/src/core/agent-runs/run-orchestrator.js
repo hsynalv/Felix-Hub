@@ -13,6 +13,8 @@ import {
   RunStatus,
   StepType,
 } from "./agent-runs.service.js";
+import { recordContextEvent } from "../project-context/project-context.service.js";
+import { queryRunUsage } from "../usage/usage-ledger.service.js";
 import {
   getWorkflowTemplate,
   buildPlanFromTemplate,
@@ -111,16 +113,43 @@ export async function recordApprovalResolved(runId, { approvalId, approved, tool
 
 export async function completeRun(runId, { usage = null, error = null } = {}) {
   if (!runId) return null;
+  const run = await getRun(runId);
+
   if (error) {
+    if (run?.projectId) {
+      void recordContextEvent(run.projectId, {
+        type: "run_failed",
+        summary: `Run failed: ${error.message || runId.slice(0, 8)}`,
+        refs: { runId },
+      });
+    }
     return updateRunStatus(runId, RunStatus.FAILED, { error });
   }
-  if (usage) {
+
+  let runUsage = usage;
+  try {
+    const ledger = await queryRunUsage(runId);
+    if (ledger.totals) runUsage = ledger.totals;
+  } catch {
+    /* ignore */
+  }
+
+  if (runUsage) {
     await appendRunStep(runId, {
       type: StepType.SYSTEM,
       status: "ok",
-      metadata: { event: "run_completed", usage },
+      metadata: { event: "run_completed", usage: runUsage },
     });
   }
+
+  if (run?.projectId) {
+    void recordContextEvent(run.projectId, {
+      type: "run_completed",
+      summary: `Run completed: ${run.goal || runId.slice(0, 8)}`,
+      refs: { runId, usage: runUsage },
+    });
+  }
+
   return updateRunStatus(runId, RunStatus.COMPLETED);
 }
 

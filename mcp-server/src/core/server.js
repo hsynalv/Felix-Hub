@@ -22,9 +22,14 @@ import { registerUiChatRoutes } from "./ui-chat.js";
 import { registerAgentRunRoutes } from "./agent-runs/routes.js";
 import { registerAgentRunJobRunner } from "./agent-runs/agent-run-job.js";
 import { registerWorkflowRunJobRunner } from "./agent-runs/workflow-run-job.js";
+import { registerProjectIndexJobRunner } from "./project-context/project-index-job.js";
 import { registerAgentRunTools } from "./agent-runs/agent-runs.tools.js";
+import { registerProjectContextTools } from "./project-context/project-context.tools.js";
+import { registerSidecarTools } from "./sidecar/sidecar-tools.js";
 import { resolvePendingApproval } from "./agent-runs/approval-bridge.js";
 import { registerUsageRoutes } from "./usage/routes.js";
+import { registerInternalMarketplaceRoutes } from "./marketplace/internal-routes.js";
+import { registerSidecarRoutes } from "./sidecar/sidecar-routes.js";
 import { purgeOlderThan } from "./usage/usage-ledger.service.js";
 import { initPersistence, getPersistenceStatus, isPersistenceHealthy } from "./persistence/index.js";
 import { initMasterKey } from "./settings/crypto.js";
@@ -688,8 +693,11 @@ export async function createServer() {
   registerUiChatRoutes(app);
   registerAgentRunJobRunner();
   registerWorkflowRunJobRunner();
+  registerProjectIndexJobRunner();
   registerAgentRunRoutes(app);
   registerUsageRoutes(app);
+  registerInternalMarketplaceRoutes(app);
+  registerSidecarRoutes(app);
 
   // ── Plugin loader ──────────────────────────────────────────────────────────
 
@@ -728,6 +736,8 @@ export async function createServer() {
 
   await loadPlugins(app);
   registerAgentRunTools();
+  registerProjectContextTools();
+  registerSidecarTools();
 
   try {
     const { startTelegramPolling } = await import("../plugins/notifications/telegram.webhook.js");

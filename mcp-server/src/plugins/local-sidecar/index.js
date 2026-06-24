@@ -8,6 +8,7 @@
 import { Router } from "express";
 import { ToolTags } from "../../core/tool-registry.js";
 import { fsList, fsRead, fsWrite, fsHash, checkPathAllowed } from "./sidecar.core.js";
+import { delegateToSidecar } from "../../core/sidecar/sidecar-proxy.js";
 import { spawn } from "child_process";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
@@ -53,7 +54,8 @@ export const tools = [
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
     handler: async ({ path, explanation }) => {
-      const result = await fsList(path);
+      const delegated = await delegateToSidecar("list", { path });
+      const result = delegated ?? (await fsList(path));
       if (!result.ok) return result;
       return {
         ok: true,
@@ -88,7 +90,8 @@ export const tools = [
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
     handler: async ({ path, maxSize, explanation }) => {
-      const result = await fsRead(path, { maxSize });
+      const delegated = await delegateToSidecar("read", { path, maxSize });
+      const result = delegated ?? (await fsRead(path, { maxSize }));
       if (!result.ok) return result;
       return {
         ok: true,
@@ -122,7 +125,8 @@ export const tools = [
     },
     tags: [ToolTags.WRITE, ToolTags.DESTRUCTIVE, ToolTags.LOCAL_FS],
     handler: async ({ path, content, explanation }) => {
-      const result = await fsWrite(path, content);
+      const delegated = await delegateToSidecar("write", { path, content });
+      const result = delegated ?? (await fsWrite(path, content));
       if (!result.ok) return result;
       return {
         ok: true,
@@ -152,7 +156,8 @@ export const tools = [
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
     handler: async ({ path, explanation }) => {
-      const result = await fsHash(path);
+      const delegated = await delegateToSidecar("hash", { path });
+      const result = delegated ?? (await fsHash(path));
       if (!result.ok) return result;
       return {
         ok: true,
