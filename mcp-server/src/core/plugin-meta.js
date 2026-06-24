@@ -18,6 +18,8 @@ const REQUIRED_FIELDS = ["name", "version", "status", "owner"];
 const VALID_STATUSES = ["stable", "beta", "experimental"];
 const VALID_TEST_LEVELS = ["none", "unit", "integration", "e2e"];
 const VALID_SCOPES = ["read", "write", "admin"];
+const VALID_RISK_LEVELS = ["low", "medium", "high", "destructive"];
+const VALID_CAPABILITIES = ["read", "write", "network", "shell", "git", "destructive"];
 
 /**
  * Validate a plugin's metadata
@@ -85,6 +87,26 @@ export function validatePluginMeta(pluginDir, pluginName) {
   // Validate security scope
   if (meta.security?.scope && !VALID_SCOPES.includes(meta.security.scope)) {
     errors.push(`Invalid security.scope: ${meta.security.scope} (must be one of: ${VALID_SCOPES.join(", ")})`);
+  }
+
+  if (!meta.security?.riskLevel) {
+    errors.push("Missing security.riskLevel (low|medium|high|destructive)");
+  } else if (!VALID_RISK_LEVELS.includes(meta.security.riskLevel)) {
+    errors.push(`Invalid security.riskLevel: ${meta.security.riskLevel}`);
+  }
+
+  if (!Array.isArray(meta.security?.capabilities) || meta.security.capabilities.length === 0) {
+    errors.push("Missing security.capabilities array");
+  } else {
+    for (const cap of meta.security.capabilities) {
+      if (!VALID_CAPABILITIES.includes(cap)) {
+        errors.push(`Invalid security.capabilities entry: ${cap}`);
+      }
+    }
+  }
+
+  if (!Array.isArray(meta.security?.requiresApproval)) {
+    errors.push("Missing security.requiresApproval array");
   }
 
   const missingEnvVars = getMissingCatalogEnvVars(pluginName, meta.envVars);

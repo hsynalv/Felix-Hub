@@ -10,6 +10,8 @@
 import { randomUUID } from "crypto";
 import { config } from "./config.js";
 import { RedisJobStore } from "./jobs.redis.js";
+import { recordJobEvent, recordJobDuration } from "./observability/jobs.metrics.js";
+import logger from "./logger.js";
 
 // Initialize store (Redis or in-memory fallback)
 let store = null;
@@ -127,7 +129,7 @@ export function submitJob(type, payload = {}, context = {}) {
       .enqueue(job)
       .then(() => startJob())
       .catch((err) => {
-        console.error("[jobs] Failed to enqueue job in Redis:", err);
+        console.error("[jobs] Failed to enqueue job in Redis, using memory store:", err.message);
         job.useMemoryStore = true;
         jobs.set(id, job);
         startJob();
@@ -138,6 +140,8 @@ export function submitJob(type, payload = {}, context = {}) {
   }
 
   console.log(`[jobs] submitted ${type} job ${id}`);
+  logger.info("job.submitted", { jobId: id, type, plugin: context.plugin });
+  recordJobEvent(type, "queued", context.plugin);
   return publicView(job);
 }
 
@@ -145,15 +149,16 @@ export function submitJob(type, payload = {}, context = {}) {
  * Internal: Execute a job
  */
 async function runJob(id) {
-  // Get job from appropriate store
+  // Get job from appropriate store (memory fallback when Redis enqueue failed)
   let job;
+  const memoryJob = jobs.get(id);
   if (useRedis && store) {
     job = await store.get(id);
-    if (!job) {
-      job = jobs.get(id);
+    if (!job && memoryJob) {
+      job = memoryJob;
     }
   } else {
-    job = jobs.get(id);
+    job = memoryJob;
   }
 
   if (!job || job.state !== JobState.QUEUED) return;
@@ -243,6 +248,9 @@ async function runJob(id) {
     },
   };
 
+  const runStartedAt = Date.now();
+  recordJobEvent(job.type, "started", job.context?.plugin);
+
   try {
     await log(`Starting ${job.type} job`);
     const result = await runner(legacyJob, updateProgress, log);
@@ -264,6 +272,8 @@ async function runJob(id) {
     }
 
     await log(`Job completed`);
+    recordJobEvent(job.type, "completed", job.context?.plugin);
+    recordJobDuration(job.type, Date.now() - runStartedAt, job.context?.plugin);
   } catch (err) {
     const errorMsg = err?.message ?? String(err);
     if (persistInRedis) {
@@ -280,6 +290,8 @@ async function runJob(id) {
       }
     }
     await log(`Job failed: ${errorMsg}`);
+    recordJobEvent(job.type, "failed", job.context?.plugin);
+    recordJobDuration(job.type, Date.now() - runStartedAt, job.context?.plugin);
   }
 }
 

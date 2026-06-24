@@ -96,17 +96,17 @@ export function policyGuardrailMiddleware(req, res, next) {
     return next();
   }
 
-  // Skip if confirmed=true (dry-run bypass) — requires write scope when auth is enabled
+  // Skip if confirmed=true — requires admin scope when auth is enabled
   if (req.query?.confirmed === "true") {
     if (isAuthEnabled()) {
       const scopes = req.authScopes ?? [];
-      const hasWrite = scopes.some((s) => s === "write" || s === "admin");
-      if (!hasWrite) {
+      const hasAdmin = scopes.some((s) => s === "admin");
+      if (!hasAdmin) {
         return res.status(403).json({
           ok: false,
           error: {
             code: "forbidden",
-            message: "Policy confirmation bypass requires write or admin scope.",
+            message: "Policy confirmation bypass requires admin scope.",
           },
         });
       }

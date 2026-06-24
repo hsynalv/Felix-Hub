@@ -2,9 +2,10 @@
  * Tools Metrics
  *
  * Metrics collection for tool discovery and usage.
+ * Uses canonical tool-registry.js (not deprecated tools/tool.registry.js).
  */
 
-import { getToolRegistry } from "../tools/tool.registry.js";
+import { getToolRegistryStats, listTools } from "../tool-registry.js";
 import { Metrics, getMetricsRegistry } from "./metrics.js";
 
 /**
@@ -17,14 +18,12 @@ import { Metrics, getMetricsRegistry } from "./metrics.js";
 export function recordToolCall(toolName, plugin, status, duration) {
   const registry = getMetricsRegistry();
 
-  // Increment tool calls counter
   registry.increment(Metrics.TOOL_CALLS_TOTAL, 1, {
     tool: toolName,
     plugin,
     status,
   });
 
-  // Record errors
   if (status === "error") {
     registry.increment(Metrics.ERRORS_TOTAL, 1, {
       type: "tool",
@@ -82,8 +81,7 @@ export function recordRAGQuery(operation, durationMs, status) {
  * @returns {Object}
  */
 export function getToolMetrics() {
-  const registry = getToolRegistry();
-  const stats = registry.getStats();
+  const stats = getToolRegistryStats();
 
   return {
     tools_total: stats.total,
@@ -97,10 +95,8 @@ export function getToolMetrics() {
  * Sync tool metrics with tool registry
  */
 export function syncToolMetrics() {
-  const registry = getToolRegistry();
   const metrics = getMetricsRegistry();
-  const stats = registry.getStats();
-
+  const stats = getToolRegistryStats();
   metrics.set(Metrics.TOOLS_TOTAL, stats.total);
 }
 
@@ -109,7 +105,5 @@ export function syncToolMetrics() {
  */
 export function initializeToolMetrics() {
   const registry = getMetricsRegistry();
-
-  // Initialize gauges
-  registry.set(Metrics.TOOLS_TOTAL, 0);
+  registry.set(Metrics.TOOLS_TOTAL, listTools().length);
 }

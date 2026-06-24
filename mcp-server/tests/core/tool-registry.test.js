@@ -11,6 +11,8 @@ import {
   clearTools,
   callTool,
   ToolTags,
+  getToolRegistryStats,
+  assertUniqueToolNames,
 } from "../../src/core/tool-registry.js";
 import { TEST_INPUT_SCHEMA } from "../framework/test-tool-schema.js";
 
@@ -216,6 +218,55 @@ describe("Tool Registry", () => {
       expect(allowed.ok).toBe(true);
 
       vi.restoreAllMocks();
+    });
+  });
+
+  describe("getToolRegistryStats", () => {
+    it("should aggregate tools by plugin", () => {
+      registerTool({
+        name: "a1",
+        description: "A",
+        inputSchema: TEST_INPUT_SCHEMA,
+        plugin: "alpha",
+        handler: async () => "ok",
+      });
+      registerTool({
+        name: "b1",
+        description: "B",
+        inputSchema: TEST_INPUT_SCHEMA,
+        plugin: "beta",
+        handler: async () => "ok",
+      });
+
+      const stats = getToolRegistryStats();
+      expect(stats.total).toBe(2);
+      expect(stats.byPlugin.alpha).toBe(1);
+      expect(stats.byPlugin.beta).toBe(1);
+    });
+  });
+
+  describe("assertUniqueToolNames", () => {
+    it("should pass when all names are unique", () => {
+      registerTool({
+        name: "unique_tool",
+        description: "Unique",
+        inputSchema: TEST_INPUT_SCHEMA,
+        handler: async () => "ok",
+      });
+      expect(() => assertUniqueToolNames()).not.toThrow();
+    });
+  });
+
+  describe("registerTool duplicate guard", () => {
+    it("should throw when registering the same name twice", () => {
+      const def = {
+        name: "dup_tool",
+        description: "Dup",
+        inputSchema: TEST_INPUT_SCHEMA,
+        handler: async () => "ok",
+      };
+      registerTool(def);
+      expect(() => registerTool(def)).toThrow(/already registered/);
     });
   });
 });

@@ -15,8 +15,17 @@
   },
   "security": {
     "scope": "write",
-    "dangerousCombinations": ["shell"],
-    "requiresApproval": false
+    "dangerousCombinations": [
+      "shell"
+    ],
+    "requiresApproval": [
+      "write"
+    ],
+    "riskLevel": "medium",
+    "capabilities": [
+      "write",
+      "network"
+    ]
   },
   "performance": {
     "avgResponseTimeMs": 2000,

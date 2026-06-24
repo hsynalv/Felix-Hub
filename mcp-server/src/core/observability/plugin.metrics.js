@@ -2,9 +2,10 @@
  * Plugin Metrics
  *
  * Metrics collection for plugin system.
+ * Uses canonical plugins.js loader state (not deprecated registry/index.js).
  */
 
-import { getRegistry } from "../registry/index.js";
+import { getPlugins, getFailedPlugins } from "../plugins.js";
 import { Metrics, getMetricsRegistry } from "./metrics.js";
 
 /**
@@ -17,14 +18,12 @@ import { Metrics, getMetricsRegistry } from "./metrics.js";
 export function recordPluginCall(pluginName, action, status, duration) {
   const registry = getMetricsRegistry();
 
-  // Increment plugin calls counter
   registry.increment(Metrics.PLUGIN_CALLS_TOTAL, 1, {
     plugin: pluginName,
     action,
     status,
   });
 
-  // Record duration if provided
   if (duration !== undefined) {
     registry.observe(Metrics.PLUGIN_EXECUTION_DURATION_MS, duration, {
       plugin: pluginName,
@@ -32,7 +31,6 @@ export function recordPluginCall(pluginName, action, status, duration) {
     });
   }
 
-  // Increment errors counter if failed
   if (status === "error") {
     registry.increment(Metrics.ERRORS_TOTAL, 1, {
       type: "plugin",
@@ -48,9 +46,20 @@ export function recordPluginCall(pluginName, action, status, duration) {
  * @param {boolean} enabled
  */
 export function updatePluginGauge(pluginName, enabled) {
-  const registry = getMetricsRegistry();
-  // This is tracked globally via getPluginStats
-  // Individual plugin enablement tracked via labels if needed
+  void pluginName;
+  void enabled;
+}
+
+function getPluginStatus() {
+  const plugins = getPlugins();
+  const failed = getFailedPlugins();
+  return {
+    enabled: plugins.length,
+    total: plugins.length + failed.length,
+    healthy: plugins.length,
+    failed: failed.length,
+    loaded: plugins.length,
+  };
 }
 
 /**
@@ -58,8 +67,7 @@ export function updatePluginGauge(pluginName, enabled) {
  * @returns {Object}
  */
 export function getPluginMetrics() {
-  const registry = getRegistry();
-  const status = registry.getStatus();
+  const status = getPluginStatus();
 
   return {
     plugins_enabled: status.enabled,
@@ -75,8 +83,6 @@ export function getPluginMetrics() {
  */
 export function initializePluginMetrics() {
   const metrics = getMetricsRegistry();
-
-  // Set initial gauge values
   metrics.set(Metrics.PLUGINS_ENABLED, 0);
   metrics.set(Metrics.TOOLS_TOTAL, 0);
 }
@@ -85,9 +91,7 @@ export function initializePluginMetrics() {
  * Sync plugin metrics with registry
  */
 export function syncPluginMetrics() {
-  const registry = getRegistry();
   const metrics = getMetricsRegistry();
-  const status = registry.getStatus();
-
+  const status = getPluginStatus();
   metrics.set(Metrics.PLUGINS_ENABLED, status.enabled);
 }

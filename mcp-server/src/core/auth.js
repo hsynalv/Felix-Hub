@@ -69,8 +69,100 @@ function authEnabled() {
 function extractKey(req) {
   const auth = req.headers["authorization"] ?? "";
   if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
-  // Also accept x-hub-api-key header as fallback
-  return req.headers["x-hub-api-key"]?.trim() ?? null;
+  return req.headers["x-hub-api-key"]?.trim() ?? req.headers["x-api-key"]?.trim() ?? null;
+}
+
+/**
+ * Resolve API key or UI token to scopes (sync).
+ * @param {string} key
+ * @returns {{ valid: boolean, scopes?: string[], type?: string, actor?: Object }}
+ */
+export function resolveApiKeyOrUiToken(key) {
+  if (!key) {
+    return { valid: false };
+  }
+
+  const uiToken = validateUiToken(key);
+  if (uiToken.ok) {
+    const scopes = ["read", "write", "admin"];
+    return {
+      valid: true,
+      scopes,
+      type: "ui_token",
+      actor: { type: "ui_token", scopes },
+    };
+  }
+
+  const keyMap = getKeyMap();
+  const scopes = keyMap.get(key);
+  if (scopes) {
+    return {
+      valid: true,
+      scopes: scopes.map(normalizeScope),
+      type: "api_key",
+      actor: { type: "api_key", scopes: scopes.map(normalizeScope) },
+    };
+  }
+
+  return { valid: false };
+}
+
+/**
+ * Unified request authentication (REST) — API key + UI token.
+ * @param {import('express').Request} req
+ * @returns {{ authenticated: boolean, scopes: string[], actor: Object|null, type?: string }}
+ */
+export function authenticateRequest(req) {
+  if (!authEnabled()) {
+    if (process.env.NODE_ENV === "production") {
+      return { authenticated: false, scopes: [], actor: null, error: "auth_not_configured" };
+    }
+    return { authenticated: true, scopes: [], actor: null, type: "open" };
+  }
+
+  const key = extractKey(req);
+  if (!key) {
+    return { authenticated: false, scopes: [], actor: null };
+  }
+
+  const resolved = resolveApiKeyOrUiToken(key);
+  if (!resolved.valid) {
+    return { authenticated: false, scopes: [], actor: null };
+  }
+
+  return {
+    authenticated: true,
+    scopes: resolved.scopes,
+    actor: resolved.actor,
+    type: resolved.type,
+  };
+}
+
+/**
+ * Optional auth: populate req.authScopes / req.actor when a valid token is present.
+ */
+export function optionalAuthMiddleware(req, res, next) {
+  const result = authenticateRequest(req);
+  if (result.error === "auth_not_configured" && process.env.NODE_ENV === "production") {
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "auth_not_configured",
+        message: "Server auth is not configured. Set HUB_READ_KEY, HUB_WRITE_KEY, and HUB_ADMIN_KEY.",
+      },
+    });
+  }
+  if (result.authenticated && result.scopes?.length) {
+    req.authScopes = result.scopes;
+    req.actor = result.actor;
+  }
+  next();
+}
+
+function authorizeScope(scopes, requiredScope) {
+  const required = normalizeScope(requiredScope);
+  const requiredIndex = SCOPE_HIERARCHY.indexOf(required);
+  return scopes.some((s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex);
 }
 
 /**
@@ -91,13 +183,13 @@ export function requireScope(scope = "read") {
           },
         });
       }
-      return next(); // development/test open mode
+      return next();
     }
 
     const requiredScope = normalizeScope(scope);
+    const auth = authenticateRequest(req);
 
-    const key = extractKey(req);
-    if (!key) {
+    if (!auth.authenticated) {
       return res.status(401).json({
         ok: false,
         error: {
@@ -107,66 +199,19 @@ export function requireScope(scope = "read") {
       });
     }
 
-    // Allow short-lived UI session tokens (6-digit, notification) — admin scope on all pages
-    const uiToken = validateUiToken(key);
-    if (uiToken.ok) {
-      const scopes = ["read", "write", "admin"];
-      const requiredIndex = SCOPE_HIERARCHY.indexOf(requiredScope);
-      const hasScope = scopes.some(
-        (s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex
-      );
+    req.authScopes = auth.scopes;
+    req.actor = auth.actor;
 
-      if (!hasScope) {
-        return res.status(403).json({
-          ok: false,
-          error: {
-            code: "forbidden",
-            message: `This endpoint requires '${scope}' scope.`,
-          },
-        });
-      }
-
-      req.authScopes = scopes;
-      req.actor = {
-        type: "ui_token",
-        scopes: req.authScopes,
-      };
-      return next();
-    }
-
-    const keyMap = getKeyMap();
-    const scopes = keyMap.get(key);
-    if (!scopes) {
-      return res.status(401).json({
-        ok: false,
-        error: {
-          code: "invalid_key",
-          message: "Invalid API key.",
-        },
-      });
-    }
-
-    const requiredIndex = SCOPE_HIERARCHY.indexOf(requiredScope);
-    const hasScope = scopes.some(
-      (s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex
-    );
-
-    if (!hasScope) {
+    if (!authorizeScope(auth.scopes, requiredScope)) {
       return res.status(403).json({
         ok: false,
         error: {
           code: "forbidden",
-          message: `This endpoint requires '${scope}' scope. Your key does not have sufficient permissions.`,
+          message: `This endpoint requires '${scope}' scope.`,
         },
       });
     }
 
-    // Attach scopes to request for downstream use
-    req.authScopes = scopes.map(normalizeScope);
-    req.actor = {
-      type: "api_key",
-      scopes: req.authScopes,
-    };
     next();
   };
 }
@@ -237,17 +282,13 @@ export async function introspectOAuthToken(token) {
  * @returns {Promise<{valid: boolean, scopes?: string[], claims?: Object}>}
  */
 export async function validateBearerToken(token) {
-  // First check if it's a configured API key
-  const keyMap = getKeyMap();
-  const apiKeyScopes = keyMap.get(token);
-  if (apiKeyScopes) {
-    return { valid: true, scopes: apiKeyScopes, type: "api_key" };
+  const resolved = resolveApiKeyOrUiToken(token);
+  if (resolved.valid) {
+    return { valid: true, scopes: resolved.scopes, type: resolved.type };
   }
 
-  // Try OAuth 2.1 introspection
   const claims = await introspectOAuthToken(token);
   if (claims) {
-    // Extract scopes from claims (space-separated per RFC 6749)
     const scopes = claims.scope?.split(" ") || [];
     return { valid: true, scopes, claims, type: "oauth" };
   }
@@ -292,11 +333,7 @@ export function requireOAuthScope(scope = "read") {
     }
 
     // Check scope
-    const requiredScope = normalizeScope(scope);
-    const requiredIndex = SCOPE_HIERARCHY.indexOf(requiredScope);
-    const hasScope = validation.scopes.some(
-      (s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex
-    );
+    const hasScope = authorizeScope(validation.scopes, scope);
 
     if (!hasScope) {
       return res.status(403).json({

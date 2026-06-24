@@ -16,7 +16,12 @@
   "security": {
     "scope": "read",
     "dangerousCombinations": [],
-    "requiresApproval": false
+    "requiresApproval": [],
+    "riskLevel": "low",
+    "capabilities": [
+      "read",
+      "git"
+    ]
   },
   "performance": {
     "avgResponseTimeMs": 500,

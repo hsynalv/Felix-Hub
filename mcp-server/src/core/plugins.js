@@ -2,7 +2,7 @@ import { readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { config } from "./config.js";
-import { registerTool } from "./tool-registry.js";
+import { registerTool, clearTools } from "./tool-registry.js";
 import { validatePluginMeta, getQualitySummary } from "./plugin-meta.js";
 import { isStrictPluginLoading } from "./plugin-strict.js";
 

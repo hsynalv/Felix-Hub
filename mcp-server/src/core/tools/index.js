@@ -1,8 +1,25 @@
 /**
  * Core Tools Module
  *
- * Tool Discovery API for MCP-Hub platform.
+ * Canonical runtime tools: ../tool-registry.js (registerTool, listTools, callTool).
+ * Legacy discovery/registry exports below are @deprecated — test and migration only.
  */
+
+// Canonical runtime registry (preferred)
+export {
+  registerTool,
+  unregisterTool,
+  getTool,
+  listTools,
+  clearTools,
+  callTool,
+  approveTool,
+  ToolTags,
+  VALID_TAGS,
+  validateTool,
+  getToolRegistryStats,
+  assertUniqueToolNames,
+} from "../tool-registry.js";
 
 // Types
 export { ToolStatus, VALID_TOOL_STATUSES } from "./tool.types.js";

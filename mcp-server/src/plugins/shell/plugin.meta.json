@@ -18,7 +18,16 @@
     "dangerousCombinations": [
       "write"
     ],
-    "requiresApproval": true
+    "requiresApproval": [
+      "write",
+      "destructive"
+    ],
+    "riskLevel": "destructive",
+    "capabilities": [
+      "write",
+      "shell",
+      "destructive"
+    ]
   },
   "performance": {
     "avgResponseTimeMs": 500,

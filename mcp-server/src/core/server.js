@@ -8,7 +8,7 @@ import { loadPlugins, getPlugins } from "./plugins.js";
 import { initializeToolHooks } from "./tool-registry.js";
 import { auditMiddleware, getLogs, getStats } from "./audit.js";
 import { getAuditManager, initAuditManager } from "./audit/index.js";
-import { requireScope, isAuthEnabled } from "./auth.js";
+import { requireScope, isAuthEnabled, optionalAuthMiddleware } from "./auth.js";
 import { submitJob, getJob, listJobs, getJobStats } from "./jobs.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -241,6 +241,7 @@ export async function createServer() {
   app.use(workspaceContextMiddleware);
   app.use(auditMiddleware);
   app.use(responseEnvelopeMiddleware);
+  app.use(optionalAuthMiddleware);
   app.use(policyGuardrailMiddleware);
 
   // ── Core routes ────────────────────────────────────────────────────────────
@@ -358,14 +359,28 @@ export async function createServer() {
 
   // ── Audit routes ───────────────────────────────────────────────────────────
 
-  app.get("/audit/logs", requireScope("read"), (req, res) => {
+  app.get("/audit/logs", requireScope("read"), async (req, res) => {
     const { plugin, status, limit } = req.query;
-    const logs = getLogs({ plugin, status, limit: Number(limit) || 100 });
+    const logs = await getLogs({ plugin, status, limit: Number(limit) || 100 });
     res.json({ count: logs.length, logs });
   });
 
-  app.get("/audit/stats", requireScope("read"), (req, res) => {
-    res.json({ stats: getStats() });
+  app.get("/audit/stats", requireScope("read"), async (req, res) => {
+    res.json({ stats: await getStats() });
+  });
+
+  /** GET /audit/events — unified audit query (http | tool | plugin) */
+  app.get("/audit/events", requireScope("read"), async (req, res) => {
+    const { source, plugin, operation, limit = 100, offset = 0 } = req.query;
+    const { queryAuditEvents } = await import("./audit/audit.service.js");
+    const entries = await queryAuditEvents({
+      source: source ? String(source) : undefined,
+      plugin: plugin ? String(plugin) : undefined,
+      operation: operation ? String(operation) : undefined,
+      limit: Math.min(Number(limit) || 100, 500),
+      offset: Number(offset) || 0,
+    });
+    res.json({ entries, count: entries.length });
   });
 
   /** GET /audit/operations — plugin operation audit (core audit manager), filter by plugin, operation, limit */
@@ -775,13 +790,17 @@ export async function createServer() {
   app.use((err, req, res, next) => {
     const status = err instanceof AppError ? err.statusCode : 500;
     const requestId = req?.requestId ?? null;
+    const isProduction = process.env.NODE_ENV === "production";
     const payload = err.serialize
       ? err.serialize(requestId)
       : {
           ok: false,
           error: {
-            code: "internal_error",
-            message: err.message ?? "Internal server error",
+            code: status >= 500 && isProduction ? "internal_error" : (err.code || "internal_error"),
+            message:
+              status >= 500 && isProduction
+                ? "Internal server error"
+                : (err.message ?? "Internal server error"),
           },
           meta: {
             requestId,

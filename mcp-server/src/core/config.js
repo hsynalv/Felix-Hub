@@ -56,9 +56,16 @@ const rawConfig = {
     enableN8n: process.env.ENABLE_N8N_PLUGIN !== "false",
     enableN8nCredentials: process.env.ENABLE_N8N_CREDENTIALS !== "false",
     enableN8nWorkflows: process.env.ENABLE_N8N_WORKFLOWS !== "false",
-    strictLoading: process.env.STRICT_PLUGIN_LOADING === "true" || process.env.PLUGIN_STRICT_MODE === "true",
-    strictMeta: process.env.STRICT_PLUGIN_META === "true",
-    strictToolSchema: process.env.STRICT_TOOL_SCHEMA === "true",
+    strictLoading:
+      process.env.STRICT_PLUGIN_LOADING === "true" ||
+      process.env.PLUGIN_STRICT_MODE === "true" ||
+      (process.env.NODE_ENV === "production" && process.env.STRICT_PLUGIN_LOADING !== "false"),
+    strictMeta:
+      process.env.STRICT_PLUGIN_META === "true" ||
+      (process.env.NODE_ENV === "production" && process.env.STRICT_PLUGIN_META !== "false"),
+    strictToolSchema:
+      process.env.STRICT_TOOL_SCHEMA === "true" ||
+      (process.env.NODE_ENV === "production" && process.env.STRICT_TOOL_SCHEMA !== "false"),
   },
   redis: {
     url: process.env.REDIS_URL || undefined,

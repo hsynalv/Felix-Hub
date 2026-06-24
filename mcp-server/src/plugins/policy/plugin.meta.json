@@ -18,7 +18,13 @@
     "dangerousCombinations": [
       "write"
     ],
-    "requiresApproval": false
+    "requiresApproval": [
+      "write"
+    ],
+    "riskLevel": "medium",
+    "capabilities": [
+      "write"
+    ]
   },
   "performance": {
     "avgResponseTimeMs": 500,

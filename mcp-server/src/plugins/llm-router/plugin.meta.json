@@ -16,7 +16,14 @@
   "security": {
     "scope": "write",
     "dangerousCombinations": [],
-    "requiresApproval": false
+    "requiresApproval": [
+      "write"
+    ],
+    "riskLevel": "medium",
+    "capabilities": [
+      "write",
+      "network"
+    ]
   },
   "performance": {
     "avgResponseTimeMs": 5000,
@@ -27,12 +34,30 @@
     "examples": true,
     "apiReference": true
   },
-  "providers": ["openai", "anthropic", "google", "mistral", "ollama", "vllm"],
+  "providers": [
+    "openai",
+    "anthropic",
+    "google",
+    "mistral",
+    "ollama",
+    "vllm"
+  ],
   "supportedTasks": [
-    "coding", "analysis", "documentation", "fast", "local",
-    "backend_api", "frontend_component", "image_generation",
-    "code_review", "debugging", "refactoring", "testing",
-    "general", "complex_reasoning", "multilingual"
+    "coding",
+    "analysis",
+    "documentation",
+    "fast",
+    "local",
+    "backend_api",
+    "frontend_component",
+    "image_generation",
+    "code_review",
+    "debugging",
+    "refactoring",
+    "testing",
+    "general",
+    "complex_reasoning",
+    "multilingual"
   ],
   "dependencies": [],
   "envVars": [

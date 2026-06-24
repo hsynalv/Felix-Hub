@@ -1,6 +1,10 @@
 import { config } from "./core/config.js";
 import { createServer } from "./core/server.js";
 import { validateStartup } from "./core/sanity.js";
+import logger from "./core/logger.js";
+import { initOtel } from "./core/otel.js";
+
+await initOtel("mcp-hub");
 
 // Run startup sanity checks
 await validateStartup();
@@ -24,5 +28,6 @@ const bindHost =
   (process.env.NODE_ENV === "production" ? "127.0.0.1" : "0.0.0.0");
 
 app.listen(config.port, bindHost, () => {
+  logger.info("mcp-server listening", { host: bindHost, port: config.port });
   console.log(`mcp-server listening on http://${bindHost === "0.0.0.0" ? "localhost" : bindHost}:${config.port}`);
 });

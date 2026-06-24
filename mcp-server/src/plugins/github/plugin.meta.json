@@ -15,8 +15,17 @@
   },
   "security": {
     "scope": "read",
-    "dangerousCombinations": ["shell", "docker"],
-    "requiresApproval": false
+    "dangerousCombinations": [
+      "shell",
+      "docker"
+    ],
+    "requiresApproval": [],
+    "riskLevel": "low",
+    "capabilities": [
+      "read",
+      "network",
+      "git"
+    ]
   },
   "performance": {
     "avgResponseTimeMs": 1500,

@@ -71,6 +71,6 @@ jobs:
       - name: Run full integration suite
         working-directory: mcp-server
         run: pnpm run test:integration
-        continue-on-error: true
         env:
           NODE_ENV: test
+          STRICT_PLUGIN_META: "true"

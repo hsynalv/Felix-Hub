@@ -109,13 +109,21 @@ export function AuditPage() {
   });
 
   const { data: logsData, isLoading: logsLoading } = useQuery({
-    queryKey: ["audit-logs", limit],
+    queryKey: ["audit-events-http", limit],
     queryFn: () =>
-      apiGetRaw<{ logs?: RequestLog[]; data?: { logs?: RequestLog[] } }>(`/audit/logs?limit=${limit}`),
+      apiGetRaw<{ entries?: AuditEntry[]; data?: { entries?: AuditEntry[] } }>(
+        `/audit/events?source=http&limit=${limit}`
+      ),
   });
 
   const entries = archiveData?.entries ?? archiveData?.data?.entries ?? [];
-  const logs = logsData?.logs ?? logsData?.data?.logs ?? [];
+  const httpEvents = logsData?.entries ?? logsData?.data?.entries ?? [];
+  const logs: RequestLog[] = httpEvents.map((e) => ({
+    timestamp: e.timestamp,
+    method: (e.metadata as { method?: string })?.method,
+    path: (e.metadata as { path?: string })?.path,
+    status: (e.metadata as { statusCode?: number })?.statusCode ?? (e.success ? 200 : 500),
+  }));
 
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();

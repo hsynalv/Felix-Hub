@@ -44,3 +44,13 @@ export {
   auditEmit,
   auditLog,
 } from "./audit.manager.js";
+
+// Unified write API (preferred)
+export {
+  logHttp,
+  logOperation,
+  logToolExecution,
+  queryAuditEvents,
+  getHttpRequestLogs,
+  getAuditEventStats,
+} from "./audit.service.js";

@@ -21,7 +21,9 @@ import {
   executeBeforeHooks,
   executeAfterHooks,
 } from "./tool-hooks.js";
-import { auditLog } from "./audit/index.js";
+import { logToolExecution } from "./audit/audit.service.js";
+import logger from "./logger.js";
+import { withToolSpan } from "./otel.js";
 import { isStrictToolSchema } from "./plugin-strict.js";
 import { sanitizeToolArgs, hasToolScope } from "./security-guard.js";
 import { isAuthEnabled } from "./auth.js";
@@ -245,6 +247,10 @@ export function registerTool(tool) {
 
   const { tags: validatedTags } = validateTags(tool.tags);
 
+  if (tools.has(tool.name)) {
+    throw new Error(`Tool '${tool.name}' is already registered`);
+  }
+
   tools.set(tool.name, {
     name: tool.name,
     description: tool.description,
@@ -280,6 +286,47 @@ export function getTool(name) {
  */
 export function listTools() {
   return Array.from(tools.values());
+}
+
+/**
+ * Aggregate statistics for observability (canonical registry).
+ * @returns {{ total: number, byPlugin: Record<string, number>, byCategory: Record<string, number>, productionReady: number }}
+ */
+export function getToolRegistryStats() {
+  const all = listTools();
+  const stats = {
+    total: all.length,
+    byPlugin: {},
+    byCategory: {},
+    productionReady: 0,
+  };
+
+  for (const tool of all) {
+    const plugin = tool.plugin || "unknown";
+    stats.byPlugin[plugin] = (stats.byPlugin[plugin] || 0) + 1;
+
+    const category = tool.category || "uncategorized";
+    stats.byCategory[category] = (stats.byCategory[category] || 0) + 1;
+
+    if (tool.status === "production" || tool.tags?.includes(ToolTags.READ_ONLY)) {
+      stats.productionReady++;
+    }
+  }
+
+  return stats;
+}
+
+/**
+ * Assert all registered tool names are unique (throws on duplicate).
+ */
+export function assertUniqueToolNames() {
+  const seen = new Set();
+  for (const tool of listTools()) {
+    if (seen.has(tool.name)) {
+      throw new Error(`Duplicate tool name registered: ${tool.name}`);
+    }
+    seen.add(tool.name);
+  }
 }
 
 /**
@@ -343,7 +390,15 @@ export async function callTool(name, args, context = {}) {
   const startTime = Date.now();
   let result;
   try {
-    result = await tool.handler(args, context);
+    logger.info("tool.call.start", {
+      tool: name,
+      plugin: tool.plugin,
+      requestId: context.requestId,
+      runId: context.runId,
+    });
+    result = await withToolSpan(name, { plugin: tool.plugin, requestId: context.requestId }, () =>
+      tool.handler(args, context)
+    );
 
     // Normalize result to standard envelope if not already
     if (result && typeof result === "object") {
@@ -376,15 +431,12 @@ export async function callTool(name, args, context = {}) {
   }
 
   // Audit logging
-  logToolExecution({
+  logToolExecutionToAudit({
     toolName: name,
-    timestamp: new Date().toISOString(),
     projectId: context.projectId,
-    parameters: args,
-    result: result,
     duration: Date.now() - startTime,
     user: context.user,
-    approvalId: context.approvalId,
+    requestId: context.requestId,
     failed: !result.ok,
   });
 
@@ -481,21 +533,18 @@ export function initializeToolHooks() {
  * Audit logging for tool executions.
  * @param {Object} logEntry
  */
-function logToolExecution(logEntry) {
+function logToolExecutionToAudit(logEntry) {
   const tool = tools.get(logEntry.toolName);
   const pluginName = tool?.plugin || "core";
 
-  void auditLog({
+  void logToolExecution({
+    toolName: logEntry.toolName,
     plugin: pluginName,
-    operation: logEntry.toolName,
-    actor: logEntry.user || "anonymous",
-    workspaceId: logEntry.projectId || "global",
-    projectId: logEntry.projectId || null,
-    correlationId: logEntry.requestId,
-    allowed: !logEntry.failed,
-    success: !logEntry.failed,
-    durationMs: logEntry.duration || 0,
-    metadata: { toolName: logEntry.toolName },
+    user: logEntry.user,
+    projectId: logEntry.projectId,
+    requestId: logEntry.requestId,
+    failed: logEntry.failed,
+    duration: logEntry.duration || 0,
   }).catch((err) => {
     console.error("[tool-registry] audit log failed:", err.message);
   });
