@@ -66,10 +66,14 @@ function authEnabled() {
   );
 }
 
-function extractKey(req) {
+export function extractAuthKey(req) {
   const auth = req.headers["authorization"] ?? "";
   if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
   return req.headers["x-hub-api-key"]?.trim() ?? req.headers["x-api-key"]?.trim() ?? null;
+}
+
+function extractKey(req) {
+  return extractAuthKey(req);
 }
 
 /**

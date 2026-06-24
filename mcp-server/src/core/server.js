@@ -29,7 +29,7 @@ import { registerSidecarTools } from "./sidecar/sidecar-tools.js";
 import { resolvePendingApproval } from "./agent-runs/approval-bridge.js";
 import { registerUsageRoutes } from "./usage/routes.js";
 import { registerInternalMarketplaceRoutes } from "./marketplace/internal-routes.js";
-import { registerSidecarRoutes } from "./sidecar/sidecar-routes.js";
+import { registerWorkspacePreferencesRoutes } from "./workspace-preferences.routes.js";
 import { purgeOlderThan } from "./usage/usage-ledger.service.js";
 import { initPersistence, getPersistenceStatus, isPersistenceHealthy } from "./persistence/index.js";
 import { initMasterKey } from "./settings/crypto.js";
@@ -698,6 +698,7 @@ export async function createServer() {
   registerUsageRoutes(app);
   registerInternalMarketplaceRoutes(app);
   registerSidecarRoutes(app);
+  registerWorkspacePreferencesRoutes(app);
 
   // ── Plugin loader ──────────────────────────────────────────────────────────
 

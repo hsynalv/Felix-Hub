@@ -144,24 +144,13 @@ export async function fetchEnvCatalog() {
   return apiGet<EnvCatalogResponse>("/settings/env-catalog");
 }
 
-export const PROJECT_ID_KEY = "mcp-hub-project-id";
-export const PROJECT_ENV_KEY = "mcp-hub-project-env";
-
-export function getProjectId() {
-  return localStorage.getItem(PROJECT_ID_KEY) || "default";
-}
-
-export function setProjectId(id: string) {
-  localStorage.setItem(PROJECT_ID_KEY, id);
-}
-
-export function getProjectEnv() {
-  return localStorage.getItem(PROJECT_ENV_KEY) || "development";
-}
-
-export function setProjectEnv(env: string) {
-  localStorage.setItem(PROJECT_ENV_KEY, env);
-}
+export {
+  getProjectId,
+  getProjectEnv,
+  saveProjectContext,
+  hydrateProjectContext,
+  fetchWorkspacePreferences,
+} from "./project-context";
 
 export interface LlmConfigSnapshot {
   mode: "unified" | "split";

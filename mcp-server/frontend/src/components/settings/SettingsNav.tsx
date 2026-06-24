@@ -2,6 +2,7 @@ import {
   Bot,
   Database,
   FolderKanban,
+  Laptop,
   Palette,
   Sparkles,
   Variable,
@@ -15,6 +16,7 @@ export type SettingsSectionId =
   | "llm"
   | "integrations"
   | "connections"
+  | "sidecar"
   | "advanced";
 
 export const SETTINGS_SECTIONS: Array<{
@@ -52,6 +54,12 @@ export const SETTINGS_SECTIONS: Array<{
     label: "Bağlantılar",
     description: "Harici servis profilleri",
     icon: Database,
+  },
+  {
+    id: "sidecar",
+    label: "Yerel erişim",
+    description: "Sidecar ve bağlantı durumu",
+    icon: Laptop,
   },
   {
     id: "advanced",

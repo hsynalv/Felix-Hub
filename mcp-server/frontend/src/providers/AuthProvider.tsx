@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { clearAuthRefreshTimer, ensureAuth } from "@/lib/auth";
+import { hydrateProjectContext } from "@/lib/project-context";
 
 type AuthContextValue = {
   ready: boolean;
@@ -19,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     ensureAuth()
+      .then(() => hydrateProjectContext())
       .then(() => {
         if (cancelled) return;
         void queryClient.invalidateQueries({ queryKey: ["whoami"] });

@@ -1,17 +1,5 @@
 import { getApiKey } from "./auth";
-
-const PROJECT_ID_KEY = "mcp-hub-project-id";
-const PROJECT_ENV_KEY = "mcp-hub-project-env";
-
-function projectHeaders(): Record<string, string> {
-  if (typeof localStorage === "undefined") {
-    return { "x-project-id": "default", "x-env": "development" };
-  }
-  return {
-    "x-project-id": localStorage.getItem(PROJECT_ID_KEY) || "default",
-    "x-env": localStorage.getItem(PROJECT_ENV_KEY) || "development",
-  };
-}
+import { getProjectHeaders } from "./workspace-context-store";
 
 export class ApiError extends Error {
   code?: string;
@@ -28,7 +16,7 @@ export class ApiError extends Error {
 function authHeaders(extra: HeadersInit = {}): HeadersInit {
   const key = getApiKey();
   return {
-    ...projectHeaders(),
+    ...getProjectHeaders(),
     Accept: "application/json",
     ...(key ? { Authorization: `Bearer ${key}` } : {}),
     ...extra,

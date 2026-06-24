@@ -13,6 +13,7 @@ import {
   Cpu,
   Database,
   LayoutGrid,
+  Laptop,
   MessageSquare,
   Plug,
   RefreshCw,
@@ -32,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiGet, type ChatModelsData, type HealthData, type PluginInfo, type WhoamiData } from "@/lib/api-client";
 import { fetchDashboardBundle } from "@/lib/dashboard-api";
 import { fetchUsageStats, formatCostUsd, formatTokenCount } from "@/lib/usage-api";
+import { fetchSidecarStatus, sidecarStatusLabel, sidecarStatusTone } from "@/lib/sidecar-api";
 import { listRuns } from "@/lib/runs-api";
 import { cn, formatDuration, formatTime } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -137,6 +139,13 @@ export function HomePage() {
     queryFn: () => listRuns({ status: "running", limit: 10 }),
     staleTime: 15_000,
     refetchInterval: 30_000,
+  });
+
+  const { data: sidecarStatus } = useQuery({
+    queryKey: ["sidecar-status"],
+    queryFn: fetchSidecarStatus,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
   const toolCount = plugins.reduce((n, p) => n + (Array.isArray(p.tools) ? p.tools.length : 0), 0);
@@ -269,11 +278,38 @@ export function HomePage() {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {loading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
+          Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
         ) : (
           <>
+            <StatCard
+              label="Yerel erişim"
+              value={
+                sidecarStatus
+                  ? sidecarStatus.mode === "direct"
+                    ? "Doğrudan"
+                    : sidecarStatus.deviceCount > 0
+                      ? `${sidecarStatus.deviceCount} cihaz`
+                      : "Sidecar"
+                  : "—"
+              }
+              hint={
+                sidecarStatus
+                  ? `${sidecarStatus.nodeEnv} · ${sidecarStatusLabel(sidecarStatus.aggregateStatus)}`
+                  : "Sidecar durumu yüklenemedi"
+              }
+              icon={Laptop}
+              status={
+                sidecarStatus
+                  ? sidecarStatusTone(sidecarStatus.aggregateStatus) === "healthy"
+                    ? "healthy"
+                    : sidecarStatusTone(sidecarStatus.aggregateStatus) === "error"
+                      ? "error"
+                      : "warning"
+                  : "degraded"
+              }
+            />
             <StatCard
               label="Aktif agent run"
               value={activeRuns}

@@ -9,6 +9,7 @@ import { PluginEnvPanel } from "@/components/settings/PluginEnvPanel";
 import { LlmRoutingPanel } from "@/components/settings/LlmRoutingPanel";
 import { ProjectSettingsPanel } from "@/components/settings/ProjectSettingsPanel";
 import { UsageQuotaPanel } from "@/components/settings/UsageQuotaPanel";
+import { SidecarSettingsPanel } from "@/components/settings/SidecarSettingsPanel";
 import { SettingsNav, type SettingsSectionId } from "@/components/settings/SettingsNav";
 import { fetchSettings } from "@/lib/settings-api";
 import { ApiError } from "@/lib/api-client";
@@ -35,6 +36,10 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
     title: "Bağlantılar",
     description: "Harici servislere ait kayıtlı bağlantı profillerini görüntüleyin.",
   },
+  sidecar: {
+    title: "Yerel erişim",
+    description: "Sidecar bağlantısı, production modu ve eşleştirilmiş cihazlar.",
+  },
   advanced: {
     title: "Gelişmiş",
     description: "Yedekleme, taşıma ve kurulum araçları.",
@@ -51,7 +56,8 @@ export function SettingsPage() {
   });
 
   const isForbidden = settingsQuery.error instanceof ApiError && settingsQuery.error.status === 403;
-  const needsAdmin = section !== "appearance" && section !== "project";
+  const needsAdmin =
+    section !== "appearance" && section !== "project" && section !== "sidecar";
   const header = SECTION_HEADERS[section];
 
   return (
@@ -86,6 +92,7 @@ export function SettingsPage() {
         {section === "integrations" && !isForbidden && <PluginEnvPanel />}
         {section === "llm" && !isForbidden && <LlmRoutingPanel />}
         {section === "connections" && !isForbidden && <ConnectionsSettingsPanel />}
+        {section === "sidecar" && <SidecarSettingsPanel />}
         {section === "advanced" && !isForbidden && <AdvancedSettingsPanel />}
       </div>
     </div>

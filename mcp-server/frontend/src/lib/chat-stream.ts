@@ -1,5 +1,6 @@
 import { getApiKey } from "./auth";
 import { apiPost } from "./api-client";
+import { getProjectHeaders } from "./workspace-context-store";
 
 export interface ChatMessage {
   role: "user" | "assistant" | "tool";
@@ -54,8 +55,7 @@ export async function streamChat(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
-      "x-project-id": localStorage.getItem("mcp-hub-project-id") || "default",
-      "x-env": localStorage.getItem("mcp-hub-project-env") || "development",
+      ...getProjectHeaders(),
     },
     body: JSON.stringify({
       message,

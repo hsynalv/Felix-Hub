@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SettingsInfoBox, SettingsSectionCard } from "@/components/settings/shared";
-import { getProjectId } from "@/lib/settings-api";
+import { getProjectId } from "@/lib/project-context";
 import {
   checkProjectQuota,
   fetchUsageQuotas,

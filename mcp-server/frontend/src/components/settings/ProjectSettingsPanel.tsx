@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/select";
 import { SettingsInfoBox, SettingsSectionCard } from "@/components/settings/shared";
 import { fetchProjectContext, updateProjectLinks, syncProjectIndex } from "@/lib/project-api";
-import { getProjectEnv, getProjectId, setProjectEnv, setProjectId } from "@/lib/settings-api";
+import { getProjectEnv, getProjectId, saveProjectContext } from "@/lib/project-context";
+import { subscribeWorkspaceContext } from "@/lib/workspace-context-store";
 import { useToast } from "@/providers/ToastProvider";
 
 export function ProjectSettingsPanel() {
@@ -41,12 +42,25 @@ export function ProjectSettingsPanel() {
     if (links.defaultBranch) setDefaultBranch(links.defaultBranch);
   }, [contextQuery.data?.links]);
 
-  const saveProject = () => {
-    setProjectId(projectId.trim() || "default");
-    setProjectEnv(projectEnv.trim() || "development");
-    toast.show("Proje ayarları kaydedildi");
-    queryClient.invalidateQueries();
-  };
+  useEffect(() => {
+    return subscribeWorkspaceContext(() => {
+      setProjectIdState(getProjectId());
+      setProjectEnvState(getProjectEnv());
+    });
+  }, []);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      saveProjectContext({
+        projectId: projectId.trim() || "default",
+        projectEnv: projectEnv.trim() || "development",
+      }),
+    onSuccess: () => {
+      toast.show("Proje ayarları kaydedildi");
+      queryClient.invalidateQueries();
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
 
   const linksMutation = useMutation({
     mutationFn: () =>
@@ -108,7 +122,9 @@ export function ProjectSettingsPanel() {
             </div>
           </div>
 
-          <Button onClick={saveProject}>Kaydet</Button>
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            Kaydet
+          </Button>
 
           {graphNodes > 0 && (
             <p className="text-xs text-muted-foreground">
@@ -116,9 +132,9 @@ export function ProjectSettingsPanel() {
             </p>
           )}
 
-          <SettingsInfoBox>
-            Bu ayarlar yalnızca tarayıcınızda tutulur. Farklı bir cihazdan giriş yaptığınızda yeniden
-            tanımlamanız gerekir.
+          <SettingsInfoBox variant="tip" title="Sunucuda saklanır">
+            Proje ve ortam tercihiniz hub veritabanında saklanır. Aynı API anahtarıyla farklı
+            cihazlardan giriş yaptığınızda ayarlarınız senkron kalır.
           </SettingsInfoBox>
         </div>
       </SettingsSectionCard>

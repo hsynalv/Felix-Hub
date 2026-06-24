@@ -16,7 +16,7 @@ import {
   usageRangePresets,
   type UsageGroupBy,
 } from "@/lib/usage-api";
-import { getProjectId } from "@/lib/settings-api";
+import { getProjectId } from "@/lib/project-context";
 
 const GROUP_LABELS: Record<UsageGroupBy, string> = {
   tool: "Araç",
