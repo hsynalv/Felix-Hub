@@ -9,7 +9,15 @@
 
 import { writeFile, mkdir } from "fs/promises";
 import { join, dirname } from "path";
+import { Router } from "express";
 import OpenAI from "openai";
+import { recordUsageEvent } from "../../core/usage/usage-ledger.service.js";
+import { estimateImageCostUsd } from "../../core/usage/usage-pricing.js";
+import { usageContextFromRequest } from "../../core/usage/usage-context.js";
+import { requireScope } from "../../core/auth.js";
+import { getEnvValue } from "../../core/settings/effective-config.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
+import { auditLog } from "../../core/audit/index.js";
 
 export const name = "image-gen";
 export const version = "1.0.0";
@@ -34,10 +42,16 @@ const PROVIDERS = {
   },
 };
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openaiClient = null;
+
+function getOpenAIClient() {
+  const apiKey = getEnvValue("OPENAI_API_KEY") || process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey });
+  }
+  return openaiClient;
+}
 
 // Track generated images
 const generatedImages = new Map();
@@ -46,6 +60,11 @@ const generatedImages = new Map();
  * Generate image with DALL-E
  */
 async function generateWithDalle(prompt, options = {}) {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+
   const model = options.model || "dall-e-3";
   const size = options.size || "1024x1024";
   const quality = options.quality || "standard";
@@ -127,6 +146,7 @@ async function saveImage(base64Data, filepath) {
  */
 export async function generateImage(prompt, options = {}) {
   const provider = options.provider || "openai";
+  const usageContext = options.usageContext || {};
 
   let result;
   if (provider === "openai") {
@@ -136,6 +156,29 @@ export async function generateImage(prompt, options = {}) {
   } else {
     throw new Error(`Unknown provider: ${provider}`);
   }
+
+  const imageCost = estimateImageCostUsd(
+    result.provider,
+    result.model,
+    options.size || "1024x1024",
+    options.quality || "standard"
+  );
+  const base = usageContextFromRequest(usageContext, {
+    toolName: "image_generate",
+    pluginName: "image-gen",
+    source: usageContext.source || "plugin",
+    operationType: "image_generation",
+  });
+  await recordUsageEvent({
+    ...base,
+    provider: result.provider,
+    model: result.model,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    estimatedCostUsd: imageCost,
+    metadata: { size: options.size || "1024x1024", quality: options.quality || "standard" },
+  });
 
   // Save to file if path provided
   let savedPath = null;
@@ -276,10 +319,13 @@ export const tools = [
       },
       required: ["prompt"],
     },
-    handler: async ({ prompt, type, ...options }) => {
+    handler: async ({ prompt, type, ...options }, context = {}) => {
       try {
         const enhancedPrompt = enhancePrompt(prompt, type);
-        const result = await generateImage(enhancedPrompt, options);
+        const result = await generateImage(enhancedPrompt, {
+          ...options,
+          usageContext: { ...context, toolName: "image_generate", source: context.source || "mcp_tool" },
+        });
         return {
           ok: true,
           data: {
@@ -445,6 +491,47 @@ export const endpoints = [
 ];
 
 // Plugin registration
-export function register(app, dependencies) {
+export function register(app) {
+  const router = Router();
+  mountPluginHealth(router, { name, version });
+
+  router.post("/generate", requireScope("write"), async (req, res) => {
+    try {
+      const { prompt, type, ...options } = req.body ?? {};
+      const enhancedPrompt = enhancePrompt(prompt, type);
+      const result = await generateImage(enhancedPrompt, options);
+      void auditLog({
+        plugin: "image-gen",
+        operation: "generate",
+        actor: req.actor?.type || "api",
+        workspaceId: "global",
+        allowed: true,
+        success: true,
+        metadata: {
+          provider: result.provider,
+          model: result.model,
+          estimatedCostUsd: result.provider === "openai" ? 0.04 : 0.02,
+        },
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: { message: error.message } });
+    }
+  });
+
+  router.post("/variations", requireScope("write"), async (req, res) => {
+    try {
+      const variations = await generateVariations(req.body.imagePath, req.body);
+      res.json({ ok: true, data: variations });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: { message: error.message } });
+    }
+  });
+
+  router.get("/list", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: listImages() });
+  });
+
+  app.use("/image", router);
   console.log("[Image Gen] Registered with providers:", Object.keys(PROVIDERS).join(", "));
 }

@@ -22,6 +22,10 @@ import {
   executeAfterHooks,
 } from "./tool-hooks.js";
 import { auditLog } from "./audit/index.js";
+import { isStrictToolSchema } from "./plugin-strict.js";
+import { sanitizeToolArgs, hasToolScope } from "./security-guard.js";
+import { isAuthEnabled } from "./auth.js";
+import { ensureWriteToolExplanation } from "./tool-schema.js";
 
 const tools = new Map();
 
@@ -60,6 +64,13 @@ export function validateTool(tool) {
     errors.push("Tool must have a 'description' (string)");
   }
 
+  // Map legacy 'parameters' to 'inputSchema' before validation
+  if (tool.parameters && !tool.inputSchema) {
+    console.warn(`[tool-registry] Tool '${tool.name}' uses deprecated 'parameters'. Mapping to 'inputSchema'.`);
+    tool.inputSchema = tool.parameters;
+    delete tool.parameters;
+  }
+
   if (!tool.inputSchema || typeof tool.inputSchema !== "object") {
     errors.push("Tool must have an 'inputSchema' (JSON Schema object)");
   } else {
@@ -73,15 +84,14 @@ export function validateTool(tool) {
       ["write", "destructive", "DESTRUCTIVE", "WRITE"].includes(tag)
     );
     if (isWriteTool && !hasExplanation) {
-      console.warn(`[tool-registry] Warning: Tool '${tool.name}' is a write/destructive tool but lacks 'explanation' field in inputSchema. Consider adding it so LLM can explain why it runs this tool.`);
+      if (isStrictToolSchema()) {
+        errors.push(
+          "Write/destructive tool must define inputSchema.properties.explanation (STRICT_TOOL_SCHEMA=true)"
+        );
+      } else {
+        console.warn(`[tool-registry] Warning: Tool '${tool.name}' is a write/destructive tool but lacks 'explanation' field in inputSchema. Consider adding it so LLM can explain why it runs this tool.`);
+      }
     }
-  }
-
-  // Map legacy 'parameters' to 'inputSchema' if present
-  if (tool.parameters && !tool.inputSchema) {
-    console.warn(`[tool-registry] Tool '${tool.name}' uses deprecated 'parameters'. Mapping to 'inputSchema'.`);
-    tool.inputSchema = tool.parameters;
-    delete tool.parameters;
   }
 
   if (errors.length > 0) {
@@ -95,8 +105,22 @@ export function validateTool(tool) {
  * @returns {string[]} Validated tags
  */
 export function validateTags(tags) {
-  if (!tags || !Array.isArray(tags)) return [];
-  return tags.filter((tag) => VALID_TAGS.includes(tag));
+  if (!tags || !Array.isArray(tags)) {
+    return { tags: [], unknown: [] };
+  }
+
+  const unknown = tags.filter((tag) => !VALID_TAGS.includes(tag));
+  const valid = tags.filter((tag) => VALID_TAGS.includes(tag));
+
+  if (unknown.length > 0) {
+    const message = `Unknown tool tags ignored: ${unknown.join(", ")} (valid: ${VALID_TAGS.join(", ")})`;
+    if (isStrictToolSchema()) {
+      throw new Error(message);
+    }
+    console.warn(`[tool-registry] ${message}`);
+  }
+
+  return { tags: valid, unknown };
 }
 
 /**
@@ -134,6 +158,72 @@ export function listToolsByTags(includeTags = [], excludeTags = []) {
   return result;
 }
 
+function resolveAuthScopes(context) {
+  return context.scopes || context.authScopes || [];
+}
+
+function toolRequiresWriteScope(tool) {
+  const tags = tool.tags || [];
+  return tags.includes(ToolTags.WRITE) || tags.includes(ToolTags.DESTRUCTIVE);
+}
+
+function hasWriteOrAdminScope(scopes) {
+  return scopes.some((scope) => scope === "write" || scope === "admin");
+}
+
+function validateRequiredArgs(tool, args) {
+  const schema = tool.inputSchema;
+  if (!schema || schema.type !== "object") {
+    return null;
+  }
+
+  for (const field of schema.required || []) {
+    if (args[field] === undefined) {
+      return {
+        ok: false,
+        error: {
+          code: "invalid_args",
+          message: `Missing required argument: ${field}`,
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
+function checkToolAuthorization(tool, name, context) {
+  if (!isAuthEnabled()) {
+    return null;
+  }
+
+  const scopes = resolveAuthScopes(context);
+
+  if (toolRequiresWriteScope(tool) && !hasWriteOrAdminScope(scopes)) {
+    return {
+      ok: false,
+      error: {
+        code: "insufficient_scope",
+        message: `Tool '${name}' requires write or admin scope`,
+      },
+      meta: { requestId: context.requestId },
+    };
+  }
+
+  if (!hasToolScope(name, scopes)) {
+    return {
+      ok: false,
+      error: {
+        code: "insufficient_scope",
+        message: `Insufficient scope for tool '${name}'`,
+      },
+      meta: { requestId: context.requestId },
+    };
+  }
+
+  return null;
+}
+
 /**
  * Register a tool in the registry.
  * @param {Object} tool
@@ -144,6 +234,8 @@ export function listToolsByTags(includeTags = [], excludeTags = []) {
  * @param {string} tool.plugin - Plugin name that owns this tool
  */
 export function registerTool(tool) {
+  tool = ensureWriteToolExplanation(tool);
+
   // Validate according to MCP contract
   validateTool(tool);
 
@@ -151,7 +243,7 @@ export function registerTool(tool) {
     throw new Error(`Tool '${tool.name}' must have a handler function`);
   }
 
-  const validatedTags = validateTags(tool.tags);
+  const { tags: validatedTags } = validateTags(tool.tags);
 
   tools.set(tool.name, {
     name: tool.name,
@@ -214,6 +306,31 @@ export async function callTool(name, args, context = {}) {
         message: `Tool not found: ${name}`,
       },
     };
+  }
+
+  const authError = checkToolAuthorization(tool, name, context);
+  if (authError) {
+    return authError;
+  }
+
+  const argCheck = sanitizeToolArgs(name, args);
+  if (argCheck.blocked) {
+    return {
+      ok: false,
+      error: {
+        code: "security_blocked",
+        message: "Tool arguments blocked by security policy",
+        details: { issues: argCheck.issues },
+      },
+      meta: { requestId: context.requestId },
+    };
+  }
+  args = argCheck.sanitized;
+
+  const schemaError = validateRequiredArgs(tool, args);
+  if (schemaError) {
+    schemaError.meta = { requestId: context.requestId };
+    return schemaError;
   }
 
   // Execute before-hooks (policy checks, validation, etc.)
