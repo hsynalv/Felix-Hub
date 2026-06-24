@@ -7,7 +7,7 @@ import { config } from "./config.js";
 import { loadPlugins, getPlugins } from "./plugins.js";
 import { initializeToolHooks } from "./tool-registry.js";
 import { auditMiddleware, getLogs, getStats } from "./audit.js";
-import { getAuditManager } from "./audit/index.js";
+import { getAuditManager, initAuditManager } from "./audit/index.js";
 import { requireScope, isAuthEnabled } from "./auth.js";
 import { submitJob, getJob, listJobs, getJobStats } from "./jobs.js";
 import { dirname, join } from "path";
@@ -18,6 +18,8 @@ import { getApprovalStore } from "./policy-hooks.js";
 import { callTool } from "./tool-registry.js";
 import { createMcpHttpMiddleware } from "../mcp/http-transport.js";
 import { issueUiTokenWithNotification } from "./ui-tokens.js";
+import { registerUiChatRoutes } from "./ui-chat.js";
+import { initPersistence, getPersistenceStatus, isPersistenceHealthy } from "./persistence/index.js";
 
 import { workspaceContextMiddleware } from "./workspace.js";
 
@@ -55,6 +57,11 @@ function responseEnvelopeMiddleware(req, res, next) {
   const originalJson = res.json.bind(res);
   res.json = (payload) => {
     const requestId = req.requestId ?? null;
+
+    // MCP clients expect raw JSON-RPC result payloads, not the REST envelope.
+    if (req.path === "/mcp") {
+      return originalJson(payload);
+    }
 
     // If already in the new envelope, pass through.
     if (isPlainObject(payload) && (payload.ok === true || payload.ok === false) && payload.meta && "requestId" in payload.meta) {
@@ -196,7 +203,12 @@ export async function createServer() {
   // ── Core routes ────────────────────────────────────────────────────────────
 
   app.get("/health", (req, res) => {
-    res.json({ status: "ok", auth: isAuthEnabled() ? "enabled" : "disabled" });
+    const persistence = getPersistenceStatus();
+    res.json({
+      status: "ok",
+      auth: isAuthEnabled() ? "enabled" : "disabled",
+      persistence,
+    });
   });
 
   app.get("/whoami", requireScope("read"), (req, res) => {
@@ -325,6 +337,34 @@ export async function createServer() {
       ...(operation && { operation: String(operation) }),
     });
     res.json({ entries, count: entries.length });
+  });
+
+  /** GET /audit/archive — MSSQL audit_archive (paginated); memory fallback when degraded */
+  app.get("/audit/archive", requireScope("read"), async (req, res) => {
+    const { plugin, operation, limit = 100, offset = 0 } = req.query;
+    const lim = Math.min(Number(limit) || 100, 500);
+    const off = Number(offset) || 0;
+
+    if (isPersistenceHealthy()) {
+      const { MssqlAuditSink } = await import("./audit/sinks/mssql.audit.js");
+      const sink = new MssqlAuditSink();
+      const entries = await sink.read(lim, off, {
+        ...(plugin && { plugin: String(plugin) }),
+        ...(operation && { operation: String(operation) }),
+      });
+      const stats = await sink.stats();
+      return res.json({ source: "mssql", entries, count: entries.length, total: stats.count });
+    }
+
+    const manager = getAuditManager();
+    if (!manager.initialized) await manager.init();
+    const entries = await manager.getRecentEntries({
+      limit: lim,
+      offset: off,
+      ...(plugin && { plugin: String(plugin) }),
+      ...(operation && { operation: String(operation) }),
+    });
+    res.json({ source: "memory", entries, count: entries.length, persistence: getPersistenceStatus() });
   });
 
   // ── Job queue routes ───────────────────────────────────────────────────────
@@ -526,31 +566,16 @@ export async function createServer() {
 
   app.all("/mcp", createMcpHttpMiddleware());
 
-  // ── Landing Page (Public) ─────────────────────────────────────────────────
+  // ── React SPA (unified UI) ─────────────────────────────────────────────────
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
+  const appDistPath = join(__dirname, "..", "public", "app");
 
-  // ── Web UI Panel ──────────────────────────────────────────────────────────
-
-  app.get(["/ui", "/ui/"], (req, res) => {
-    const uiIndexPath = join(__dirname, "..", "public", "ui", "index.html");
-    if (!existsSync(uiIndexPath)) {
-      return res.status(404).json({ ok: false, error: "UI not found" });
-    }
-    res.setHeader("Cache-Control", "no-store");
-    res.sendFile(uiIndexPath);
-  });
-
-  // ── Admin Panel (20-plugin yönetim, loglar, kontrol) ───────────────────────
-
-  app.get(["/admin", "/admin/"], (req, res) => {
-    const adminPath = join(__dirname, "..", "public", "admin", "index.html");
-    if (!existsSync(adminPath)) {
-      return res.status(404).json({ ok: false, error: "Admin UI not found" });
-    }
-    res.setHeader("Cache-Control", "no-store");
-    res.sendFile(adminPath);
-  });
+  // Legacy URL redirects (do not catch /ui/chat/* API routes)
+  app.get(["/ui", "/ui/"], (_req, res) => res.redirect(301, "/chat"));
+  app.get(["/observability/dashboard", "/observability/dashboard/"], (_req, res) =>
+    res.redirect(301, "/observability")
+  );
 
   app.post("/ui/token", (req, res) => {
     const ip = req.ip || "";
@@ -586,41 +611,17 @@ export async function createServer() {
       });
   });
 
-  // Serve landing page static files
-  app.get("/landing/styles.css", (req, res) => {
-    const cssPath = join(__dirname, "..", "public", "landing", "styles.css");
-    if (!existsSync(cssPath)) {
-      return res.status(404).json({ ok: false, error: "CSS not found" });
-    }
-    res.setHeader("Content-Type", "text/css");
-    res.sendFile(cssPath);
-  });
-
-  app.get("/landing/app.js", (req, res) => {
-    const jsPath = join(__dirname, "..", "public", "landing", "app.js");
-    if (!existsSync(jsPath)) {
-      return res.status(404).json({ ok: false, error: "JS not found" });
-    }
-    res.setHeader("Content-Type", "application/javascript");
-    res.sendFile(jsPath);
-  });
-
-  // Root path - serve landing page
-  app.get("/", (req, res) => {
-    const indexPath = join(__dirname, "..", "public", "landing", "index.html");
-    if (!existsSync(indexPath)) {
-      return res.json({
-        ok: true,
-        message: "mcp-hub is running",
-        version: "1.0.0",
-        docs: "/api-docs",
-        dashboard: "/observability/dashboard",
-      });
-    }
-    res.sendFile(indexPath);
-  });
+  registerUiChatRoutes(app);
 
   // ── Plugin loader ──────────────────────────────────────────────────────────
+
+  await initPersistence();
+  const persistenceStatus = getPersistenceStatus();
+  const auditSinks = ["memory"];
+  if (persistenceStatus.status === "healthy") {
+    auditSinks.push("mssql");
+  }
+  await initAuditManager({ sinks: auditSinks, memoryMaxEntries: 1000 });
 
   // Load policy presets at startup
   loadPresetsAtStartup();
@@ -629,6 +630,50 @@ export async function createServer() {
   initializeToolHooks();
 
   await loadPlugins(app);
+
+  // ── React SPA static + HTML fallback ───────────────────────────────────────
+
+  const spaIndexPath = join(appDistPath, "index.html");
+  const spaApiPrefixes = [
+    "/mcp",
+    "/health",
+    "/openapi",
+    "/plugins",
+    "/audit",
+    "/jobs",
+    "/approvals",
+    "/approve",
+    "/ui/chat",
+    "/ui/token",
+    "/whoami",
+    "/observability/health",
+    "/observability/metrics",
+    "/observability/errors",
+  ];
+
+  if (existsSync(spaIndexPath)) {
+    app.use(express.static(appDistPath, { index: false }));
+    app.get("*", (req, res, next) => {
+      if (req.method !== "GET") return next();
+      if (spaApiPrefixes.some((p) => req.path === p || req.path.startsWith(`${p}/`))) return next();
+      if (req.path.includes(".")) return next();
+      const accept = req.headers.accept || "";
+      const wantsHtml = accept.includes("text/html") || accept.includes("*/*") || accept === "";
+      if (!wantsHtml) return next();
+      res.setHeader("Cache-Control", "no-store");
+      res.sendFile(spaIndexPath);
+    });
+  } else {
+    console.warn("[spa] Build not found — run: npm run ui:build");
+    app.get("/", (_req, res) => {
+      res.json({
+        ok: true,
+        message: "mcp-hub API running — UI not built",
+        hint: "cd mcp-server && npm run ui:build",
+        docs: "/openapi.json",
+      });
+    });
+  }
 
   // ── 404 handler ────────────────────────────────────────────────────────────
 

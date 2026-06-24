@@ -21,6 +21,7 @@ import {
   executeBeforeHooks,
   executeAfterHooks,
 } from "./tool-hooks.js";
+import { auditLog } from "./audit/index.js";
 
 const tools = new Map();
 
@@ -364,14 +365,23 @@ export function initializeToolHooks() {
  * @param {Object} logEntry
  */
 function logToolExecution(logEntry) {
-  // In production, this could write to a file, database, or external service
-  const logLine = JSON.stringify({
-    type: "tool_audit",
-    ...logEntry,
-  });
+  const tool = tools.get(logEntry.toolName);
+  const pluginName = tool?.plugin || "core";
 
-  // Write to stderr for now (can be redirected to file)
-  console.error(logLine);
+  void auditLog({
+    plugin: pluginName,
+    operation: logEntry.toolName,
+    actor: logEntry.user || "anonymous",
+    workspaceId: logEntry.projectId || "global",
+    projectId: logEntry.projectId || null,
+    correlationId: logEntry.requestId,
+    allowed: !logEntry.failed,
+    success: !logEntry.failed,
+    durationMs: logEntry.duration || 0,
+    metadata: { toolName: logEntry.toolName },
+  }).catch((err) => {
+    console.error("[tool-registry] audit log failed:", err.message);
+  });
 }
 
 /**

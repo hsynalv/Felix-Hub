@@ -79,6 +79,11 @@ export class AuditManager {
           }));
           break;
         }
+        case "mssql": {
+          const { MssqlAuditSink } = await import("./sinks/mssql.audit.js");
+          sinks.push(new MssqlAuditSink());
+          break;
+        }
         // Redis and other sinks can be added here
         default: {
           console.warn(`[audit-manager] Unknown sink type: ${sinkType}`);

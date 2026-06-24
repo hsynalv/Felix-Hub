@@ -1,0 +1,105 @@
+import { getApiKey } from "./auth";
+import { apiPost } from "./api-client";
+
+export interface ChatMessage {
+  role: "user" | "assistant" | "tool";
+  content: string;
+  toolName?: string;
+  toolPhase?: "start" | "end";
+}
+
+export interface ApprovalPayload {
+  approvalId: string;
+  tool: string;
+  arguments: Record<string, unknown>;
+  message?: string;
+}
+
+export interface ChatStreamCallbacks {
+  onMeta?: (data: Record<string, unknown>) => void;
+  onToken?: (text: string) => void;
+  onTool?: (data: { phase: string; name: string; arguments?: Record<string, unknown>; result?: unknown }) => void;
+  onApproval?: (payload: ApprovalPayload) => void | Promise<void>;
+  onDone?: (data: Record<string, unknown>) => void;
+  onError?: (message: string) => void;
+}
+
+export async function streamChat(
+  message: string,
+  history: Array<{ role: string; content: string }>,
+  model: string | undefined,
+  callbacks: ChatStreamCallbacks
+): Promise<void> {
+  const key = getApiKey();
+  if (!key) throw new Error("API key gerekli");
+
+  const res = await fetch("/ui/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({ message, history, model }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: { message?: string } })?.error?.message || `HTTP ${res.status}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("Stream unavailable");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() || "";
+
+    for (const part of parts) {
+      const lines = part.split("\n");
+      let event = "message";
+      let dataLine = "";
+      for (const line of lines) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+      }
+      if (!dataLine) continue;
+      const payload = JSON.parse(dataLine);
+
+      switch (event) {
+        case "meta":
+          callbacks.onMeta?.(payload);
+          break;
+        case "token":
+          if (payload.text) callbacks.onToken?.(payload.text);
+          break;
+        case "tool":
+          callbacks.onTool?.(payload);
+          break;
+        case "approval":
+          await callbacks.onApproval?.({
+            approvalId: payload.approvalId,
+            tool: payload.tool,
+            arguments: payload.arguments || {},
+            message: payload.message,
+          });
+          break;
+        case "done":
+          callbacks.onDone?.(payload);
+          break;
+        case "error":
+          callbacks.onError?.(payload.message || "Stream error");
+          break;
+      }
+    }
+  }
+}
+
+export async function submitChatApproval(approvalId: string, approved: boolean): Promise<void> {
+  await apiPost("/ui/chat/approve", { approval_id: approvalId, approved });
+}

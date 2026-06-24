@@ -343,7 +343,6 @@ async function runAdapter(type, fn, res, _req, options = {}) {
   }
 }
 
-export const requires = [];
 // At least one of these env vars must be set depending on which adapter you use:
 //   POSTGRES_URL or DATABASE_URL         → postgres adapter
 //   MSSQL_HOST + MSSQL_USER + ...        → mssql adapter

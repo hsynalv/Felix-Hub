@@ -5,7 +5,7 @@
  * Handles GET/POST /mcp requests.
  */
 
-import { createMcpServer } from "./gateway.js";
+import { handleMcpHttpMessage } from "./gateway.js";
 import { validateBearerToken } from "../core/auth.js";
 
 /**
@@ -13,8 +13,6 @@ import { validateBearerToken } from "../core/auth.js";
  * @returns {Function} Express middleware
  */
 export function createMcpHttpMiddleware() {
-  const server = createMcpServer();
-
   return async (req, res, next) => {
     // Only handle /mcp path
     if (req.path !== "/mcp") {
@@ -100,13 +98,23 @@ export function createMcpHttpMiddleware() {
           });
         }
 
-        // Process through MCP server with auth context
-        const result = await server.handleRequest(message, {
+        const result = await handleMcpHttpMessage(message, {
           user: authContext.user,
           scopes: authContext.scopes,
+          projectId: req.projectId,
+          projectEnv: req.projectEnv,
+          requestId: req.requestId,
         });
 
-        return res.json(result);
+        if (result === null) {
+          return res.status(204).end();
+        }
+
+        return res.json({
+          jsonrpc: "2.0",
+          id: message.id ?? null,
+          result,
+        });
       }
 
       // Method not allowed
@@ -119,6 +127,15 @@ export function createMcpHttpMiddleware() {
       });
     } catch (err) {
       console.error("[mcp-http] error:", err);
+      if (err.code === "method_not_found") {
+        return res.status(404).json({
+          ok: false,
+          error: {
+            code: "method_not_found",
+            message: err.message,
+          },
+        });
+      }
       return res.status(500).json({
         ok: false,
         error: {

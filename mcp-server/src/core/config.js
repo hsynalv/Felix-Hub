@@ -64,6 +64,10 @@ const rawConfig = {
     keyPrefix: process.env.REDIS_PREFIX || "mcp-hub:",
     ttlSeconds: Number(process.env.REDIS_TTL_SECONDS) || 86400,
   },
+  persistence: {
+    enabled: process.env.HUB_PERSISTENCE_ENABLED === "true",
+    mssqlUrl: process.env.HUB_MSSQL_URL?.trim() || undefined,
+  },
 };
 
 // Validate and export config

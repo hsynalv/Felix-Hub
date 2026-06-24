@@ -16,6 +16,6 @@ process.on("unhandledRejection", (reason, promise) => {
 
 const app = await createServer();
 
-app.listen(config.port, () => {
+app.listen(config.port, "0.0.0.0", () => {
   console.log(`mcp-server listening on http://localhost:${config.port}`);
 });

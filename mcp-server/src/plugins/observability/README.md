@@ -14,7 +14,7 @@ Sağlık kontrolleri ve metrikler.
 
 ## Dashboard
 
-Web UI: `http://localhost:8787/observability/dashboard`
+Web UI: `http://localhost:8787/observability` (legacy `/observability/dashboard` → redirect)
 
 ## Metrikler
 

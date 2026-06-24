@@ -97,6 +97,12 @@ export const ConfigSchema = z.object({
     keyPrefix: z.string().default("mcp-hub:"),
     ttlSeconds: z.number().int().default(86400),
   }),
+
+  // Hub MSSQL persistence (internal schema — separate from database plugin)
+  persistence: z.object({
+    enabled: z.boolean().default(false),
+    mssqlUrl: z.string().optional(),
+  }),
 });
 
 /**
@@ -190,6 +196,9 @@ export function logStartupConfig(config) {
   if (config.redis.enabled) {
     console.log("📦 Redis: enabled");
   }
-  
+  if (config.persistence.enabled) {
+    console.log(`🗄️  Hub persistence: enabled (url: ${sanitized.persistence?.mssqlUrl ? "set" : "fallback/none"})`);
+  }
+
   console.log("");
 }

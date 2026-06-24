@@ -10,6 +10,26 @@
 import { randomUUID } from "crypto";
 import { getRedis } from "../../core/redis.js";
 
+async function syncMemoryToPersistence(memoryId, action, content = null) {
+  try {
+    const mod = await import("../../core/persistence/index.js");
+    if (action === "delete") {
+      await mod.markMemorySyncDeleted(memoryId, NS);
+      return;
+    }
+    const contentHash = content ? mod.hashContent(content) : null;
+    await mod.upsertMemorySyncState({
+      memoryId,
+      namespace: NS,
+      syncTarget: "mssql_meta",
+      syncStatus: "pending",
+      contentHash,
+    });
+  } catch {
+    // persistence disabled or unavailable
+  }
+}
+
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 const NS              = process.env.BRAIN_NAMESPACE || process.env.BRAIN_USER_ID || "default";
@@ -111,6 +131,7 @@ export async function addMemory({
 
   await r.setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(mem));
   await r.sadd(MEM_INDEX_KEY, id);
+  await syncMemoryToPersistence(id, "create", content);
   return mem;
 }
 
@@ -145,6 +166,7 @@ export async function updateMemory(id, fields) {
   };
 
   await r.setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(updated));
+  await syncMemoryToPersistence(id, "update", updated.content);
   return updated;
 }
 
@@ -152,6 +174,7 @@ export async function updateMemory(id, fields) {
 export async function deleteMemory(id) {
   await getRedis().del(memKey(id));
   await getRedis().srem(MEM_INDEX_KEY, id);
+  await syncMemoryToPersistence(id, "delete");
   return { deleted: true, id };
 }
 

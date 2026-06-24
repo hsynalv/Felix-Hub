@@ -34,6 +34,7 @@ export { AuditSink } from "./sink.interface.js";
 export { MemoryAuditSink } from "./sinks/memory.audit.js";
 export { FileAuditSink } from "./sinks/file.audit.js";
 export { MultiAuditSink } from "./sinks/multi.audit.js";
+export { MssqlAuditSink } from "./sinks/mssql.audit.js";
 
 // Audit manager
 export {

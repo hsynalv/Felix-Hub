@@ -1,0 +1,41 @@
+/**
+ * Hub MSSQL migration runner
+ */
+
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "migrations");
+
+const MIGRATION_FILES = [
+  { version: 1, file: "001_hub_schema.sql" },
+];
+
+/**
+ * @param {import("mssql").ConnectionPool} pool
+ */
+export async function runMigrations(pool) {
+  for (const migration of MIGRATION_FILES) {
+    const sqlPath = join(MIGRATIONS_DIR, migration.file);
+    const sqlText = readFileSync(sqlPath, "utf8");
+    await pool.request().batch(sqlText);
+    console.log(`[persistence] Applied migration v${migration.version} (${migration.file})`);
+  }
+}
+
+/**
+ * @param {import("mssql").ConnectionPool} pool
+ * @returns {Promise<number|null>}
+ */
+export async function getSchemaVersion(pool) {
+  try {
+    const result = await pool.request().query(
+      "SELECT MAX(version) AS version FROM hub_schema_version"
+    );
+    return result.recordset[0]?.version ?? null;
+  } catch {
+    return null;
+  }
+}
