@@ -9,6 +9,10 @@
 
 import { writeFile, mkdir } from "fs/promises";
 import { dirname } from "path";
+import { Router } from "express";
+import { requireScope } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
+import { auditLog } from "../../core/audit/index.js";
 
 export const name = "video-gen";
 export const version = "1.0.0";
@@ -557,6 +561,50 @@ export const endpoints = [
 ];
 
 // Plugin registration
-export function register(app, dependencies) {
+export function register(app) {
+  const router = Router();
+  mountPluginHealth(router, { name, version });
+
+  router.post("/generate", requireScope("write"), async (req, res) => {
+    try {
+      const result = await generateVideo(req.body.prompt, req.body);
+      void auditLog({
+        plugin: "video-gen",
+        operation: "generate",
+        actor: req.actor?.type || "api",
+        workspaceId: "global",
+        allowed: true,
+        success: true,
+        metadata: { provider: result.provider, estimatedCostUsd: 0.15 },
+      });
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: { message: error.message } });
+    }
+  });
+
+  router.get("/status/:id", requireScope("read"), async (req, res) => {
+    try {
+      const status = await checkStatus(req.params.id);
+      res.json({ ok: true, data: status });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: { message: error.message } });
+    }
+  });
+
+  router.post("/avatar", requireScope("write"), async (req, res) => {
+    try {
+      const result = await generateAvatarVideo(req.body.text, req.body.avatarId, req.body.options);
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: { message: error.message } });
+    }
+  });
+
+  router.get("/list", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: listVideos() });
+  });
+
+  app.use("/video", router);
   console.log("[Video Gen] Registered with providers:", Object.keys(PROVIDERS).join(", "));
 }

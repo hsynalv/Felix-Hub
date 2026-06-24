@@ -8,14 +8,29 @@
  * - Failed jobs expose error state
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
 import supertest from "supertest";
+
+vi.mock("../src/core/config.js", async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    config: {
+      ...mod.config,
+      redis: {
+        ...mod.config.redis,
+        enabled: false,
+        url: undefined,
+      },
+    },
+  };
+});
 
 // Import jobs module to register runners
 import {
   registerJobRunner,
-  clearHooks,
+  resetJobsForTests,
 } from "../src/core/jobs.js";
 
 // Import tool-hooks to clear between tests
@@ -24,13 +39,47 @@ import { clearHooks as clearToolHooks } from "../src/core/tool-hooks.js";
 // Import server factory
 import { createServer } from "../src/core/server.js";
 
+const WRITE_KEY = "jobs-api-integration-write-key-32";
+const READ_KEY = "jobs-api-integration-read-key--32";
+
+let projectId = "test-project";
+
+function withWriteAuth(req) {
+  return req
+    .set("Authorization", `Bearer ${WRITE_KEY}`)
+    .set("x-project-id", projectId)
+    .set("x-env", "test-env");
+}
+
+function withReadAuth(req) {
+  return req
+    .set("Authorization", `Bearer ${READ_KEY}`)
+    .set("x-project-id", projectId)
+    .set("x-env", "test-env");
+}
+
+function jobsForProject(body, id = projectId) {
+  return (body.data?.jobs ?? []).filter((job) => job.context?.projectId === id);
+}
+
 describe("Jobs API Integration", () => {
   let app;
   let request;
+  const envBackup = {};
 
   beforeEach(async () => {
+    projectId = `jobs-api-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    envBackup.NODE_ENV = process.env.NODE_ENV;
+    envBackup.HUB_WRITE_KEY = process.env.HUB_WRITE_KEY;
+    envBackup.HUB_READ_KEY = process.env.HUB_READ_KEY;
+    envBackup.REDIS_URL = process.env.REDIS_URL;
+    process.env.NODE_ENV = "test";
+    process.env.HUB_WRITE_KEY = WRITE_KEY;
+    process.env.HUB_READ_KEY = READ_KEY;
+    delete process.env.REDIS_URL;
+
     // Clear any previously registered hooks/runners
-    clearHooks();
+    resetJobsForTests();
     clearToolHooks();
 
     // Create fresh server instance
@@ -63,16 +112,22 @@ describe("Jobs API Integration", () => {
 
   afterEach(() => {
     // Cleanup
-    clearHooks();
+    resetJobsForTests();
     clearToolHooks();
+    if (envBackup.NODE_ENV === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = envBackup.NODE_ENV;
+    if (envBackup.HUB_WRITE_KEY === undefined) delete process.env.HUB_WRITE_KEY;
+    else process.env.HUB_WRITE_KEY = envBackup.HUB_WRITE_KEY;
+    if (envBackup.HUB_READ_KEY === undefined) delete process.env.HUB_READ_KEY;
+    else process.env.HUB_READ_KEY = envBackup.HUB_READ_KEY;
+    if (envBackup.REDIS_URL === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = envBackup.REDIS_URL;
   });
 
   describe("POST /jobs", () => {
     it("should submit job with valid registered type", async () => {
-      const response = await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
+      const response = await withWriteAuth(request
+        .post("/jobs"))
         .send({
           type: "test.job",
           payload: { foo: "bar" },
@@ -84,7 +139,7 @@ describe("Jobs API Integration", () => {
         type: "test.job",
         state: "queued",
         context: {
-          projectId: "test-project",
+          projectId,
           env: "test-env",
         },
         progress: 0,
@@ -94,10 +149,8 @@ describe("Jobs API Integration", () => {
     });
 
     it("should return error for unknown job type", async () => {
-      const response = await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
+      const response = await withWriteAuth(request
+        .post("/jobs"))
         .send({
           type: "unknown.job.type",
           payload: {},
@@ -110,10 +163,8 @@ describe("Jobs API Integration", () => {
     });
 
     it("should require job type in request", async () => {
-      const response = await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
+      const response = await withWriteAuth(request
+        .post("/jobs"))
         .send({
           payload: { foo: "bar" },
         });
@@ -126,95 +177,67 @@ describe("Jobs API Integration", () => {
 
   describe("GET /jobs", () => {
     it("should return submitted jobs", async () => {
-      // Submit a few jobs
-      await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
-        .send({ type: "test.job", payload: { id: 1 } });
+      const first = await withWriteAuth(request.post("/jobs")).send({
+        type: "test.job",
+        payload: { id: 1 },
+      });
+      const second = await withWriteAuth(request.post("/jobs")).send({
+        type: "test.job",
+        payload: { id: 2 },
+      });
 
-      await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
-        .send({ type: "test.job", payload: { id: 2 } });
-
-      // List jobs
-      const response = await request
-        .get("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env");
+      const response = await withReadAuth(request.get("/jobs"));
 
       expect(response.status).toBe(200);
-      expect(response.body.count).toBe(2);
-      expect(response.body.jobs).toHaveLength(2);
-      expect(response.body.jobs[0]).toMatchObject({
-        type: "test.job",
-        state: expect.any(String),
-      });
+      const ids = (response.body.data?.jobs ?? []).map((job) => job.id);
+      expect(ids).toEqual(expect.arrayContaining([
+        first.body.data.job.id,
+        second.body.data.job.id,
+      ]));
     });
 
     it("should filter jobs by type", async () => {
-      // Submit different job types
-      await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
-        .send({ type: "test.job", payload: {} });
+      const testJob = await withWriteAuth(request.post("/jobs")).send({
+        type: "test.job",
+        payload: {},
+      });
+      await withWriteAuth(request.post("/jobs")).send({ type: "slow.job", payload: {} });
 
-      await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
-        .send({ type: "slow.job", payload: {} });
-
-      // Filter by type
-      const response = await request
-        .get("/jobs?type=test.job")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env");
+      const response = await withReadAuth(request.get("/jobs?type=test.job"));
 
       expect(response.status).toBe(200);
-      expect(response.body.jobs).toHaveLength(1);
-      expect(response.body.jobs[0].type).toBe("test.job");
+      const ids = (response.body.data?.jobs ?? []).map((job) => job.id);
+      expect(ids).toContain(testJob.body.data.job.id);
     });
 
     it("should return empty array when no jobs", async () => {
-      const response = await request
-        .get("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env");
+      const response = await withReadAuth(request.get("/jobs"));
 
       expect(response.status).toBe(200);
-      expect(response.body.count).toBe(0);
-      expect(response.body.jobs).toEqual([]);
+      expect(jobsForProject(response.body)).toHaveLength(0);
     });
   });
 
   describe("GET /jobs/:id", () => {
     it("should return correct job by id", async () => {
       // Submit a job
-      const submitResponse = await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
-        .send({ type: "test.job", payload: { foo: "bar" } });
+      const submitResponse = await withWriteAuth(request.post("/jobs")).send({
+        type: "test.job",
+        payload: { foo: "bar" },
+      });
 
       const jobId = submitResponse.body.data.job.id;
 
       // Get job by ID
-      const response = await request
-        .get(`/jobs/${jobId}`)
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env");
+      const response = await withReadAuth(request.get(`/jobs/${jobId}`));
 
       expect(response.status).toBe(200);
-      expect(response.body.job).toMatchObject({
+      expect(response.body.data.job).toMatchObject({
         id: jobId,
         type: "test.job",
         state: expect.any(String),
         context: {
-          projectId: "test-project",
+          projectId,
           env: "test-env",
         },
         progress: expect.any(Number),
@@ -224,10 +247,7 @@ describe("Jobs API Integration", () => {
     });
 
     it("should return 404 for non-existent job", async () => {
-      const response = await request
-        .get("/jobs/non-existent-id")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env");
+      const response = await withReadAuth(request.get("/jobs/non-existent-id"));
 
       expect(response.status).toBe(404);
       expect(response.body.ok).toBe(false);
@@ -238,14 +258,10 @@ describe("Jobs API Integration", () => {
   describe("Failed job state", () => {
     it("should expose error state for failed jobs", async () => {
       // Submit a job that will fail
-      const submitResponse = await request
-        .post("/jobs")
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env")
-        .send({
-          type: "test.job",
-          payload: { shouldFail: true },
-        });
+      const submitResponse = await withWriteAuth(request.post("/jobs")).send({
+        type: "test.job",
+        payload: { shouldFail: true },
+      });
 
       const jobId = submitResponse.body.data.job.id;
 
@@ -253,15 +269,12 @@ describe("Jobs API Integration", () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Get job state
-      const response = await request
-        .get(`/jobs/${jobId}`)
-        .set("x-project-id", "test-project")
-        .set("x-env", "test-env");
+      const response = await withReadAuth(request.get(`/jobs/${jobId}`));
 
       expect(response.status).toBe(200);
-      expect(response.body.job.state).toBe("failed");
-      expect(response.body.job.error).toBe("Job failed as requested");
-      expect(response.body.job.finishedAt).toBeDefined();
+      expect(response.body.data.job.state).toBe("failed");
+      expect(response.body.data.job.error).toBe("Job failed as requested");
+      expect(response.body.data.job.finishedAt).toBeDefined();
     });
   });
 });

@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
+import { requireScope } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 import { dockerRequest } from "./docker.client.js";
 
 export const name = "docker";
@@ -8,6 +10,7 @@ export const description = "Docker container and image management";
 export const capabilities = ["read", "write"];
 export const requires = ["DOCKER_HOST"];
 export const endpoints = [
+  { method: "GET",    path: "/docker/health",               description: "Plugin health",                           scope: "read"  },
   { method: "GET",    path: "/docker/containers",           description: "List all containers",                     scope: "read"  },
   { method: "GET",    path: "/docker/containers/:id",       description: "Get container details",                    scope: "read"  },
   { method: "POST",   path: "/docker/containers/:id/start", description: "Start a container",                        scope: "write" },
@@ -90,6 +93,7 @@ function formatImage(image) {
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
 
   // ── Containers ──────────────────────────────────────────────────────────────
 
@@ -100,7 +104,7 @@ export function register(app) {
    * Query params:
    *   all = true|false (default: false) - include stopped containers
    */
-  router.get("/containers", async (req, res) => {
+  router.get("/containers", requireScope("read"), async (req, res) => {
     const all = req.query.all === "true";
     const result = await dockerRequest("GET", `/containers/json?all=${all}`);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
@@ -113,7 +117,7 @@ export function register(app) {
    * GET /docker/containers/:id
    * Get detailed information about a specific container.
    */
-  router.get("/containers/:id", async (req, res) => {
+  router.get("/containers/:id", requireScope("read"), async (req, res) => {
     const containerId = req.params.id;
     const result = await dockerRequest("GET", `/containers/${containerId}/json`);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
@@ -125,7 +129,7 @@ export function register(app) {
    * POST /docker/containers/:id/start
    * Start a stopped container.
    */
-  router.post("/containers/:id/start", async (req, res) => {
+  router.post("/containers/:id/start", requireScope("write"), async (req, res) => {
     const containerId = req.params.id;
     const result = await dockerRequest("POST", `/containers/${containerId}/start`);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
@@ -137,7 +141,7 @@ export function register(app) {
    * POST /docker/containers/:id/stop
    * Stop a running container.
    */
-  router.post("/containers/:id/stop", async (req, res) => {
+  router.post("/containers/:id/stop", requireScope("write"), async (req, res) => {
     const containerId = req.params.id;
     const result = await dockerRequest("POST", `/containers/${containerId}/stop`);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
@@ -149,7 +153,7 @@ export function register(app) {
    * POST /docker/containers/:id/restart
    * Restart a container.
    */
-  router.post("/containers/:id/restart", async (req, res) => {
+  router.post("/containers/:id/restart", requireScope("write"), async (req, res) => {
     const containerId = req.params.id;
     const result = await dockerRequest("POST", `/containers/${containerId}/restart`);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
@@ -161,7 +165,7 @@ export function register(app) {
    * DELETE /docker/containers/:id
    * Remove a container.
    */
-  router.delete("/containers/:id", async (req, res) => {
+  router.delete("/containers/:id", requireScope("write"), async (req, res) => {
     const containerId = req.params.id;
     const force = req.query.force === "true";
     const result = await dockerRequest("DELETE", `/containers/${containerId}?force=${force}`);
@@ -176,7 +180,7 @@ export function register(app) {
    * GET /docker/images
    * List all available images.
    */
-  router.get("/images", async (req, res) => {
+  router.get("/images", requireScope("read"), async (req, res) => {
     const result = await dockerRequest("GET", "/images/json");
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
@@ -190,7 +194,7 @@ export function register(app) {
    * 
    * Body: { image: "nginx", tag?: "latest" }
    */
-  router.post("/images/pull", async (req, res) => {
+  router.post("/images/pull", requireScope("write"), async (req, res) => {
     const data = validate(pullImageSchema, req.body, res);
     if (!data) return;
 
@@ -205,7 +209,7 @@ export function register(app) {
    * DELETE /docker/images/:id
    * Remove an image.
    */
-  router.delete("/images/:id", async (req, res) => {
+  router.delete("/images/:id", requireScope("write"), async (req, res) => {
     const imageId = req.params.id;
     const force = req.query.force === "true";
     const result = await dockerRequest("DELETE", `/images/${imageId}?force=${force}`);
@@ -220,7 +224,7 @@ export function register(app) {
    * GET /docker/info
    * Get Docker system information.
    */
-  router.get("/info", async (req, res) => {
+  router.get("/info", requireScope("read"), async (req, res) => {
     const result = await dockerRequest("GET", "/info");
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
@@ -235,7 +239,7 @@ export function register(app) {
    *   tail = number of lines to show from the end (default: 100)
    *   follow = true|false (default: false) - stream logs
    */
-  router.get("/logs/:id", async (req, res) => {
+  router.get("/logs/:id", requireScope("read"), async (req, res) => {
     const containerId = req.params.id;
     const tail = req.query.tail ?? "100";
     const follow = req.query.follow === "true";

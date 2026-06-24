@@ -6,7 +6,7 @@
  */
 
 import { handleMcpHttpMessage } from "./gateway.js";
-import { validateBearerToken } from "../core/auth.js";
+import { validateBearerToken, isAuthEnabled } from "../core/auth.js";
 
 /**
  * Create Express middleware for MCP HTTP endpoint
@@ -14,8 +14,9 @@ import { validateBearerToken } from "../core/auth.js";
  */
 export function createMcpHttpMiddleware() {
   return async (req, res, next) => {
-    // Only handle /mcp path
-    if (req.path !== "/mcp") {
+    // Mounted via app.all("/mcp", ...) → req.baseUrl is "/mcp", req.path is "/"
+    const onMcpRoute = req.baseUrl === "/mcp" || req.path === "/mcp";
+    if (!onMcpRoute) {
       return next();
     }
 
@@ -43,7 +44,7 @@ export function createMcpHttpMiddleware() {
           scopes: validation.scopes || [],
           type: validation.type,
         };
-      } else if (process.env.HUB_AUTH_ENABLED === "true") {
+      } else if (isAuthEnabled() || process.env.OAUTH_INTROSPECTION_ENDPOINT) {
         return res.status(401).json({
           ok: false,
           error: {
@@ -52,7 +53,7 @@ export function createMcpHttpMiddleware() {
           },
         });
       }
-    } else if (process.env.HUB_AUTH_ENABLED === "true") {
+    } else if (isAuthEnabled() || process.env.OAUTH_INTROSPECTION_ENDPOINT) {
       return res.status(401).json({
         ok: false,
         error: {

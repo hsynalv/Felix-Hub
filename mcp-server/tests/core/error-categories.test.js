@@ -136,7 +136,7 @@ describe("Error Categories", () => {
     });
 
     it("should categorize OpenAI rate limit errors", () => {
-      const error = new Error("Rate limit exceeded for OpenAI API");
+      const error = new Error("rate limit exceeded for OpenAI API");
 
       const result = categorizeError(error);
       expect(result.category).toBe(ErrorCategory.RATE_LIMIT);

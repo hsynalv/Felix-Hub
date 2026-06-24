@@ -1,0 +1,50 @@
+{
+  "name": "file-storage",
+  "version": "1.0.0",
+  "status": "beta",
+  "owner": "core-team",
+  "description": "S3, Google Drive ve lokal depolama ile dosya işlemleri",
+  "requiresAuth": true,
+  "supportsJobs": false,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "write",
+    "dangerousCombinations": [
+      "write"
+    ],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": false
+  },
+  "dependencies": [],
+  "envVars": [
+    {
+      "name": "FILE_STORAGE_LOCAL_ROOT",
+      "required": false,
+      "description": "Local filesystem root for stored files"
+    },
+    {
+      "name": "FILE_STORAGE_MAX_MB",
+      "required": false,
+      "description": "Maximum upload size in megabytes"
+    },
+    {
+      "name": "FILE_STORAGE_READONLY",
+      "required": false,
+      "description": "Disable destructive file operations when true"
+    }
+  ]
+}

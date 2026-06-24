@@ -1,22 +1,39 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Brain, KeyRound, Loader2, Plus, Search, Trash2, Upload } from "lucide-react";
+import {
+  Brain,
+  Download,
+  FileJson,
+  Layers,
+  List,
+  Loader2,
+  MessageSquare,
+  Network,
+  Plus,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Tags,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { BrainGraph } from "@/components/BrainGraph";
-import { getApiKey } from "@/lib/auth";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState } from "@/components/layout/EmptyState";
+import { BrainGraph, MEMORY_TYPE_COLORS } from "@/components/BrainGraph";
 import {
   createMemory,
   deleteMemory,
@@ -28,7 +45,10 @@ import {
   fetchProjects,
   recallMemories,
   syncObsidian,
+  pullObsidian,
+  downloadObsidianCanvas,
   updateMemory,
+  type BrainMemory,
   type MemoryType,
 } from "@/lib/brain-api";
 import { useToast } from "@/providers/ToastProvider";
@@ -36,8 +56,172 @@ import { cn, formatTime } from "@/lib/utils";
 
 const MEMORY_TYPES: MemoryType[] = ["fact", "decision", "preference", "event", "project_note"];
 
+const MEMORY_TYPE_LABELS: Record<MemoryType, string> = {
+  fact: "Gerçek",
+  decision: "Karar",
+  preference: "Tercih",
+  event: "Olay",
+  project_note: "Proje notu",
+};
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+  dotColor,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+  dotColor?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+        active
+          ? "border-primary bg-primary/15 text-primary"
+          : "border-border/80 bg-muted/20 text-muted-foreground hover:border-primary/30 hover:bg-muted/40 hover:text-foreground"
+      )}
+    >
+      {dotColor && (
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} />
+      )}
+      <span className="max-w-[140px] truncate">{label}</span>
+      {count != null && <span className="tabular-nums opacity-80">{count}</span>}
+    </button>
+  );
+}
+
+function MemoryDetailContent({
+  selected,
+  editing,
+  editContent,
+  related,
+  onEditContent,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  savePending,
+  onDelete,
+  deletePending,
+  onSelectRelated,
+}: {
+  selected: BrainMemory;
+  editing: boolean;
+  editContent: string;
+  related: BrainMemory[];
+  onEditContent: (v: string) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: () => void;
+  savePending: boolean;
+  onDelete: () => void;
+  deletePending: boolean;
+  onSelectRelated: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-4 p-4">
+      <div className="flex flex-wrap gap-1.5">
+        <Badge
+          style={{
+            backgroundColor: `${MEMORY_TYPE_COLORS[selected.type]}22`,
+            color: MEMORY_TYPE_COLORS[selected.type],
+          }}
+        >
+          {MEMORY_TYPE_LABELS[selected.type]}
+        </Badge>
+        <Badge>Önem {(selected.importance ?? 0).toFixed(2)}</Badge>
+        {selected.projectId && <Badge variant="warning">{selected.projectId}</Badge>}
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Oluşturulma {formatTime(selected.createdAt)}
+        {selected.updatedAt && ` · Güncelleme ${formatTime(selected.updatedAt)}`}
+      </p>
+
+      {editing ? (
+        <Textarea
+          value={editContent}
+          onChange={(e) => onEditContent(e.target.value)}
+          rows={12}
+          className="font-mono text-sm"
+        />
+      ) : (
+        <div className="prose prose-sm max-w-none dark:prose-invert">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{selected.content}</ReactMarkdown>
+        </div>
+      )}
+
+      {selected.tags && selected.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.tags.map((t) => (
+            <Badge key={t}>#{t}</Badge>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
+        {editing ? (
+          <>
+            <Button size="sm" onClick={onSave} disabled={savePending}>
+              Kaydet
+            </Button>
+            <Button size="sm" variant="outline" onClick={onCancelEdit}>
+              İptal
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button size="sm" variant="outline" onClick={onStartEdit}>
+              Düzenle
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link
+                to={`/chat?prompt=${encodeURIComponent(`Bu bellek hakkında: ${selected.content.slice(0, 200)}`)}`}
+              >
+                <MessageSquare className="mr-1.5 h-4 w-4" />
+                Sohbette sor
+              </Link>
+            </Button>
+            <Button size="sm" variant="destructive" onClick={onDelete} disabled={deletePending}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </>
+        )}
+      </div>
+
+      {related.length > 0 && (
+        <div className="border-t border-border/60 pt-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">İlgili bellekler</p>
+          <ul className="space-y-2">
+            {related.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  className="w-full rounded-lg border border-border/60 p-2 text-left text-xs transition-colors hover:bg-muted/40"
+                  onClick={() => onSelectRelated(r.id)}
+                >
+                  <span
+                    className="mb-1 inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: MEMORY_TYPE_COLORS[r.type] }}
+                  />
+                  <span className="ml-1.5 line-clamp-2 text-foreground">{r.content}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BrainPage() {
-  const [hasApiKey, setHasApiKey] = useState(() => !!getApiKey());
   const [search, setSearch] = useState("");
   const [semantic, setSemantic] = useState(false);
   const [typeFilter, setTypeFilter] = useState("");
@@ -54,35 +238,26 @@ export function BrainPage() {
   const toast = useToast();
   const qc = useQueryClient();
 
-  useEffect(() => {
-    const sync = () => setHasApiKey(!!getApiKey());
-    sync();
-    const t = setInterval(sync, 1500);
-    return () => clearInterval(t);
-  }, []);
-
   const { data: stats } = useQuery({
     queryKey: ["brain-stats"],
     queryFn: fetchBrainStats,
-    enabled: hasApiKey,
+    staleTime: 60_000,
   });
 
   const { data: profile } = useQuery({
     queryKey: ["brain-profile"],
     queryFn: fetchBrainProfile,
-    enabled: hasApiKey,
   });
 
   const { data: projectsData } = useQuery({
     queryKey: ["brain-projects"],
     queryFn: fetchProjects,
-    enabled: hasApiKey,
+    staleTime: 60_000,
   });
 
   const { data: obsidian } = useQuery({
     queryKey: ["brain-obsidian"],
     queryFn: fetchObsidianStatus,
-    enabled: hasApiKey,
   });
 
   const listQuery = useQuery({
@@ -105,7 +280,6 @@ export function BrainPage() {
         limit: 100,
       });
     },
-    enabled: hasApiKey,
   });
 
   const memories = listQuery.data?.memories ?? [];
@@ -126,20 +300,28 @@ export function BrainPage() {
     return [...set].sort();
   }, [memories]);
 
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    memories.forEach((m) => m.tags?.forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
+    return allTags.map((name) => ({ name, count: counts.get(name) ?? 0 }));
+  }, [memories, allTags]);
+
   const { data: selected } = useQuery({
     queryKey: ["brain-memory", selectedId],
     queryFn: () => fetchMemory(selectedId!),
-    enabled: !!selectedId && hasApiKey,
+    enabled: !!selectedId,
   });
 
   const related = useMemo(() => {
     if (!selected) return [];
-    return memories.filter(
-      (m) =>
-        m.id !== selected.id &&
-        ((selected.projectId && m.projectId === selected.projectId) ||
-          selected.tags?.some((t) => m.tags?.includes(t)))
-    ).slice(0, 8);
+    return memories
+      .filter(
+        (m) =>
+          m.id !== selected.id &&
+          ((selected.projectId && m.projectId === selected.projectId) ||
+            selected.tags?.some((t) => m.tags?.includes(t)))
+      )
+      .slice(0, 6);
   }, [memories, selected]);
 
   const saveMutation = useMutation({
@@ -185,8 +367,20 @@ export function BrainPage() {
 
   const obsidianSync = useMutation({
     mutationFn: syncObsidian,
-    onSuccess: (d) => toast.show(`Obsidian sync: ${d.synced} bellek`),
+    onSuccess: (d) => toast.show(`Obsidian senkron: ${d.synced} bellek`),
     onError: (e) => toast.show(e instanceof Error ? e.message : "Sync hatası", "error"),
+  });
+
+  const obsidianPull = useMutation({
+    mutationFn: pullObsidian,
+    onSuccess: (d) => toast.show(`Vault güncellendi: ${d.updated} kayıt`),
+    onError: (e) => toast.show(e instanceof Error ? e.message : "Pull hatası", "error"),
+  });
+
+  const obsidianCanvas = useMutation({
+    mutationFn: downloadObsidianCanvas,
+    onSuccess: () => toast.show("Canvas indirildi"),
+    onError: (e) => toast.show(e instanceof Error ? e.message : "Canvas hatası", "error"),
   });
 
   const selectMemory = useCallback((id: string) => {
@@ -199,183 +393,307 @@ export function BrainPage() {
   }, [selected]);
 
   const projects = projectsData?.projects ?? [];
+  const activeFilters = [typeFilter, tagFilter, projectFilter, search.trim()].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter("");
+    setTagFilter("");
+    setProjectFilter("");
+    setSemantic(false);
+  };
+
+  const refreshAll = () => {
+    void qc.invalidateQueries({ queryKey: ["brain-memories"] });
+    void qc.invalidateQueries({ queryKey: ["brain-stats"] });
+    void qc.invalidateQueries({ queryKey: ["brain-projects"] });
+    void listQuery.refetch();
+  };
+
+  const detailProps = selected
+    ? {
+        selected,
+        editing,
+        editContent,
+        related,
+        onEditContent: setEditContent,
+        onStartEdit: () => setEditing(true),
+        onCancelEdit: () => setEditing(false),
+        onSave: () => saveMutation.mutate(),
+        savePending: saveMutation.isPending,
+        onDelete: () => deleteMutation.mutate(),
+        deletePending: deleteMutation.isPending,
+        onSelectRelated: selectMemory,
+      }
+    : null;
+
+  const viewTabs = (
+    <Tabs value={view} onValueChange={(v) => setView(v as "list" | "graph")}>
+      <TabsList>
+        <TabsTrigger value="list" className="gap-1.5 text-xs">
+          <List className="h-3.5 w-3.5" />
+          Liste
+        </TabsTrigger>
+        <TabsTrigger value="graph" className="gap-1.5 text-xs">
+          <Network className="h-3.5 w-3.5" />
+          Harita
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" onClick={refreshAll} disabled={listQuery.isFetching}>
+        <RefreshCw className={cn("mr-1.5 h-4 w-4", listQuery.isFetching && "animate-spin")} />
+        Yenile
+      </Button>
+      {obsidian?.enabled && (
+        <>
+          <Button variant="outline" size="sm" disabled={obsidianPull.isPending} onClick={() => obsidianPull.mutate()}>
+            {obsidianPull.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+            Vault çek
+          </Button>
+          <Button variant="outline" size="sm" disabled={obsidianCanvas.isPending} onClick={() => obsidianCanvas.mutate()}>
+            {obsidianCanvas.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="mr-1 h-4 w-4" />}
+            Canvas
+          </Button>
+          <Button variant="outline" size="sm" disabled={obsidianSync.isPending} onClick={() => obsidianSync.mutate()}>
+            {obsidianSync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="mr-1 h-4 w-4" />}
+            Hub gönder
+          </Button>
+        </>
+      )}
+      <Button size="sm" onClick={() => setNewOpen(true)}>
+        <Plus className="mr-1 h-4 w-4" />
+        Yeni bellek
+      </Button>
+    </div>
+  );
 
   return (
-    <div className="mx-auto flex h-full min-h-0 max-w-7xl flex-col gap-3">
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
-        <div>
-          <h1 className="flex items-center gap-2 text-lg font-semibold">
-            <Brain className="h-5 w-5 text-primary" />
-            Brain Memory
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {stats?.total ?? "—"} bellek · {projects.length} proje
-            {profile && Object.keys(profile).length > 0 && " · profil yüklü"}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {obsidian?.enabled && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={obsidianSync.isPending}
-              onClick={() => obsidianSync.mutate()}
-            >
-              {obsidianSync.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="mr-1 h-4 w-4" />
-              )}
-              Obsidian sync
-            </Button>
-          )}
-          <Button size="sm" onClick={() => setNewOpen(true)} disabled={!hasApiKey}>
-            <Plus className="mr-1 h-4 w-4" />
-            Yeni bellek
-          </Button>
-        </div>
-      </div>
-
-      {!hasApiKey && (
-        <div className="flex shrink-0 items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <div>
-            <p className="font-medium">Kimlik doğrulama gerekli</p>
-            <p className="text-muted-foreground">
-              Üst bardan Token veya API key kaydet.{" "}
-              <Link to="/settings" className="text-primary underline-offset-2 hover:underline">
-                Settings
-              </Link>
-            </p>
-          </div>
-        </div>
+    <div
+      className={cn(
+        "flex h-full min-h-0 min-w-0 flex-col",
+        view === "graph" ? "gap-0 overflow-hidden" : "overflow-hidden"
       )}
+    >
+      {view === "list" ? (
+        <>
+          <div className="mx-auto w-full max-w-7xl shrink-0 px-4 pt-4 md:px-6">
+            <PageHeader
+              title="Brain Bellek"
+              description="Proje bilgilerinizi, kararlarınızı ve notlarınızı tek yerde tutun. Liste veya bilgi haritası ile keşfedin."
+              actions={headerActions}
+            />
+          </div>
 
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[220px_1fr_320px]">
-        {/* Filters */}
-        <Card className="flex flex-col gap-3 p-3 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Arama</label>
-            <div className="flex gap-1">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+            <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6">
+              <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Toplam bellek", value: stats?.total ?? "—", icon: Brain, hint: "Kayıtlı anı" },
+          { label: "Proje", value: projects.length, icon: Layers, hint: "Bağlı proje" },
+          { label: "Etiket", value: allTags.length, icon: Tags, hint: "Farklı etiket" },
+          {
+            label: "Profil",
+            value: profile && Object.keys(profile).length > 0 ? "Aktif" : "Boş",
+            icon: Sparkles,
+            hint: obsidian?.enabled ? "Obsidian bağlı" : "Yerel bellek",
+          },
+        ].map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+            <Card>
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                  <s.icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                  <p className="text-xl font-semibold tabular-nums">{s.value}</p>
+                  <p className="text-[11px] text-muted-foreground">{s.hint}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+              </div>
+
+      <Card className="min-w-0 shrink-0 overflow-hidden">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Ara…"
+                placeholder="Bellek içeriği veya etiket ara…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                disabled={!hasApiKey}
+                className="pl-9"
               />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <Button
                 variant={semantic ? "default" : "outline"}
-                size="icon"
-                title="Semantic recall"
+                size="sm"
                 onClick={() => setSemantic((s) => !s)}
-                disabled={!hasApiKey}
+                title="Anlamsal arama"
               >
-                <Search className="h-4 w-4" />
+                <Sparkles className="mr-1.5 h-4 w-4" />
+                Akıllı arama
               </Button>
+              {viewTabs}
             </div>
-            {semantic && (
-              <p className="text-[10px] text-muted-foreground">Semantic: POST /brain/recall</p>
-            )}
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Tip</label>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              <option value="">Tümü</option>
-              {MEMORY_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Tag</label>
-            <select
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              <option value="">Tümü</option>
-              {allTags.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Proje</label>
-            <select
-              value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              <option value="">Tümü</option>
-              {projects.map((p) => (
-                <option key={p.slug || p.name} value={p.slug || p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Tabs value={view} onValueChange={(v) => setView(v as "list" | "graph")}>
-            <TabsList className="w-full">
-              <TabsTrigger value="list" className="flex-1">
-                Liste
-              </TabsTrigger>
-              <TabsTrigger value="graph" className="flex-1">
-                Graph
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </Card>
 
-        {/* List / Graph */}
-        <Card className="flex min-h-0 flex-col overflow-hidden">
-          {view === "graph" ? (
-            <CardContent className="p-3">
-              <BrainGraph
-                memories={filteredMemories}
-                projects={projects}
-                selectedId={selectedId}
-                onSelect={selectMemory}
-              />
-            </CardContent>
-          ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Bellek türü</p>
+            <div className="scrollbar-chip-row flex gap-2 overflow-x-auto pb-1">
+              <div className="flex w-max flex-nowrap gap-2 pr-2">
+                <FilterChip
+                  label="Tümü"
+                  count={memories.length}
+                  active={!typeFilter}
+                  onClick={() => setTypeFilter("")}
+                />
+                {MEMORY_TYPES.map((type) => (
+                  <FilterChip
+                    key={type}
+                    label={MEMORY_TYPE_LABELS[type]}
+                    count={stats?.byType?.[type]}
+                    active={typeFilter === type}
+                    dotColor={MEMORY_TYPE_COLORS[type]}
+                    onClick={() => setTypeFilter(typeFilter === type ? "" : type)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {projects.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Proje</p>
+              <div className="scrollbar-chip-row flex gap-2 overflow-x-auto pb-1">
+                <div className="flex w-max flex-nowrap gap-2 pr-2">
+                  <FilterChip
+                    label="Tüm projeler"
+                    active={!projectFilter}
+                    onClick={() => setProjectFilter("")}
+                  />
+                  {projects.map((p) => {
+                    const slug = p.slug || p.name;
+                    return (
+                      <FilterChip
+                        key={slug}
+                        label={p.name}
+                        count={stats?.byProject?.[slug]}
+                        active={projectFilter === slug}
+                        onClick={() => setProjectFilter(projectFilter === slug ? "" : slug)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tagCounts.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted-foreground">Etiket</p>
+                {activeFilters > 0 && (
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearFilters}>
+                    Filtreleri temizle
+                  </Button>
+                )}
+              </div>
+              <div className="scrollbar-chip-row flex gap-2 overflow-x-auto pb-1">
+                <div className="flex w-max flex-nowrap gap-2 pr-2">
+                  <FilterChip label="Tüm etiketler" active={!tagFilter} onClick={() => setTagFilter("")} />
+                  {tagCounts.map(({ name, count }) => (
+                    <FilterChip
+                      key={name}
+                      label={`#${name}`}
+                      count={count}
+                      active={tagFilter === name}
+                      onClick={() => setTagFilter(tagFilter === name ? "" : name)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {semantic && (
+            <p className="text-xs text-muted-foreground">
+              Akıllı arama: anlamına göre en yakın bellekler getirilir.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid min-h-[min(70vh,640px)] shrink-0 gap-4 lg:grid-cols-5">
+        <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-3">
+          <CardHeader className="shrink-0 border-b border-border/60 py-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <List className="h-4 w-4 text-primary" />
+              Bellek listesi
+              <span className="font-normal text-muted-foreground">({filteredMemories.length})</span>
+            </CardTitle>
+          </CardHeader>
+
+            <ScrollArea className="min-h-0 flex-1">
               {listQuery.isLoading ? (
-                <p className="p-4 text-sm text-muted-foreground">Yükleniyor…</p>
+                <div className="space-y-2 p-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="h-20 animate-pulse rounded-lg bg-muted/50" />
+                  ))}
+                </div>
               ) : filteredMemories.length === 0 ? (
-                <p className="p-4 text-center text-sm text-muted-foreground">Bellek yok</p>
+                <EmptyState
+                  icon={Brain}
+                  title="Bellek bulunamadı"
+                  description="Yeni bir bellek ekleyin veya filtreleri genişletin."
+                  action={
+                    <Button size="sm" onClick={() => setNewOpen(true)}>
+                      <Plus className="mr-1 h-4 w-4" />
+                      İlk belleği ekle
+                    </Button>
+                  }
+                  className="py-16"
+                />
               ) : (
-                <ul className="space-y-2">
+                <ul className="divide-y divide-border/60 p-2">
                   {filteredMemories.map((m) => (
                     <li key={m.id}>
                       <button
                         type="button"
                         onClick={() => selectMemory(m.id)}
                         className={cn(
-                          "w-full rounded-lg border border-border p-3 text-left text-sm transition-colors hover:bg-muted/50",
-                          selectedId === m.id && "border-primary/50 bg-primary/10"
+                          "w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/40",
+                          selectedId === m.id && "bg-primary/10 ring-1 ring-inset ring-primary/25"
                         )}
                       >
-                        <div className="mb-1 flex flex-wrap items-center gap-1">
-                          <Badge>{m.type}</Badge>
-                          {m.projectId && (
-                            <Badge variant="warning">{m.projectId}</Badge>
+                        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                          <Badge
+                            style={{
+                              backgroundColor: `${MEMORY_TYPE_COLORS[m.type]}22`,
+                              color: MEMORY_TYPE_COLORS[m.type],
+                            }}
+                          >
+                            {MEMORY_TYPE_LABELS[m.type]}
+                          </Badge>
+                          {m.projectId && <Badge variant="warning">{m.projectId}</Badge>}
+                          {semantic && m.score != null && (
+                            <Badge variant="success">%{Math.round(m.score * 100)}</Badge>
                           )}
                           <span className="ml-auto text-[10px] text-muted-foreground">
                             {formatTime(m.createdAt)}
                           </span>
                         </div>
-                        <p className="line-clamp-2 text-foreground">{m.content}</p>
+                        <p className="line-clamp-2 text-sm leading-relaxed">{m.content}</p>
                         {m.tags && m.tags.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {m.tags.slice(0, 4).map((t) => (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {m.tags.slice(0, 5).map((t) => (
                               <span key={t} className="text-[10px] text-muted-foreground">
                                 #{t}
                               </span>
@@ -387,125 +705,155 @@ export function BrainPage() {
                   ))}
                 </ul>
               )}
-            </div>
-          )}
+            </ScrollArea>
         </Card>
 
-        {/* Detail */}
-        <Card className="flex min-h-0 flex-col overflow-hidden">
-          <CardHeader className="shrink-0 pb-2">
-            <CardTitle className="text-sm">Detay</CardTitle>
+        <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-2">
+          <CardHeader className="shrink-0 border-b border-border/60 py-3">
+            <CardTitle className="text-sm font-medium">Bellek detayı</CardTitle>
           </CardHeader>
-          <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+          <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
             {!selected ? (
-              <p className="text-sm text-muted-foreground">Bellek seçin</p>
+              <EmptyState
+                icon={Brain}
+                title="Bir bellek seçin"
+                description="Listeden bir belleğe tıklayarak içeriğini görüntüleyin."
+                className="py-16"
+              />
             ) : (
-              <>
-                <div className="flex flex-wrap gap-1">
-                  <Badge>{selected.type}</Badge>
-                  <Badge>imp {(selected.importance ?? 0).toFixed(2)}</Badge>
-                  {selected.projectId && <Badge variant="warning">{selected.projectId}</Badge>}
-                </div>
-                {editing ? (
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    rows={10}
-                    className="w-full rounded-lg border border-border bg-background p-2 font-mono text-sm"
-                  />
-                ) : (
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{selected.content}</ReactMarkdown>
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {editing ? (
-                    <>
-                      <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-                        Kaydet
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditing(false)}>
-                        İptal
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                        Düzenle
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        asChild
-                      >
-                        <Link to={`/chat?prompt=${encodeURIComponent(`Bu bellek hakkında: ${selected.content.slice(0, 200)}`)}`}>
-                          Chat&apos;te sor
-                        </Link>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deleteMutation.mutate()}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-                {related.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">İlgili bellekler</p>
-                    <ul className="space-y-1">
-                      {related.map((r) => (
-                        <li key={r.id}>
-                          <button
-                            type="button"
-                            className="text-left text-xs text-primary hover:underline"
-                            onClick={() => selectMemory(r.id)}
-                          >
-                            {r.content.slice(0, 60)}…
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
+              <ScrollArea className="min-h-0 flex-1">
+                {detailProps && <MemoryDetailContent {...detailProps} />}
+              </ScrollArea>
             )}
           </CardContent>
         </Card>
       </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-card/80 px-3 py-2 backdrop-blur-sm">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Network className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">Bilgi haritası</p>
+                <p className="text-[11px] text-muted-foreground">{filteredMemories.length} bellek</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {viewTabs}
+              {headerActions}
+            </div>
+          </div>
+
+          <div className="shrink-0 space-y-2 border-b border-border/60 bg-card/40 px-3 py-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Ara…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 pl-9 text-sm"
+                />
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant={semantic ? "default" : "outline"}
+                  size="sm"
+                  className="h-8"
+                  onClick={() => setSemantic((s) => !s)}
+                >
+                  <Sparkles className="mr-1 h-3.5 w-3.5" />
+                  Akıllı
+                </Button>
+                {activeFilters > 0 && (
+                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={clearFilters}>
+                    Temizle
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="scrollbar-chip-row flex gap-2 overflow-x-auto pb-0.5">
+              <div className="flex w-max flex-nowrap gap-1.5 pr-2">
+                <FilterChip label="Tümü" count={memories.length} active={!typeFilter} onClick={() => setTypeFilter("")} />
+                {MEMORY_TYPES.map((type) => (
+                  <FilterChip
+                    key={type}
+                    label={MEMORY_TYPE_LABELS[type]}
+                    active={typeFilter === type}
+                    dotColor={MEMORY_TYPE_COLORS[type]}
+                    onClick={() => setTypeFilter(typeFilter === type ? "" : type)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
+            <BrainGraph
+              className="h-full min-h-0 rounded-none border-0"
+              memories={filteredMemories}
+              projects={projects}
+              selectedId={selectedId}
+              onSelect={selectMemory}
+            />
+
+            <Sheet open={!!selected} onOpenChange={(open) => !open && setSelectedId(null)}>
+              <SheetContent side="right" className="flex w-full max-w-md flex-col gap-0 p-0 sm:max-w-md">
+                <SheetHeader className="shrink-0 border-b border-border/60 px-4 py-3 text-left">
+                  <SheetTitle className="text-sm font-medium">Bellek detayı</SheetTitle>
+                </SheetHeader>
+                <ScrollArea className="min-h-0 flex-1">
+                  {detailProps ? <MemoryDetailContent {...detailProps} /> : null}
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </>
+      )}
 
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Yeni bellek</DialogTitle>
           </DialogHeader>
-          <select
-            value={newType}
-            onChange={(e) => setNewType(e.target.value as MemoryType)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          >
-            {MEMORY_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <textarea
-            value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
-            rows={6}
-            placeholder="Markdown desteklenir…"
-            className="w-full rounded-lg border border-border bg-background p-2 text-sm"
-          />
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={!newContent.trim() || createMutation.isPending}
-          >
-            Oluştur
-          </Button>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Tür</Label>
+              <div className="flex flex-wrap gap-2">
+                {MEMORY_TYPES.map((type) => (
+                  <FilterChip
+                    key={type}
+                    label={MEMORY_TYPE_LABELS[type]}
+                    active={newType === type}
+                    dotColor={MEMORY_TYPE_COLORS[type]}
+                    onClick={() => setNewType(type)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>İçerik</Label>
+              <Textarea
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                rows={8}
+                placeholder="Markdown desteklenir. Kararlar, notlar, tercihler…"
+              />
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => createMutation.mutate()}
+              disabled={!newContent.trim() || createMutation.isPending}
+            >
+              {createMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Bellek oluştur
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

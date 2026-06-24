@@ -46,6 +46,9 @@ import {
   exportMemory,
   deleteMemoryFromVault,
   syncAllToVault,
+  importFromVault,
+  exportCanvasJson,
+  runFullObsidianEnhancements,
   getObsidianStatus,
   isExportEnabled,
 } from "./brain.obsidian.js";
@@ -70,6 +73,8 @@ export const metadata = createMetadata({
     { method: "GET",    path: "/brain/memories/:id",       description: "Get memory by ID",              scope: "read"  },
     { method: "POST",   path: "/brain/recall",             description: "Semantic memory search",        scope: "read"  },
     { method: "POST",   path: "/brain/obsidian/sync",      description: "Export memories to Obsidian", scope: "write" },
+    { method: "POST",   path: "/brain/obsidian/pull",      description: "Import memories from Obsidian vault", scope: "write" },
+    { method: "GET",    path: "/brain/obsidian/canvas",    description: "Export Obsidian canvas JSON", scope: "read"  },
     { method: "GET",    path: "/brain/obsidian/status",    description: "Obsidian export status",        scope: "read"  },
     { method: "PATCH",  path: "/brain/memories/:id",       description: "Update a memory",             scope: "write" },
     { method: "DELETE", path: "/brain/memories/:id",       description: "Delete a memory",             scope: "write" },
@@ -371,10 +376,45 @@ export function register(app) {
         });
       }
       const result = await syncAllToVault();
+      await runFullObsidianEnhancements();
       await brainAudit("obsidian_sync", { synced: result.synced, errors: result.errors });
       res.json({ ok: true, data: result });
     } catch (err) {
       pluginErrorResponse(req, res, err, "obsidian_sync");
+    }
+  });
+
+  router.post("/obsidian/pull", requireScope("write"), async (req, res) => {
+    try {
+      if (!isExportEnabled()) {
+        return res.status(400).json({
+          ok: false,
+          error: {
+            code: "obsidian_disabled",
+            message: "Set OBSIDIAN_EXPORT_ENABLED=true and OBSIDIAN_VAULT_PATH",
+          },
+        });
+      }
+      const result = await importFromVault();
+      await brainAudit("obsidian_pull", { updated: result.updated, errors: result.errors });
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      pluginErrorResponse(req, res, err, "obsidian_pull");
+    }
+  });
+
+  router.get("/obsidian/canvas", requireScope("read"), async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit || "200", 10);
+      const canvas = await exportCanvasJson({ limit });
+      if (req.query.download === "1") {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Content-Disposition", 'attachment; filename="mcp-hub-brain.canvas"');
+        return res.send(JSON.stringify(canvas, null, 2));
+      }
+      res.json({ ok: true, data: canvas });
+    } catch (err) {
+      pluginErrorResponse(req, res, err, "obsidian_canvas");
     }
   });
 
@@ -548,6 +588,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why this memory should be stored" },
         content:    { type: "string",  description: "What to remember (up to 8000 chars)" },
         type:       { type: "string",  enum: ["fact", "decision", "preference", "event", "project_note"], default: "fact" },
         tags:       { type: "array",   items: { type: "string" }, default: [] },
@@ -666,6 +707,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why this reasoning step is being recorded" },
         thought: { type: "string", description: "Short reasoning step or conclusion" },
         context: { type: "string", description: "Optional label (e.g. task name) for this thought" },
       },
@@ -689,6 +731,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why the profile is being updated" },
         fields: {
           type: "object",
           description: "Key/value pairs to set on the profile",
@@ -731,6 +774,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why this memory is being updated" },
         id:         { type: "string", description: "Memory ID to update" },
         content:    { type: "string", description: "New content (optional)" },
         type:       { type: "string", enum: ["fact", "decision", "preference", "event", "project_note"] },
@@ -769,6 +813,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why these memories should be deleted" },
         ids:       { type: "array", items: { type: "string" }, description: "Explicit memory IDs to delete" },
         query:     { type: "string",  description: "Semantic query — deletes all memories matching this query above minScore" },
         minScore:  { type: "number",  default: 0.75, description: "Minimum similarity score for query-based deletion" },
@@ -827,6 +872,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why this project is being registered" },
         name:         { type: "string" },
         path:         { type: "string", description: "Absolute local path" },
         stack:        { type: "string", description: "Tech stack (e.g. 'Node.js, PostgreSQL, Redis')" },
@@ -940,6 +986,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why filesystem indexing is needed" },
         paths:       { type: "array", items: { type: "string" }, description: "Absolute directory paths to scan" },
         maxDepth:    { type: "number", default: 4 },
         workspaceId: { type: "string", default: "brain-fs" },
@@ -1019,6 +1066,7 @@ export const tools = [
     inputSchema: {
       type: "object",
       properties: {
+        explanation: { type: "string", description: "Why this session should be summarized and saved" },
         sessionId: { type: "string" },
         messages: {
           type: "array",

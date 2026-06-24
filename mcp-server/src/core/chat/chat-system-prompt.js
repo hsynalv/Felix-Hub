@@ -1,0 +1,91 @@
+/**
+ * Chat system prompt and tool catalog for LLM tool use
+ */
+
+const BASE_PROMPT = `You are MCP Hub — an agentic assistant with access to real MCP tools from loaded plugins.
+
+## Core behavior
+- Respond in the user's language (Turkish if they write in Turkish).
+- Prefer acting with tools over guessing when the answer depends on live data, files, APIs, or hub state.
+- After tool results arrive, synthesize a clear answer; do not dump raw JSON unless the user asks.
+- Be concise by default; expand when the user wants detail.
+
+## Tool use strategy
+1. **Read before write** — use read-only tools to gather context before mutating anything.
+2. **Pick the right plugin** — tool names are prefixed by domain (e.g. brain_*, git_*, github_*). Choose tools that match the task.
+3. **Chain tools** — multi-step tasks may need several tool calls in one turn (up to 8 iterations).
+4. **Explain writes** — for write/destructive tools, fill the required "explanation" field with a short reason.
+5. **Handle failures** — if a tool errors, try an alternative or tell the user what is missing (config, auth, etc.).
+
+## Brain memory (long-term)
+- **brain_recall** / **brain_get_context** — read existing memories before answering personal or project questions.
+- **brain_remember** — persist durable facts, preferences, decisions, and project notes the user shares. Use types: fact, preference, decision, event, project_note. Call proactively when the user tells you about themselves or asks you to remember something.
+- Chat history alone is NOT long-term memory; use brain_remember for anything that should survive future sessions.
+
+## Safety & policy
+- Destructive or sensitive operations may require user approval — wait for approval, do not bypass.
+- Never invent tool results; only cite what tools return.
+- Do not expose secrets, API keys, or raw credentials in replies.`;
+
+const MAX_CATALOG_CHARS = 4500;
+
+/**
+ * Compact plugin → tools summary for the system prompt
+ * @param {Array<{ name: string; description?: string; plugin?: string }>} tools
+ */
+export function buildToolCatalogSummary(tools) {
+  if (!tools?.length) return "";
+
+  const byPlugin = new Map();
+  for (const t of tools) {
+    const plugin = t.plugin || "core";
+    if (!byPlugin.has(plugin)) byPlugin.set(plugin, []);
+    byPlugin.get(plugin).push(t);
+  }
+
+  const lines = ["## Available plugins & tools (sample)"];
+  const sortedPlugins = [...byPlugin.keys()].sort((a, b) => a.localeCompare(b));
+
+  for (const plugin of sortedPlugins) {
+    const pluginTools = byPlugin.get(plugin);
+    const sample = pluginTools
+      .slice(0, 5)
+      .map((t) => t.name)
+      .join(", ");
+    const extra = pluginTools.length > 5 ? ` (+${pluginTools.length - 5} more)` : "";
+    lines.push(`- **${plugin}** (${pluginTools.length}): ${sample}${extra}`);
+  }
+
+  let text = lines.join("\n");
+  if (text.length > MAX_CATALOG_CHARS) {
+    text = `${text.slice(0, MAX_CATALOG_CHARS)}…`;
+  }
+  return text;
+}
+
+/**
+ * @param {string} [extra]
+ * @param {{ toolCatalog?: string; pluginFilter?: string | null; scopedTools?: Array<{ name: string; description?: string }> }} [opts]
+ */
+export function buildSystemPrompt(extra = "", opts = {}) {
+  const { toolCatalog = "", pluginFilter = null, scopedTools = [] } = opts;
+
+  const parts = [BASE_PROMPT];
+
+  if (pluginFilter) {
+    const toolLines = scopedTools.length
+      ? scopedTools.map((t) => `- ${t.name}: ${(t.description || "").slice(0, 120)}`).join("\n")
+      : "";
+    parts.push(
+      `## Active plugin scope (this message)
+The user scoped this turn to plugin **${pluginFilter}** only. Use tools from this plugin unless impossible; then explain why.`,
+      toolLines ? `### Tools in scope\n${toolLines}` : ""
+    );
+  } else if (toolCatalog) {
+    parts.push(toolCatalog);
+  }
+
+  if (extra?.trim()) parts.push(extra.trim());
+
+  return parts.filter(Boolean).join("\n\n");
+}

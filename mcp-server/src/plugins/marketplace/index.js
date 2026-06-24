@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 
 import { join } from "path";
 import { config } from "../../core/config.js";
 import { requireScope } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 const execAsync = promisify(exec);
 
@@ -20,12 +21,17 @@ const MARKETPLACE_DIR = join(process.cwd(), "marketplace");
 const INSTALLED_DIR = join(MARKETPLACE_DIR, "installed");
 const REGISTRY_CACHE_FILE = join(config.catalog.cacheDir, "marketplace-registry.json");
 
+function isMarketplaceMutationsEnabled() {
+  return process.env.ENABLE_MARKETPLACE === "true";
+}
+
 export const name = "marketplace";
 export const version = "1.0.0";
 export const description = "Community plugin discovery and installation from npm";
 export const capabilities = ["read", "write"];
 export const requires = [];
 export const endpoints = [
+  { method: "GET", path: "/marketplace/health", description: "Plugin health", scope: "read" },
   { method: "GET", path: "/marketplace/search", description: "Search npm for MCP-Hub plugins", scope: "read" },
   { method: "GET", path: "/marketplace/installed", description: "List installed marketplace plugins", scope: "read" },
   { method: "POST", path: "/marketplace/install", description: "Install plugin from npm", scope: "write" },
@@ -274,6 +280,7 @@ export function register(app) {
   ensureDirectories();
 
   const router = Router();
+  mountPluginHealth(router, { name, version });
 
   /**
    * GET /marketplace/search?q=keyword
@@ -322,7 +329,17 @@ export function register(app) {
    * POST /marketplace/install
    * Install plugin from npm
    */
-  router.post("/install", requireScope("write"), async (req, res) => {
+  router.post("/install", requireScope("admin"), async (req, res) => {
+    if (!isMarketplaceMutationsEnabled()) {
+      return res.status(403).json({
+        ok: false,
+        error: {
+          code: "marketplace_disabled",
+          message: "Set ENABLE_MARKETPLACE=true to enable marketplace install operations",
+        },
+      });
+    }
+
     const { package: packageName } = req.body || {};
 
     if (!packageName) {
@@ -353,7 +370,17 @@ export function register(app) {
    * POST /marketplace/uninstall
    * Uninstall marketplace plugin
    */
-  router.post("/uninstall", requireScope("write"), async (req, res) => {
+  router.post("/uninstall", requireScope("admin"), async (req, res) => {
+    if (!isMarketplaceMutationsEnabled()) {
+      return res.status(403).json({
+        ok: false,
+        error: {
+          code: "marketplace_disabled",
+          message: "Set ENABLE_MARKETPLACE=true to enable marketplace uninstall operations",
+        },
+      });
+    }
+
     const { package: packageName } = req.body || {};
 
     if (!packageName) {
@@ -376,7 +403,17 @@ export function register(app) {
    * POST /marketplace/enable
    * Enable/disable installed plugin
    */
-  router.post("/enable", requireScope("write"), (req, res) => {
+  router.post("/enable", requireScope("admin"), (req, res) => {
+    if (!isMarketplaceMutationsEnabled()) {
+      return res.status(403).json({
+        ok: false,
+        error: {
+          code: "marketplace_disabled",
+          message: "Set ENABLE_MARKETPLACE=true to enable marketplace enable/disable operations",
+        },
+      });
+    }
+
     const { package: packageName, enabled } = req.body || {};
 
     if (!packageName || typeof enabled !== "boolean") {

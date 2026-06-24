@@ -13,6 +13,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import crypto from "crypto";
+import { requireScopeByMethod } from "../../core/auth.js";
 import { mkdir, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import { ToolTags, callTool as useTool } from "../../core/tool-registry.js";
@@ -22,6 +23,9 @@ import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/inde
 import { createPluginErrorHandler } from "../../core/error-standard.js";
 import { auditLog } from "../../core/audit/index.js";
 import { routeTask } from "../llm-router/index.js";
+import { setupProjectInNotion, createNotionPage } from "../notion/index.js";
+import { getNotionEnvId } from "../notion/notion-ids.js";
+import { getEnvValue } from "../../core/settings/effective-config.js";
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
@@ -63,7 +67,13 @@ export const examples     = metadata.examples;
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const NOTION_TASK_DB_ID = process.env.NOTION_TASK_DATABASE_ID || null;
+function getNotionTasksDbId() {
+  return (
+    getNotionEnvId(getEnvValue, "NOTION_TASKS_DB_ID") ||
+    getNotionEnvId(getEnvValue, "NOTION_TASK_DATABASE_ID") ||
+    null
+  );
+}
 
 /** Allowed base for AI-generated file writes. Override with WORKSPACE_BASE env var. */
 const WORKSPACE_BASE = resolve(process.env.WORKSPACE_BASE || process.cwd());
@@ -344,41 +354,112 @@ Include 3-5 phases. Match the user's folder structure and naming conventions.`;
 
 // ── Notion integration ────────────────────────────────────────────────────────
 
+function mapPriority(priority) {
+  const map = { Low: "Az", Medium: "Normal", High: "Yüksek" };
+  return map[priority] || "Normal";
+}
+
+function tasksFromPlan(plan) {
+  const tasks = [];
+  for (const phase of plan.phases || []) {
+    for (const task of phase.tasks || []) {
+      tasks.push({ gorev: `[${phase.name}] ${task.title}` });
+    }
+  }
+  return tasks;
+}
+
+function notionErrorMessage(result) {
+  const ds = result?.details?.dataSources;
+  if (Array.isArray(ds) && ds.length > 0) {
+    return `${result.details.message} (data_source_id: ${ds[0].id})`;
+  }
+  return (
+    result?.details?.message ||
+    result?.error?.message ||
+    result?.error ||
+    "Notion isteği başarısız"
+  );
+}
+
 async function createProjectInNotion(plan, options = {}) {
-  // Create the project page in Notion (under configured parent or workspace root)
-  const projectResult = await useTool("notion_create_page", {
-    parentId: process.env.NOTION_PROJECTS_PAGE_ID || undefined,
-    title:    plan.title,
-    content:  `${plan.description}\n\n**Complexity:** ${plan.complexity || "medium"}\n**Estimated Hours:** ${plan.estimatedHours || "?"}\n**Priority:** ${options.priority || "Medium"}`,
+  const projectsDbId = getNotionEnvId(getEnvValue, "NOTION_PROJECTS_DB_ID");
+  const tasksDbId =
+    getNotionEnvId(getEnvValue, "NOTION_TASKS_DB_ID") ||
+    getNotionEnvId(getEnvValue, "NOTION_TASK_DATABASE_ID");
+
+  if (projectsDbId && tasksDbId) {
+    const setup = await setupProjectInNotion({
+      name: plan.title,
+      status: "Yapılıyor",
+      oncelik: mapPriority(options.priority),
+      tasks: tasksFromPlan(plan),
+    });
+
+    if (!setup.ok) {
+      return {
+        ok: false,
+        error: { code: "notion_error", message: notionErrorMessage(setup) },
+      };
+    }
+
+    const createdTasks = (setup.data?.tasks?.items || []).map((t, i) => ({
+      title: t.gorev,
+      notionTaskId: t.id,
+      phase: plan.phases?.[Math.floor(i / Math.max(1, (plan.phases?.[0]?.tasks?.length || 1)))]?.name,
+    }));
+
+    return {
+      ok: true,
+      notionProjectId: setup.data.project.id,
+      notionProjectUrl: setup.data.project.url,
+      tasks: createdTasks.length ? createdTasks : tasksFromPlan(plan).map((t) => ({ ...t, notionTaskId: null })),
+      phases: plan.phases?.length ?? 0,
+      totalTasks: setup.data.tasks.created,
+    };
+  }
+
+  const description = `${plan.description || ""}\n\n**Complexity:** ${plan.complexity || "medium"}\n**Estimated Hours:** ${plan.estimatedHours || "?"}\n**Priority:** ${options.priority || "Medium"}`;
+  const projectResult = await createNotionPage({
+    title: plan.title,
+    parentPageId:
+      getNotionEnvId(getEnvValue, "NOTION_ROOT_PAGE_ID") ||
+      getNotionEnvId(getEnvValue, "NOTION_PROJECTS_PAGE_ID") ||
+      undefined,
+    blocks: [{ type: "paragraph", text: description }],
+    explanation: "Project orchestrator init",
   });
 
   if (!projectResult?.ok) {
-    return { ok: false, error: { code: "notion_error", message: "Failed to create project page in Notion" } };
+    return {
+      ok: false,
+      error: {
+        code: "notion_error",
+        message: notionErrorMessage(projectResult),
+      },
+    };
   }
 
   const notionProjectId = projectResult.data?.id;
-  const createdTasks    = [];
+  const createdTasks = [];
 
-  // Create tasks for each phase
-  if (NOTION_TASK_DB_ID) {
+  if (getNotionTasksDbId()) {
     for (const phase of plan.phases || []) {
       for (const task of phase.tasks || []) {
         const taskResult = await useTool("notion_create_task", {
-          databaseId: NOTION_TASK_DB_ID,
-          name:       `[${phase.name}] ${task.title}`,
-          status:     "Todo",
-          priority:   "Medium",
+          databaseId: getNotionTasksDbId(),
+          name: `[${phase.name}] ${task.title}`,
+          projectId: notionProjectId,
         });
 
         createdTasks.push({
           ...task,
           notionTaskId: taskResult?.data?.id || null,
-          phase:        phase.name,
+          phase: phase.name,
         });
       }
     }
   } else {
-    // No task database configured — still include tasks without Notion IDs
     for (const phase of plan.phases || []) {
       for (const task of phase.tasks || []) {
         createdTasks.push({ ...task, notionTaskId: null, phase: phase.name });
@@ -386,7 +467,13 @@ async function createProjectInNotion(plan, options = {}) {
     }
   }
 
-  return { ok: true, notionProjectId, tasks: createdTasks, phases: plan.phases?.length ?? 0, totalTasks: createdTasks.length };
+  return {
+    ok: true,
+    notionProjectId,
+    tasks: createdTasks,
+    phases: plan.phases?.length ?? 0,
+    totalTasks: createdTasks.length,
+  };
 }
 
 // ── Codebase initialization ───────────────────────────────────────────────────
@@ -484,6 +571,7 @@ async function executeTask(projectId, task, context = {}) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 const router = Router();
+router.use(requireScopeByMethod());
 
 // ── Health ────────────────────────────────────────────────────────────────────
 
@@ -504,7 +592,7 @@ router.get("/health", (_req, res) => {
       notion:        notionOk ? "configured" : "missing NOTION_API_KEY",
       github:        githubOk ? "configured" : "missing GITHUB_TOKEN",
       redis:         redisOk  ? "configured" : "missing REDIS_URL",
-      taskDatabase:  NOTION_TASK_DB_ID ? "configured" : "missing NOTION_TASK_DATABASE_ID",
+      taskDatabase: getNotionTasksDbId() ? "configured" : "missing NOTION_TASKS_DB_ID",
       workspaceBase: WORKSPACE_BASE,
     },
   });

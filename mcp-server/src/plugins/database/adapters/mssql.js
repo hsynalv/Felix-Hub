@@ -5,6 +5,7 @@
 import sql from "mssql";
 import { createPluginErrorHandler } from "../../../core/error-standard.js";
 import { config } from "../../../core/config.js";
+import { mssqlConfigFromConnectionString } from "../../../core/persistence/mssql-config.js";
 
 const pluginError = createPluginErrorHandler("database");
 
@@ -18,21 +19,13 @@ const QUERY_TIMEOUT_MS = dbConfig.queryTimeoutMs || 30000;
 function getConfig() {
   if (process.env.MSSQL_CONNECTION_STRING) {
     return {
-      connectionString: process.env.MSSQL_CONNECTION_STRING,
-      // Connection timeout
-      connectionTimeout: CONNECTION_TIMEOUT_MS,
-      // Request timeout (query timeout)
-      requestTimeout: QUERY_TIMEOUT_MS,
-      // Pool configuration
-      pool: {
+      ...mssqlConfigFromConnectionString(process.env.MSSQL_CONNECTION_STRING, {
         max: dbConfig.maxPoolSize || 10,
         min: 0,
         idleTimeoutMillis: dbConfig.idleTimeoutMs || 30000,
-      },
-      options: {
-        encrypt: true,
-        trustServerCertificate: true,
-      },
+      }),
+      connectionTimeout: CONNECTION_TIMEOUT_MS,
+      requestTimeout: QUERY_TIMEOUT_MS,
     };
   }
   if (process.env.MSSQL_HOST && process.env.MSSQL_DATABASE) {
@@ -62,6 +55,17 @@ async function getPool() {
   if (pool) return pool;
   pool = await sql.connect(getConfig());
   return pool;
+}
+
+export async function reloadPool() {
+  if (pool) {
+    try {
+      await pool.close();
+    } catch {
+      /* ignore */
+    }
+    pool = null;
+  }
 }
 
 export default {

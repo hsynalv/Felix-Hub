@@ -6,23 +6,25 @@ import { describe, it, expect, vi } from "vitest";
 import * as codeReview from "../../src/plugins/code-review/index.js";
 
 describe("Code Review Plugin", () => {
+  const meta = codeReview.metadata;
+
   describe("Plugin Metadata", () => {
     it("should have correct name and version", () => {
-      expect(codeReview.name).toBe("code-review");
-      expect(codeReview.version).toBe("1.0.0");
+      expect(meta.name).toBe("code-review");
+      expect(meta.version).toBe("1.0.0");
     });
 
     it("should have required exports", () => {
-      expect(codeReview.name).toBeDefined();
-      expect(codeReview.version).toBeDefined();
-      expect(codeReview.description).toBeDefined();
-      expect(codeReview.endpoints).toBeDefined();
+      expect(meta.name).toBeDefined();
+      expect(meta.version).toBeDefined();
+      expect(meta.description).toBeDefined();
+      expect(meta.endpoints).toBeDefined();
       expect(codeReview.tools).toBeDefined();
       expect(codeReview.register).toBeDefined();
     });
 
     it("should define required endpoints", () => {
-      const paths = codeReview.endpoints.map(e => e.path);
+      const paths = meta.endpoints.map((e) => e.path);
       expect(paths).toContain("/code-review/file");
       expect(paths).toContain("/code-review/pr");
       expect(paths).toContain("/code-review/security");

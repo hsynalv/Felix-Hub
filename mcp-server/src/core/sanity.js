@@ -44,10 +44,19 @@ export function runStartupChecks() {
     }
   }
 
-  // Security warnings (open mode)
-  for (const check of SECURITY_WARNINGS) {
-    if (!process.env[check.name]) {
-      warnings.push(check.message);
+  // Security warnings (open mode — development/test only)
+  const hasAnyAuthKey = !!(
+    process.env.HUB_READ_KEY?.trim() ||
+    process.env.HUB_WRITE_KEY?.trim() ||
+    process.env.HUB_ADMIN_KEY?.trim()
+  );
+  if (!hasAnyAuthKey) {
+    if (process.env.NODE_ENV === "production") {
+      errors.push("Production requires HUB_READ_KEY, HUB_WRITE_KEY, and HUB_ADMIN_KEY");
+    } else {
+      for (const check of SECURITY_WARNINGS) {
+        warnings.push(check.message);
+      }
     }
   }
 

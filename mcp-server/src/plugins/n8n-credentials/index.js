@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { fetchCredentials } from "./credentials.client.js";
 import { loadFromDisk, saveToDisk, isFresh } from "./credentials.store.js";
+import { requireScope } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 export const name = "n8n-credentials";
 export const version = "1.0.0";
@@ -9,6 +11,7 @@ export const description = "n8n credential metadata — id/name/type only, no se
 export const capabilities = ["read"];
 export const requires = ["N8N_API_KEY"];
 export const endpoints = [
+  { method: "GET",  path: "/credentials/health",    description: "Plugin health",                        scope: "read"  },
   { method: "GET",  path: "/credentials",         description: "List all credentials (metadata only)", scope: "read"  },
   { method: "GET",  path: "/credentials/:type",   description: "Filter credentials by type",           scope: "read"  },
   { method: "POST", path: "/credentials/refresh", description: "Refresh from n8n",                     scope: "write" },
@@ -52,6 +55,8 @@ async function getOrRefresh() {
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version, scope: "read" });
+  router.use(requireScope("admin"));
 
   // ── GET /credentials ──────────────────────────────────────────────────────
   // Returns all credentials as [{ id, name, type }]

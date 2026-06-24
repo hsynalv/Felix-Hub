@@ -1,5 +1,6 @@
 import { randomInt } from "crypto";
 import { exec } from "child_process";
+import { getEnvValue } from "./settings/effective-config.js";
 
 const TOKENS = new Map();
 
@@ -18,7 +19,7 @@ function escapeAppleScriptString(s) {
   return String(s).replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
 }
 
-async function notify(title, message) {
+async function notifyNative(title, message) {
   try {
     if (process.platform === "darwin") {
       const t = escapeAppleScriptString(title);
@@ -30,6 +31,25 @@ async function notify(title, message) {
   } catch {
     // ignore
   }
+}
+
+async function notifyTelegram(title, message) {
+  const enabled = getEnvValue("TELEGRAM_NOTIFY_UI_TOKEN") === "true";
+  if (!enabled) return;
+  try {
+    const { sendTelegram, isTelegramConfigured } = await import(
+      "../plugins/notifications/channels/telegram.js"
+    );
+    if (!isTelegramConfigured()) return;
+    await sendTelegram({ title, message });
+  } catch {
+    // non-fatal
+  }
+}
+
+async function notify(title, message) {
+  await notifyNative(title, message);
+  await notifyTelegram(title, message);
 }
 
 export function issueUiToken({ ttlMs = 5 * 60 * 1000 } = {}) {

@@ -1,0 +1,50 @@
+{
+  "name": "http",
+  "version": "1.0.0",
+  "status": "beta",
+  "owner": "core-team",
+  "description": "http plugin",
+  "requiresAuth": true,
+  "supportsJobs": false,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "write",
+    "dangerousCombinations": [
+      "write"
+    ],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": true
+  },
+  "dependencies": [],
+  "envVars": [
+    {
+      "name": "HTTP_ALLOWED_DOMAINS",
+      "required": false,
+      "description": "Comma-separated allowlist of outbound domains"
+    },
+    {
+      "name": "HTTP_BLOCKED_DOMAINS",
+      "required": false,
+      "description": "Comma-separated blocklist of outbound domains"
+    },
+    {
+      "name": "HTTP_RATE_LIMIT_RPM",
+      "required": false,
+      "description": "Per-plugin HTTP request rate limit per minute"
+    }
+  ]
+}

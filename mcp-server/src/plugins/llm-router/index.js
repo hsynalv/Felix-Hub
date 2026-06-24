@@ -11,6 +11,19 @@ import { withResilience } from "../../core/resilience.js";
 import { createPluginErrorHandler } from "../../core/error-standard.js";
 import { auditLog, generateCorrelationId as coreGenerateCorrelationId } from "../../core/audit/index.js";
 import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/index.js";
+import { requireScopeByMethod } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
+import { recordUsageEvent } from "../../core/usage/usage-ledger.service.js";
+import { computeCostUsd, estimateImageCostUsd } from "../../core/usage/usage-pricing.js";
+import { normalizeUsageFromResponse, usageContextFromRequest } from "../../core/usage/usage-context.js";
+import {
+  getProviderApiKey,
+  isProviderKeyConfigured,
+  getRouterProviderPreference,
+  getRouterDefaultModel,
+  getChatDefaultModel,
+} from "../../core/llm-config.js";
+import { getEnvValue } from "../../core/settings/effective-config.js";
 
 const pluginError = createPluginErrorHandler("llm-router");
 
@@ -304,6 +317,99 @@ const ROUTING_RULES = [
 // Provider clients cache
 const clients = new Map();
 
+const PROVIDER_FALLBACK_ORDER = ["openai", "anthropic", "google", "mistral", "vllm", "ollama"];
+
+/**
+ * Runtime provider config (env may change after hot reload)
+ */
+export function getRuntimeProviderConfig(providerKey) {
+  const base = PROVIDERS[providerKey];
+  if (!base) return null;
+
+  if (providerKey === "vllm") {
+    const baseUrl = getEnvValue("VLLM_BASE_URL") || null;
+    return {
+      ...base,
+      baseUrl,
+      apiKey: getProviderApiKey("vllm") || "not-needed",
+      models: (getEnvValue("VLLM_MODELS") || getEnvValue("VLLM_MODEL") || "custom-model")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    };
+  }
+
+  if (providerKey === "ollama") {
+    return {
+      ...base,
+      baseUrl: getEnvValue("OLLAMA_BASE_URL") || "http://localhost:11434",
+    };
+  }
+
+  return { ...base };
+}
+
+/**
+ * Whether a provider has the required API key / base URL configured
+ */
+export function isProviderConfigured(providerKey) {
+  if (providerKey === "vllm") {
+    return !!getEnvValue("VLLM_BASE_URL")?.trim();
+  }
+  if (providerKey === "ollama") return true;
+  return isProviderKeyConfigured(providerKey);
+}
+
+/**
+ * Pick the first configured provider for a routing rule (primary → fallback → any available)
+ */
+export function resolveProviderConfig(rule, options = {}) {
+  if (options.targetProvider) {
+    const cfg = getRuntimeProviderConfig(options.targetProvider);
+    if (!cfg) {
+      throw pluginError.validation(`Unknown provider: ${options.targetProvider}`, { code: "invalid_provider" });
+    }
+    return {
+      provider: options.targetProvider,
+      model: options.model || cfg.models[0],
+      usedFallback: false,
+    };
+  }
+
+  const routerPref = getRouterProviderPreference();
+  if (routerPref !== "auto" && isProviderConfigured(routerPref)) {
+    const cfg = getRuntimeProviderConfig(routerPref);
+    return {
+      provider: routerPref,
+      model: options.model || getRouterDefaultModel(routerPref) || cfg.models[0],
+      usedFallback: false,
+    };
+  }
+
+  const candidates = [];
+  if (rule?.primary) candidates.push(rule.primary);
+  if (rule?.fallback) candidates.push(rule.fallback);
+
+  for (const key of PROVIDER_FALLBACK_ORDER) {
+    if (!candidates.some((c) => c.provider === key) && isProviderConfigured(key)) {
+      const cfg = getRuntimeProviderConfig(key);
+      candidates.push({ provider: key, model: cfg.models[0] });
+    }
+  }
+
+  const preferred = rule?.primary?.provider;
+  for (const candidate of candidates) {
+    if (!isProviderConfigured(candidate.provider)) continue;
+    return {
+      provider: candidate.provider,
+      model: options.model || candidate.model,
+      usedFallback: preferred ? candidate.provider !== preferred : false,
+    };
+  }
+
+  return null;
+}
+
 /**
  * Get or create provider client
  */
@@ -312,7 +418,7 @@ function getClient(provider) {
     return clients.get(provider);
   }
 
-  const config = PROVIDERS[provider];
+  const config = getRuntimeProviderConfig(provider);
   if (!config) {
     throw pluginError.validation(`Unknown provider: ${provider}`);
   }
@@ -321,7 +427,7 @@ function getClient(provider) {
 
   if (provider === "openai") {
     client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: getProviderApiKey("openai"),
     });
   } else if (provider === "anthropic") {
     // Anthropic uses fetch API
@@ -333,7 +439,7 @@ function getClient(provider) {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "x-api-key": process.env.ANTHROPIC_API_KEY,
+                "x-api-key": getProviderApiKey("anthropic"),
                 "anthropic-version": "2023-06-01",
               },
               body: JSON.stringify({
@@ -353,6 +459,13 @@ function getClient(provider) {
                   content: data.content?.[0]?.text || "",
                 },
               }],
+              usage: data.usage
+                ? {
+                    prompt_tokens: data.usage.input_tokens,
+                    completion_tokens: data.usage.output_tokens,
+                    total_tokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0),
+                  }
+                : undefined,
             };
           },
         },
@@ -365,7 +478,7 @@ function getClient(provider) {
         completions: {
           create: async (params) => {
             const response = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${params.model}:generateContent?key=${process.env.GOOGLE_API_KEY}`,
+              `https://generativelanguage.googleapis.com/v1beta/models/${params.model}:generateContent?key=${getProviderApiKey("google")}`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -378,6 +491,7 @@ function getClient(provider) {
               }
             );
             const data = await response.json();
+            const meta = data.usageMetadata;
             return {
               choices: [{
                 message: {
@@ -385,6 +499,13 @@ function getClient(provider) {
                   content: data.candidates?.[0]?.content?.parts?.[0]?.text || "",
                 },
               }],
+              usage: meta
+                ? {
+                    prompt_tokens: meta.promptTokenCount,
+                    completion_tokens: meta.candidatesTokenCount,
+                    total_tokens: meta.totalTokenCount,
+                  }
+                : undefined,
             };
           },
         },
@@ -393,7 +514,7 @@ function getClient(provider) {
   } else if (provider === "mistral") {
     // Mistral uses OpenAI-compatible API
     client = new OpenAI({
-      apiKey: process.env.MISTRAL_API_KEY,
+      apiKey: getProviderApiKey("mistral"),
       baseURL: "https://api.mistral.ai/v1",
     });
   } else if (provider === "ollama") {
@@ -419,6 +540,13 @@ function getClient(provider) {
                   content: data.message?.content || "",
                 },
               }],
+              usage: {
+                prompt_tokens: data.prompt_eval_count || 0,
+                completion_tokens: data.eval_count || 0,
+                total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0),
+              },
+              prompt_eval_count: data.prompt_eval_count,
+              eval_count: data.eval_count,
             };
           },
         },
@@ -447,6 +575,21 @@ function getClient(provider) {
  */
 export function resetVllmClient() {
   clients.delete("vllm");
+}
+
+/** Clear all cached LLM provider clients (hot reload after API key change) */
+export function clearLlmClientCache() {
+  clients.clear();
+}
+
+async function recordRouteUsage(context, event) {
+  const base = usageContextFromRequest(context, {
+    source: context.source || "plugin",
+    pluginName: "llm-router",
+    toolName: context.toolName || "llm_route",
+    operationType: event.operationType || "chat_completion",
+  });
+  await recordUsageEvent({ ...base, ...event });
 }
 
 /**
@@ -480,28 +623,39 @@ export async function routeTask(task, prompt, options = {}, context = {}) {
   // Find routing rule
   const rule = ROUTING_RULES.find(r => r.task === task) || ROUTING_RULES.find(r => r.task === "general");
 
-  // Determine which provider to use (targetProvider override > fallback > primary)
-  const useFallback = options.useFallback || false;
-  let providerConfig;
-  if (options.targetProvider) {
-    const targetProviderData = PROVIDERS[options.targetProvider];
-    if (!targetProviderData) {
-      throw pluginError.validation(`Unknown provider: ${options.targetProvider}`, { code: "invalid_provider" });
-    }
-    providerConfig = { provider: options.targetProvider, model: targetProviderData.models[0] };
-  } else {
-    providerConfig = useFallback && rule.fallback ? rule.fallback : rule.primary;
-  }
-  const { provider, model } = providerConfig;
-  const config = PROVIDERS[provider];
+  const resolved =
+    options.useFallback && rule.fallback && isProviderConfigured(rule.fallback.provider)
+      ? {
+          provider: rule.fallback.provider,
+          model: options.model || rule.fallback.model,
+          usedFallback: true,
+        }
+      : resolveProviderConfig(rule, options);
 
-  // Check if provider is available
-  if (config.requiresKey && !process.env[config.requiresKey]) {
-    // Try fallback if not already using it
-    if (!useFallback && rule.fallback) {
-      console.log(`[llm-router] Provider ${provider} unavailable (no API key), trying fallback...`);
-      return routeTask(task, prompt, { ...options, useFallback: true }, context);
-    }
+  if (!resolved) {
+    const hint =
+      "Hiçbir LLM sağlayıcısı yapılandırılmamış. OPENAI_API_KEY, VLLM_BASE_URL, OLLAMA veya başka bir provider anahtarı ekleyin.";
+    auditEntry({
+      operation: "route",
+      provider: "(none)",
+      model: "(none)",
+      task,
+      promptLength: validation.promptLength,
+      durationMs: Date.now() - startTime,
+      actor: context.actor || "anonymous",
+      workspaceId: context.workspaceId || null,
+      projectId: context.projectId || null,
+      correlationId,
+      success: false,
+      error: hint,
+    });
+    throw pluginError.validation(hint, { code: "provider_unavailable" });
+  }
+
+  const { provider, model, usedFallback: useFallback } = resolved;
+  const config = getRuntimeProviderConfig(provider);
+
+  if (!isProviderConfigured(provider)) {
     auditEntry({
       operation: "route",
       provider,
@@ -514,9 +668,9 @@ export async function routeTask(task, prompt, options = {}, context = {}) {
       projectId: context.projectId || null,
       correlationId,
       success: false,
-      error: `Provider ${provider} requires ${config.requiresKey}`,
+      error: `Provider ${provider} is not configured`,
     });
-    throw pluginError.validation(`Provider ${provider} requires ${config.requiresKey}`, { code: "provider_unavailable" });
+    throw pluginError.validation(`Provider ${provider} is not configured`, { code: "provider_unavailable" });
   }
 
   const client = getClient(provider);
@@ -556,13 +710,29 @@ export async function routeTask(task, prompt, options = {}, context = {}) {
         })
       );
 
+      const durationMs = Date.now() - startTime;
+      const imageCost = estimateImageCostUsd(provider, model, options.size, options.quality);
+
+      await recordRouteUsage(context, {
+        provider,
+        model,
+        task,
+        operationType: "image_generation",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: imageCost,
+        durationMs,
+        metadata: { image_count: options.n || 1, size: options.size || "1024x1024" },
+      });
+
       auditEntry({
         operation: "image_generation",
         provider,
         model,
         task,
         promptLength: validation.promptLength,
-        durationMs: Date.now() - startTime,
+        durationMs,
         actor: context.actor || "anonymous",
         workspaceId: context.workspaceId || null,
         projectId: context.projectId || null,
@@ -604,7 +774,7 @@ export async function routeTask(task, prompt, options = {}, context = {}) {
 
   // Call LLM with resilience (for chat/text tasks)
   try {
-    const result = await withLLMTimeout(
+    const llmResponse = await withLLMTimeout(
       withResilience(`llm-${provider}`, async () => {
         const response = await client.chat.completions.create({
           model: model,
@@ -615,14 +785,30 @@ export async function routeTask(task, prompt, options = {}, context = {}) {
           temperature: options.temperature ?? 0.7,
           max_tokens: Math.min(options.maxTokens ?? 4096, MAX_OUTPUT_TOKENS),
         });
-        return response.choices[0].message.content;
+        return response;
       }, {
         circuit: { failureThreshold: 3, resetTimeoutMs: 30000 },
         retry: { maxAttempts: 2, backoffMs: 1000 },
       })
     );
 
+    const result = llmResponse.choices?.[0]?.message?.content;
+    const usage = normalizeUsageFromResponse(llmResponse, provider);
     const durationMs = Date.now() - startTime;
+    const cost = computeCostUsd(model, usage.promptTokens, usage.completionTokens);
+
+    await recordRouteUsage(context, {
+      provider,
+      model,
+      task,
+      operationType: "chat_completion",
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      totalTokens: usage.totalTokens,
+      estimatedCostUsd: cost,
+      durationMs,
+      metadata: { used_fallback: useFallback, retry_count: retryCount, route_correlation_id: correlationId },
+    });
 
     auditEntry({
       operation: "route",
@@ -639,6 +825,8 @@ export async function routeTask(task, prompt, options = {}, context = {}) {
       success: true,
       fallback: useFallback,
       retryCount,
+      inputTokens: usage.promptTokens,
+      outputTokens: usage.completionTokens,
     });
 
     return {
@@ -647,6 +835,7 @@ export async function routeTask(task, prompt, options = {}, context = {}) {
       model,
       task,
       usedFallback: useFallback,
+      usage: { ...usage, estimatedCostUsd: cost },
     };
   } catch (error) {
     const durationMs = Date.now() - startTime;
@@ -721,8 +910,7 @@ function getSystemPrompt(task) {
 export async function compareLLMs(task, prompt, providers = ["openai", "anthropic"]) {
   const results = await Promise.allSettled(
     providers.map(async (provider) => {
-      const config = PROVIDERS[provider];
-      if (config.requiresKey && !process.env[config.requiresKey]) {
+      if (!isProviderConfigured(provider)) {
         return { provider, error: "API key not configured" };
       }
 
@@ -745,22 +933,14 @@ export async function compareLLMs(task, prompt, providers = ["openai", "anthropi
 }
 
 /**
- * Check if a provider is available based on its requirements
- */
-function isProviderAvailable(config) {
-  if (config.requiresKey && !process.env[config.requiresKey]) return false;
-  if (config.requiresUrl && !process.env[config.requiresUrl]) return false;
-  return true;
-}
-
-/**
  * List available models
  */
 export function listModels() {
   const available = [];
 
-  for (const [key, config] of Object.entries(PROVIDERS)) {
-    const available_flag = isProviderAvailable(config);
+  for (const key of Object.keys(PROVIDERS)) {
+    const config = getRuntimeProviderConfig(key);
+    const available_flag = isProviderConfigured(key);
     const entry = {
       provider: key,
       name: config.name,
@@ -786,6 +966,22 @@ export function listModels() {
   }
 
   return available;
+}
+
+/** Flat list of model ids from all configured providers */
+export function listConfiguredModelIds() {
+  const ids = [];
+  for (const entry of listModels()) {
+    if (!entry.available) continue;
+    for (const m of entry.models || []) {
+      if (m && !ids.includes(m)) ids.push(m);
+    }
+  }
+  const chatModel = getChatDefaultModel();
+  if (chatModel && !ids.includes(chatModel)) ids.unshift(chatModel);
+  const routerModel = getRouterDefaultModel();
+  if (routerModel && !ids.includes(routerModel)) ids.push(routerModel);
+  return ids;
 }
 
 /**
@@ -864,9 +1060,14 @@ export const tools = [
       },
       required: ["task", "prompt", "explanation"],
     },
-    handler: async ({ task, prompt, explanation, temperature, maxTokens }) => {
+    handler: async ({ task, prompt, explanation, temperature, maxTokens }, ctx) => {
       try {
-        const result = await routeTask(task, prompt, { temperature, maxTokens });
+        const result = await routeTask(task, prompt, { temperature, maxTokens }, {
+          ...ctx,
+          toolName: "llm_route",
+          source: ctx?.source || "mcp_tool",
+          channel: ctx?.channel || "cursor",
+        });
         return {
           ok: true,
           data: {
@@ -913,9 +1114,13 @@ export const tools = [
       },
       required: ["prompt", "explanation"],
     },
-    handler: async ({ prompt, explanation, temperature, maxTokens }) => {
+    handler: async ({ prompt, explanation, temperature, maxTokens }, ctx) => {
       try {
-        const result = await routeTask("backend_api", prompt, { temperature, maxTokens });
+        const result = await routeTask("backend_api", prompt, { temperature, maxTokens }, {
+          ...ctx,
+          toolName: "llm_route_backend",
+          source: ctx?.source || "mcp_tool",
+        });
         return {
           ok: true,
           data: {
@@ -962,9 +1167,13 @@ export const tools = [
       },
       required: ["prompt", "explanation"],
     },
-    handler: async ({ prompt, explanation, temperature, maxTokens }) => {
+    handler: async ({ prompt, explanation, temperature, maxTokens }, ctx) => {
       try {
-        const result = await routeTask("frontend_component", prompt, { temperature, maxTokens });
+        const result = await routeTask("frontend_component", prompt, { temperature, maxTokens }, {
+          ...ctx,
+          toolName: "llm_route_frontend",
+          source: ctx?.source || "mcp_tool",
+        });
         return {
           ok: true,
           data: {
@@ -1117,7 +1326,7 @@ export const tools = [
       },
       required: ["prompt", "explanation"],
     },
-    handler: async ({ prompt, model, explanation, temperature, maxTokens }) => {
+    handler: async ({ prompt, model, explanation, temperature, maxTokens }, ctx) => {
       const vllmConfig = PROVIDERS.vllm;
       if (!vllmConfig.baseUrl) {
         return {
@@ -1134,6 +1343,10 @@ export const tools = [
           targetProvider: "vllm",
           temperature,
           maxTokens,
+        }, {
+          ...ctx,
+          toolName: "llm_route_custom",
+          source: ctx?.source || "mcp_tool",
         });
         return {
           ok: true,
@@ -1168,6 +1381,7 @@ export const tools = [
 
 // REST API Endpoints — documented format (used by OpenAPI generator)
 export const endpoints = [
+  { method: "GET",  path: "/llm/health",                   description: "Plugin health",                                               scope: "read"  },
   { method: "POST", path: "/llm/route",                    description: "Route a prompt to the best LLM provider",                       scope: "write" },
   { method: "POST", path: "/llm/compare",                  description: "Compare responses from multiple LLM providers",                  scope: "write" },
   { method: "GET",  path: "/llm/models",                   description: "List available LLM models and their availability",               scope: "read"  },
@@ -1182,6 +1396,8 @@ export const endpoints = [
 // Plugin registration — mounts all routes
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
+  router.use(requireScopeByMethod());
 
   /**
    * POST /llm/route

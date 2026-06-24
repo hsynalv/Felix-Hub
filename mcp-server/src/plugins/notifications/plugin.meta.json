@@ -1,0 +1,55 @@
+{
+  "name": "notifications",
+  "version": "1.1.0",
+  "status": "beta",
+  "owner": "core-team",
+  "description": "System notifications (native + Telegram)",
+  "requiresAuth": true,
+  "supportsJobs": false,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "write",
+    "dangerousCombinations": [
+      "write"
+    ],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": false
+  },
+  "dependencies": [],
+  "envVars": [
+    {
+      "name": "TELEGRAM_ALLOWED_CHAT_IDS",
+      "required": false,
+      "description": "Comma-separated allowed Telegram chat IDs"
+    },
+    {
+      "name": "TELEGRAM_BOT_TOKEN",
+      "required": false,
+      "description": "Telegram bot token for outbound messages"
+    },
+    {
+      "name": "TELEGRAM_POLLING",
+      "required": false,
+      "description": "Enable Telegram long-polling mode"
+    },
+    {
+      "name": "TELEGRAM_WEBHOOK_SECRET",
+      "required": false,
+      "description": "Secret for Telegram webhook validation"
+    }
+  ]
+}

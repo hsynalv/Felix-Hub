@@ -5,18 +5,19 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createMcpServer } from "../src/mcp/gateway.js";
+import { handleMcpHttpMessage } from "../../src/mcp/gateway.js";
 import {
   registerTool,
   clearTools,
   listTools,
   ToolTags,
-} from "../src/core/tool-registry.js";
+} from "../../src/core/tool-registry.js";
 
-// Mock policy engine
-vi.mock("../src/plugins/policy/policy.engine.js", () => ({
+vi.mock("../../src/plugins/policy/policy.engine.js", () => ({
   evaluate: vi.fn(() => ({ allowed: true })),
 }));
+
+const EMPTY_SCHEMA = { type: "object", properties: {} };
 
 describe("MCP Contract Tests", () => {
   beforeEach(() => {
@@ -25,8 +26,7 @@ describe("MCP Contract Tests", () => {
 
   describe("listTools contract", () => {
     it("should return empty tools list when registry is empty", async () => {
-      const server = createMcpServer();
-      const result = await server.handleRequest(
+      const result = await handleMcpHttpMessage(
         { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
         { user: null }
       );
@@ -44,19 +44,18 @@ describe("MCP Contract Tests", () => {
           required: ["name"],
         },
         handler: async () => "result",
-        tags: [ToolTags.READ],
+        tags: [ToolTags.READ_ONLY],
       });
 
       registerTool({
         name: "another_tool",
         description: "Another test tool",
-        inputSchema: { type: "object" },
+        inputSchema: { type: "object", properties: {} },
         handler: async () => "result",
         tags: [ToolTags.WRITE, ToolTags.NETWORK],
       });
 
-      const server = createMcpServer();
-      const result = await server.handleRequest(
+      const result = await handleMcpHttpMessage(
         { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
         { user: null }
       );
@@ -65,7 +64,6 @@ describe("MCP Contract Tests", () => {
       expect(result.tools.map((t) => t.name)).toContain("test_tool");
       expect(result.tools.map((t) => t.name)).toContain("another_tool");
 
-      // Verify schema structure
       const testTool = result.tools.find((t) => t.name === "test_tool");
       expect(testTool.description).toBe("A test tool");
       expect(testTool.inputSchema.type).toBe("object");
@@ -76,14 +74,13 @@ describe("MCP Contract Tests", () => {
       registerTool({
         name: "secure_tool",
         description: "A secure tool",
-        inputSchema: { type: "object" },
+        inputSchema: EMPTY_SCHEMA,
         handler: async () => "secret",
         plugin: "test",
-        tags: [ToolTags.READ],
+        tags: [ToolTags.READ_ONLY],
       });
 
-      const server = createMcpServer();
-      const result = await server.handleRequest(
+      const result = await handleMcpHttpMessage(
         { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
         { user: null }
       );
@@ -100,8 +97,7 @@ describe("MCP Contract Tests", () => {
 
   describe("callTool contract", () => {
     it("should return error for non-existent tool", async () => {
-      const server = createMcpServer();
-      const result = await server.handleRequest(
+      const result = await handleMcpHttpMessage(
         {
           jsonrpc: "2.0",
           id: 1,
@@ -125,11 +121,10 @@ describe("MCP Contract Tests", () => {
           required: ["name"],
         },
         handler: async (args) => ({ message: `Hello ${args.name}` }),
-        tags: [ToolTags.READ],
+        tags: [ToolTags.READ_ONLY],
       });
 
-      const server = createMcpServer();
-      const result = await server.handleRequest(
+      const result = await handleMcpHttpMessage(
         {
           jsonrpc: "2.0",
           id: 1,
@@ -151,15 +146,14 @@ describe("MCP Contract Tests", () => {
       registerTool({
         name: "failing_tool",
         description: "A tool that fails",
-        inputSchema: { type: "object" },
+        inputSchema: EMPTY_SCHEMA,
         handler: async () => {
           throw new Error("Intentional failure");
         },
-        tags: [ToolTags.READ],
+        tags: [ToolTags.READ_ONLY],
       });
 
-      const server = createMcpServer();
-      const result = await server.handleRequest(
+      const result = await handleMcpHttpMessage(
         {
           jsonrpc: "2.0",
           id: 1,
@@ -179,13 +173,14 @@ describe("MCP Contract Tests", () => {
       registerTool({
         name: "tagged_tool",
         description: "A tagged tool",
+        inputSchema: EMPTY_SCHEMA,
         handler: async () => "result",
-        tags: [ToolTags.READ, ToolTags.NETWORK, ToolTags.EXTERNAL_API],
+        tags: [ToolTags.READ_ONLY, ToolTags.NETWORK, ToolTags.EXTERNAL_API],
       });
 
       const tools = listTools();
       expect(tools[0].tags).toEqual([
-        ToolTags.READ,
+        ToolTags.READ_ONLY,
         ToolTags.NETWORK,
         ToolTags.EXTERNAL_API,
       ]);
@@ -195,12 +190,13 @@ describe("MCP Contract Tests", () => {
       registerTool({
         name: "partial_tool",
         description: "A tool with some invalid tags",
+        inputSchema: EMPTY_SCHEMA,
         handler: async () => "result",
-        tags: [ToolTags.READ, "INVALID_TAG", ToolTags.WRITE, "ANOTHER_INVALID"],
+        tags: [ToolTags.READ_ONLY, "INVALID_TAG", ToolTags.WRITE, "ANOTHER_INVALID"],
       });
 
       const tools = listTools();
-      expect(tools[0].tags).toEqual([ToolTags.READ, ToolTags.WRITE]);
+      expect(tools[0].tags).toEqual([ToolTags.READ_ONLY, ToolTags.WRITE]);
     });
   });
 });

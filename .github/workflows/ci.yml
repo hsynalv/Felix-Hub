@@ -35,6 +35,16 @@ jobs:
         working-directory: mcp-server
         run: pnpm run lint
 
+      - name: Validate plugin metadata
+        working-directory: mcp-server
+        run: pnpm run validate:plugins
+        env:
+          STRICT_PLUGIN_META: "true"
+
+      - name: Build UI
+        working-directory: mcp-server
+        run: pnpm run ui:build
+
       - name: Run tests
         working-directory: mcp-server
         run: pnpm run test:run

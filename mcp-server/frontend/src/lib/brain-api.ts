@@ -135,3 +135,26 @@ export async function fetchObsidianStatus() {
 export async function syncObsidian() {
   return apiPost<{ synced: number; errors: number; total: number }>("/brain/obsidian/sync");
 }
+
+export async function pullObsidian() {
+  return apiPost<{ updated: number; skipped: number; errors: number }>("/brain/obsidian/pull");
+}
+
+export async function fetchObsidianCanvas() {
+  return apiGet<{ nodes: unknown[]; edges: unknown[] }>("/brain/obsidian/canvas");
+}
+
+export async function downloadObsidianCanvas() {
+  const key = getApiKey();
+  const res = await fetch("/brain/obsidian/canvas?download=1", {
+    headers: { ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "mcp-hub-brain.canvas";
+  a.click();
+  URL.revokeObjectURL(url);
+}

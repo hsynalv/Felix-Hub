@@ -7,6 +7,8 @@
 import { Router } from "express";
 import { runTests, runLint, getCoverage } from "./tests.core.js";
 import { ToolTags } from "../../core/tool-registry.js";
+import { requireScope } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 export const name = "tests";
 export const version = "1.0.0";
@@ -15,6 +17,7 @@ export const capabilities = ["read"];
 export const requires = [];
 
 export const endpoints = [
+  { method: "GET", path: "/tests/health", description: "Plugin health", scope: "read" },
   { method: "POST", path: "/tests/run", description: "Run tests", scope: "read" },
   { method: "POST", path: "/tests/lint", description: "Run linter", scope: "read" },
   { method: "GET", path: "/tests/coverage", description: "Get test coverage", scope: "read" },
@@ -68,6 +71,8 @@ export const tools = [
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
+  router.use(requireScope("read"));
 
   // POST /tests/run { path, pattern, watch }
   router.post("/run", async (req, res) => {

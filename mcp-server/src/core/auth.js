@@ -22,6 +22,29 @@ function normalizeScope(scope) {
   return scope;
 }
 
+const WRITE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Middleware: read scope for GET/HEAD/OPTIONS, write scope for mutating methods.
+ * Optional pathScopes map overrides scope per path (e.g. { "/drive/upload": "admin" }).
+ */
+export function requireScopeByMethod(options = {}) {
+  const readScope = options.read ?? "read";
+  const writeScope = options.write ?? "write";
+  const pathScopes = options.pathScopes ?? {};
+
+  return (req, res, next) => {
+    const pathKey = req.path || "";
+    const override = Object.entries(pathScopes).find(([prefix]) => pathKey === prefix || pathKey.endsWith(prefix));
+    const scope = override
+      ? override[1]
+      : WRITE_HTTP_METHODS.has(req.method.toUpperCase())
+        ? writeScope
+        : readScope;
+    return requireScope(scope)(req, res, next);
+  };
+}
+
 function getKeyMap() {
   const map = new Map();
   const readKey  = process.env.HUB_READ_KEY?.trim();
@@ -58,7 +81,18 @@ function extractKey(req) {
  */
 export function requireScope(scope = "read") {
   return (req, res, next) => {
-    if (!authEnabled()) return next(); // open mode — no keys configured
+    if (!authEnabled()) {
+      if (process.env.NODE_ENV === "production") {
+        return res.status(503).json({
+          ok: false,
+          error: {
+            code: "auth_not_configured",
+            message: "Server auth is not configured. Set HUB_READ_KEY, HUB_WRITE_KEY, and HUB_ADMIN_KEY.",
+          },
+        });
+      }
+      return next(); // development/test open mode
+    }
 
     const requiredScope = normalizeScope(scope);
 

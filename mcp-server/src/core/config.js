@@ -56,7 +56,9 @@ const rawConfig = {
     enableN8n: process.env.ENABLE_N8N_PLUGIN !== "false",
     enableN8nCredentials: process.env.ENABLE_N8N_CREDENTIALS !== "false",
     enableN8nWorkflows: process.env.ENABLE_N8N_WORKFLOWS !== "false",
-    strictLoading: process.env.STRICT_PLUGIN_LOADING === "true",
+    strictLoading: process.env.STRICT_PLUGIN_LOADING === "true" || process.env.PLUGIN_STRICT_MODE === "true",
+    strictMeta: process.env.STRICT_PLUGIN_META === "true",
+    strictToolSchema: process.env.STRICT_TOOL_SCHEMA === "true",
   },
   redis: {
     url: process.env.REDIS_URL || undefined,
@@ -72,6 +74,13 @@ const rawConfig = {
 
 // Validate and export config
 export const config = validateConfig(rawConfig);
+
+export {
+  getEffectiveConfig,
+  getEffectiveConfigMasked,
+  loadSettingsOverlay,
+  getEnvValue,
+} from "./settings/effective-config.js";
 
 // Log sanitized config on startup
 if (process.env.NODE_ENV !== "test") {

@@ -17,9 +17,9 @@ export const ConfigSchema = z.object({
 
   // Auth
   auth: z.object({
-    readKey: z.string().min(1, "HUB_READ_KEY is required"),
-    writeKey: z.string().min(1, "HUB_WRITE_KEY is required"),
-    adminKey: z.string().min(1, "HUB_ADMIN_KEY is required"),
+    readKey: z.string().default(""),
+    writeKey: z.string().default(""),
+    adminKey: z.string().default(""),
   }),
 
   // Audit
@@ -43,7 +43,7 @@ export const ConfigSchema = z.object({
 
   // Notion
   notion: z.object({
-    apiKey: z.string().min(1, "NOTION_API_KEY is required"),
+    apiKey: z.string().default(""),
     rootPageId: z.string().optional(),
     projectsDbId: z.string().optional(),
     tasksDbId: z.string().optional(),
@@ -105,6 +105,39 @@ export const ConfigSchema = z.object({
   }),
 });
 
+const WEAK_AUTH_KEYS = new Set([
+  "",
+  "dev",
+  "test",
+  "changeme",
+  "password",
+  "12345678",
+  "admin",
+  "read",
+  "write",
+]);
+
+function isWeakKey(value) {
+  if (!value || typeof value !== "string") return true;
+  const normalized = value.trim().toLowerCase();
+  return WEAK_AUTH_KEYS.has(normalized) || normalized.length < 16;
+}
+
+function validateProductionAuth(config) {
+  const keys = [config.auth.readKey, config.auth.writeKey, config.auth.adminKey];
+  const missing = keys.some((k) => !k?.trim());
+  const weak = keys.some((k) => isWeakKey(k));
+
+  if (missing) {
+    console.error("\n❌ Production requires HUB_READ_KEY, HUB_WRITE_KEY, and HUB_ADMIN_KEY.");
+    process.exit(1);
+  }
+  if (weak) {
+    console.error("\n❌ Production auth keys are missing or too weak (min 16 chars, no placeholders like dev/test).");
+    process.exit(1);
+  }
+}
+
 /**
  * Validate configuration object
  * @param {Object} rawConfig - Raw configuration from process.env
@@ -122,6 +155,10 @@ export function validateConfig(rawConfig) {
     console.error(errors);
     console.error("\nPlease check your .env file and ensure all required variables are set.\n");
     process.exit(1);
+  }
+
+  if (result.data.nodeEnv === "production") {
+    validateProductionAuth(result.data);
   }
 
   return result.data;
@@ -183,9 +220,14 @@ export function logStartupConfig(config) {
   console.log(`   Redis: ${config.redis.enabled ? "enabled" : "disabled"}`);
   
   console.log("\n🔐 Auth Keys:");
-  console.log(`   Read Key: ${sanitized.auth.readKey}`);
-  console.log(`   Write Key: ${sanitized.auth.writeKey}`);
-  console.log(`   Admin Key: ${sanitized.auth.adminKey}`);
+  const authConfigured = !!(config.auth.readKey || config.auth.writeKey || config.auth.adminKey);
+  if (authConfigured) {
+    console.log(`   Read Key: ${sanitized.auth.readKey}`);
+    console.log(`   Write Key: ${sanitized.auth.writeKey}`);
+    console.log(`   Admin Key: ${sanitized.auth.adminKey}`);
+  } else {
+    console.log("   (open mode — no keys configured)");
+  }
   
   if (config.notion.apiKey) {
     console.log("\n📝 Notion: enabled");

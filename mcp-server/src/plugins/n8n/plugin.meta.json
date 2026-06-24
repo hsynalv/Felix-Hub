@@ -1,0 +1,50 @@
+{
+  "name": "n8n",
+  "version": "1.0.0",
+  "status": "beta",
+  "owner": "core-team",
+  "description": "n8n plugin",
+  "requiresAuth": true,
+  "supportsJobs": false,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "write",
+    "dangerousCombinations": [
+      "write"
+    ],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": true
+  },
+  "dependencies": [],
+  "envVars": [
+    {
+      "name": "ALLOW_N8N_WRITE",
+      "required": false,
+      "description": "Allow mutating n8n operations"
+    },
+    {
+      "name": "N8N_API_KEY",
+      "required": false,
+      "description": "n8n API key"
+    },
+    {
+      "name": "N8N_BASE_URL",
+      "required": false,
+      "description": "n8n instance base URL"
+    }
+  ]
+}

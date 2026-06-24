@@ -7,7 +7,12 @@ import { Redis } from "ioredis";
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+const REDIS_DEFAULT = "redis://localhost:6379";
+
+function resolveRedisUrl() {
+  return process.env.REDIS_URL || REDIS_DEFAULT;
+}
+
 const PATTERN_CACHE_TTL_DAYS = parseInt(process.env.PATTERN_CACHE_TTL_DAYS || "7", 10);
 const DRAFT_SESSION_TTL_HOURS = parseInt(process.env.DRAFT_SESSION_TTL_HOURS || "1", 10);
 
@@ -16,8 +21,9 @@ const DRAFT_SESSION_TTL_HOURS = parseInt(process.env.DRAFT_SESSION_TTL_HOURS || 
 let redis = null;
 
 export function getRedis() {
+  const url = resolveRedisUrl();
   if (!redis) {
-    redis = new Redis(REDIS_URL, {
+    redis = new Redis(url, {
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;

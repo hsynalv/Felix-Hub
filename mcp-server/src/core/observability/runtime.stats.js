@@ -4,9 +4,9 @@
  * Process and runtime statistics for observability.
  */
 
-import { getRegistry } from "../registry/index.js";
-import { getToolRegistry } from "../tools/tool.registry.js";
-import { getJobManager } from "../jobs/job.manager.js";
+import { getPlugins, getFailedPlugins } from "../plugins.js";
+import { listTools } from "../tool-registry.js";
+import { getJobStats as getLegacyJobStats } from "../jobs.js";
 
 /**
  * Process stats
@@ -157,16 +157,16 @@ function formatUptime(seconds) {
  * @returns {Object}
  */
 export function getPluginStats() {
-  const registry = getRegistry();
-  const status = registry.getStatus();
+  const plugins = getPlugins();
+  const failed = getFailedPlugins();
 
   return {
-    total: status.total,
-    enabled: status.enabled,
-    loaded: status.loaded,
-    healthy: status.healthy,
-    failed: status.failed,
-    pluginNames: status.pluginNames,
+    total: plugins.length + failed.length,
+    enabled: plugins.length,
+    loaded: plugins.length,
+    healthy: plugins.length,
+    failed: failed.length,
+    pluginNames: plugins.map((p) => p.name),
   };
 }
 
@@ -175,17 +175,7 @@ export function getPluginStats() {
  * @returns {Promise<Object>}
  */
 export async function getJobStats() {
-  const manager = getJobManager();
-  const counts = await manager.getJobCounts();
-
-  return {
-    total: counts.total,
-    queued: counts.queued,
-    running: counts.running,
-    completed: counts.completed,
-    failed: counts.failed,
-    cancelled: counts.cancelled,
-  };
+  return getLegacyJobStats();
 }
 
 /**
@@ -193,12 +183,22 @@ export async function getJobStats() {
  * @returns {Object}
  */
 export function getToolStats() {
-  const registry = getToolRegistry();
+  const tools = listTools();
+  const byPlugin = {};
+  const categories = new Set();
+
+  for (const tool of tools) {
+    const plugin = tool.plugin || "unknown";
+    byPlugin[plugin] = (byPlugin[plugin] || 0) + 1;
+    for (const tag of tool.tags || []) {
+      categories.add(tag);
+    }
+  }
 
   return {
-    total: registry.getAll().length,
-    byPlugin: registry.getStats().byPlugin,
-    categories: registry.getCategories(),
+    total: tools.length,
+    byPlugin,
+    categories: [...categories],
   };
 }
 
@@ -221,22 +221,22 @@ export async function getSystemSnapshot() {
  * @returns {Object}
  */
 export function getHealthStatus() {
-  const registry = getRegistry();
-  const status = registry.getStatus();
+  const plugins = getPlugins();
+  const failed = getFailedPlugins();
+  const total = plugins.length + failed.length;
 
-  // Determine overall health
   let status_code = "healthy";
   const checks = {
     runtime: true,
-    plugins: status.failed === 0,
-    registry: status.total > 0,
+    plugins: failed.length === 0,
+    registry: total > 0,
   };
 
-  if (status.failed > 0) {
+  if (failed.length > 0) {
     status_code = "degraded";
   }
 
-  if (status.total === 0) {
+  if (total === 0) {
     status_code = "unhealthy";
   }
 

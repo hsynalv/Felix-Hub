@@ -5,10 +5,18 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fileWatcher from "../../src/plugins/file-watcher/index.js";
 
+async function stopAllWatchers() {
+  const listTool = fileWatcher.tools.find((t) => t.name === "file_watcher_list");
+  const stopTool = fileWatcher.tools.find((t) => t.name === "file_watcher_stop");
+  const { data } = await listTool.handler({});
+  for (const w of data.watchers ?? []) {
+    await stopTool.handler({ watcherId: w.id });
+  }
+}
+
 describe("File Watcher Plugin", () => {
-  beforeEach(() => {
-    // Clean up any existing watchers
-    const watchers = fileWatcher.tools.find(t => t.name === "file_watcher_list");
+  afterEach(async () => {
+    await stopAllWatchers();
   });
 
   describe("Plugin Metadata", () => {

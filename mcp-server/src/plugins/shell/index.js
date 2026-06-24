@@ -17,6 +17,7 @@ import { canExecute, getPolicyManager } from "../../core/policy/index.js";
 import { auditLog, getAuditManager, generateCorrelationId as coreGenerateCorrelationId } from "../../core/audit/index.js";
 import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/index.js";
 import { requireScope } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 // ── Plugin Metadata ──────────────────────────────────────────────────────────
 
@@ -176,7 +177,11 @@ async function auditEntry({ command, cwd, allowed, reason, duration, exitCode, e
 }
 
 async function getAuditLogEntries(limit = 100) {
-  return getAuditManager().read(limit);
+  const manager = getAuditManager();
+  if (!manager.initialized) {
+    await manager.init();
+  }
+  return manager.getRecentEntries({ limit });
 }
 
 /**
@@ -472,6 +477,7 @@ export const capabilities = ["read", "write"];
 export const requires    = [];
 
 export const endpoints = [
+  { method: "GET",  path: "/shell/health",          description: "Plugin health", scope: "read"  },
   { method: "POST", path: "/shell/execute",         description: "Execute a shell command (optional session_id, is_background)", scope: "write" },
   { method: "POST", path: "/shell/execute/stream",  description: "Execute with streaming output (SSE)", scope: "write" },
   { method: "POST", path: "/shell/session",        description: "Create a new shell session", scope: "write" },
@@ -684,6 +690,7 @@ export const tools = [
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
 
   /**
    * POST /shell/execute

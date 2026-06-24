@@ -1,0 +1,45 @@
+{
+  "name": "rag",
+  "version": "1.1.0",
+  "status": "beta",
+  "owner": "core-team",
+  "description": "Document indexing and semantic search. OPENAI_API_KEY enables real semantic search.",
+  "requiresAuth": true,
+  "supportsJobs": true,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "write",
+    "dangerousCombinations": [
+      "write"
+    ],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": true
+  },
+  "dependencies": [],
+  "envVars": [
+    {
+      "name": "OPENAI_API_KEY",
+      "required": false,
+      "description": "Embedding provider API key"
+    },
+    {
+      "name": "RAG_VECTOR_STORE_PATH",
+      "required": false,
+      "description": "Path for local vector store persistence"
+    }
+  ]
+}

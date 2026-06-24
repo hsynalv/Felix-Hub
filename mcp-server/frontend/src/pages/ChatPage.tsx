@@ -1,22 +1,40 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { KeyRound, Send, Loader2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bot, Menu, Sparkles } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { apiGet, type ChatModelsData } from "@/lib/api-client";
-import { getApiKey } from "@/lib/auth";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { ChatMessageList } from "@/components/chat/ChatMessageList";
+import { ChatComposer, type ChatComposerHandle } from "@/components/chat/ChatComposer";
+import { apiGet, type ChatModelsData, type PluginInfo } from "@/lib/api-client";
+import { getConversation, updateConversation } from "@/lib/conversations-api";
+import {
+  buildSystemPromptFromSettings,
+  DEFAULT_CONVERSATION_SETTINGS,
+  parseConversationSettings,
+  type ConversationSettings,
+} from "@/lib/chat-instructions";
+import { ChatInstructionsSheet } from "@/components/chat/ChatInstructionsSheet";
 import {
   streamChat,
   submitChatApproval,
@@ -24,55 +42,155 @@ import {
   type ChatMessage,
 } from "@/lib/chat-stream";
 import { useToast } from "@/providers/ToastProvider";
-import { cn } from "@/lib/utils";
-
-const EXAMPLE_PROMPTS = [
-  "Merhaba, kendini tanıt",
-  "Policy kurallarını listele",
-  "Hub health durumunu özetle",
-];
+import { useSpeechRecognition } from "@/lib/use-speech-recognition";
+import { useSpeechSynthesis } from "@/lib/use-speech-synthesis";
+import { parsePluginSlashMessage } from "@/lib/chat-plugin-slash";
+import type { SlashPluginOption } from "@/components/chat/ChatSlashMenu";
 
 let messageIdSeq = 0;
 function nextMessageId() {
   return `msg-${++messageIdSeq}`;
 }
 
+function mapServerMessages(
+  messages: Array<{ id: string; role: string; content: string; metadata?: Record<string, unknown> | null; createdAt?: string }>
+) {
+  return messages.map((m) => ({
+    id: m.id,
+    role: m.role as ChatMessage["role"],
+    content: m.content,
+    toolName: m.metadata?.toolName as string | undefined,
+    toolPhase: m.metadata?.toolPhase as "start" | "end" | undefined,
+    usage: m.metadata?.usage as ChatMessage["usage"],
+    createdAt: m.createdAt,
+  }));
+}
+
 export function ChatPage() {
-  const [searchParams] = useSearchParams();
-  const [messages, setMessages] = useState<Array<ChatMessage & { id: string }>>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const conversationId = searchParams.get("c");
+  const [messages, setMessages] = useState<Array<ChatMessage & { id: string; createdAt?: string }>>([]);
   const [input, setInput] = useState(() => searchParams.get("prompt") || "");
   const [streaming, setStreaming] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [model, setModel] = useState("");
+  const [customModel, setCustomModel] = useState("");
+  const [chatSettings, setChatSettings] = useState<ConversationSettings>({
+    ...DEFAULT_CONVERSATION_SETTINGS,
+  });
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
-  const [hasApiKey, setHasApiKey] = useState(() => !!getApiKey());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activePlugin, setActivePlugin] = useState<string | null>(null);
   const approvalResolve = useRef<((v: boolean) => void) | null>(null);
   const assistantIdRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<ChatComposerHandle>(null);
+  const userSelectedConversationRef = useRef<string | null>(null);
   const toast = useToast();
+  const sendRef = useRef<(text?: string) => void>(() => {});
+  const qc = useQueryClient();
 
-  useEffect(() => {
-    const sync = () => setHasApiKey(!!getApiKey());
-    sync();
-    window.addEventListener("storage", sync);
-    const interval = setInterval(sync, 1500);
-    return () => {
-      window.removeEventListener("storage", sync);
-      clearInterval(interval);
-    };
-  }, []);
+  const speech = useSpeechRecognition({
+    onInterim: (t) => setInput(t),
+    onFinal: (t) => {
+      if (t) void sendRef.current(t);
+    },
+  });
+  const tts = useSpeechSynthesis();
 
-  const {
-    data: modelsData,
-    isLoading: modelsLoading,
-    isError: modelsError,
-  } = useQuery({
+  const { data: modelsData, isLoading: modelsLoading, isError: modelsError } = useQuery({
     queryKey: ["chat-models"],
     queryFn: () => apiGet<ChatModelsData>("/ui/chat/models"),
-    enabled: hasApiKey,
     retry: 1,
   });
 
-  const effectiveModel = model || modelsData?.defaultModel || "";
+  const conversationQuery = useQuery({
+    queryKey: ["conversation", conversationId],
+    queryFn: () => getConversation(conversationId!),
+    enabled: !!conversationId && modelsData?.persistenceEnabled !== false,
+    retry: false,
+  });
+
+  const { data: plugins = [] } = useQuery({
+    queryKey: ["plugins"],
+    queryFn: () => apiGet<PluginInfo[]>("/plugins"),
+    staleTime: 60_000,
+  });
+
+  const pluginNames = useMemo(() => plugins.map((p) => p.name.toLowerCase()), [plugins]);
+  const slashPlugins: SlashPluginOption[] = useMemo(
+    () =>
+      plugins.map((p) => ({
+        name: p.name,
+        description: p.description,
+        toolCount: Array.isArray(p.tools) ? p.tools.length : 0,
+      })),
+    [plugins]
+  );
+
+  useEffect(() => {
+    if (streaming || !conversationId) return;
+
+    if (conversationQuery.data?.id !== conversationId) return;
+
+    const serverMessages = mapServerMessages(conversationQuery.data.messages ?? []);
+
+    if (userSelectedConversationRef.current === conversationId) {
+      setMessages(serverMessages);
+      userSelectedConversationRef.current = null;
+      return;
+    }
+
+    setMessages((prev) => {
+      if (serverMessages.length >= prev.length) return serverMessages;
+      return prev;
+    });
+  }, [conversationQuery.data, conversationId, streaming]);
+
+  useEffect(() => {
+    if (conversationQuery.data?.metadata) {
+      setChatSettings(parseConversationSettings(conversationQuery.data.metadata));
+    } else if (!conversationId) {
+      setChatSettings({ ...DEFAULT_CONVERSATION_SETTINGS });
+    }
+  }, [conversationQuery.data?.metadata, conversationId]);
+
+  useEffect(() => {
+    if (streaming) return;
+    const id = window.requestAnimationFrame(() => {
+      composerRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [streaming]);
+
+  const selectConversation = useCallback(
+    (id: string | null) => {
+      userSelectedConversationRef.current = id;
+      if (id) {
+        setSearchParams({ c: id });
+      } else {
+        setSearchParams({});
+        setMessages([]);
+      }
+      setSidebarOpen(false);
+      requestAnimationFrame(() => composerRef.current?.focus());
+    },
+    [setSearchParams]
+  );
+
+  const handleSaveSettings = useCallback(
+    async (settings: ConversationSettings) => {
+      setChatSettings(settings);
+      if (conversationId && modelsData?.persistenceEnabled !== false) {
+        await updateConversation(conversationId, { metadata: settings });
+        qc.invalidateQueries({ queryKey: ["conversation", conversationId] });
+      }
+    },
+    [conversationId, modelsData?.persistenceEnabled, qc]
+  );
+
+  const effectiveModel =
+    customModel.trim() || model || conversationQuery.data?.model || modelsData?.defaultModel || "";
 
   const waitApproval = useCallback((payload: ApprovalPayload) => {
     return new Promise<boolean>((resolve) => {
@@ -95,20 +213,25 @@ export function ChatPage() {
   };
 
   const send = async (text?: string) => {
-    const msg = (text ?? input).trim();
-    if (!msg || streaming) return;
+    const raw = (text ?? input).trim();
+    if (!raw || streaming) return;
 
-    if (!getApiKey()) {
-      toast.show("Önce üst bardan Token al veya API key kaydet", "warn");
+    const { message: msg, pluginFilter } = parsePluginSlashMessage(raw, pluginNames, activePlugin);
+    if (!msg) {
+      toast.show("Mesaj boş olamaz. /eklenti sonrası bir soru yaz.", "error");
       return;
     }
 
     setInput("");
     setStreaming(true);
+    requestAnimationFrame(() => composerRef.current?.focus());
+
+    const turnPlugin = pluginFilter;
 
     const userId = nextMessageId();
     const assistantId = nextMessageId();
     assistantIdRef.current = assistantId;
+    setStreamingMessageId(assistantId);
 
     setMessages((m) => [
       ...m,
@@ -117,6 +240,7 @@ export function ChatPage() {
     ]);
 
     let assistantText = "";
+    let resolvedConversationId = conversationId;
 
     const history = messages
       .filter((x) => x.role === "user" || x.role === "assistant")
@@ -125,19 +249,26 @@ export function ChatPage() {
 
     try {
       await streamChat(msg, history, effectiveModel || undefined, {
+        onMeta: (data) => {
+          if (data.conversationId && typeof data.conversationId === "string") {
+            resolvedConversationId = data.conversationId;
+            if (!conversationId) {
+              setSearchParams({ c: data.conversationId }, { replace: true });
+            }
+          }
+        },
         onToken: (t) => {
           assistantText += t;
           const targetId = assistantIdRef.current;
           setMessages((m) =>
             m.map((row) => (row.id === targetId ? { ...row, content: assistantText } : row))
           );
-          scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
         },
         onTool: (data) => {
           const preview =
             data.phase === "start"
-              ? `🔧 ${data.name}\n${JSON.stringify(data.arguments || {}, null, 2).slice(0, 300)}`
-              : `✓ ${data.name}: ${JSON.stringify(data.result).slice(0, 400)}`;
+              ? `${JSON.stringify(data.arguments || {}, null, 2).slice(0, 500)}`
+              : `${JSON.stringify(data.result).slice(0, 600)}`;
           setMessages((m) => [
             ...m,
             {
@@ -152,7 +283,7 @@ export function ChatPage() {
         onApproval: async (payload) => {
           setMessages((m) => [
             ...m,
-            { id: nextMessageId(), role: "tool", content: `⏳ Onay: ${payload.tool}` },
+            { id: nextMessageId(), role: "tool", content: `Onay bekleniyor: ${payload.tool}` },
           ]);
           const ok = await waitApproval(payload);
           setMessages((m) => [
@@ -160,9 +291,32 @@ export function ChatPage() {
             {
               id: nextMessageId(),
               role: "tool",
-              content: ok ? `✓ ${payload.tool} onaylandı` : `✗ ${payload.tool} reddedildi`,
+              content: ok ? `Onaylandı` : `Reddedildi`,
+              toolName: payload.tool,
+              toolPhase: "end",
             },
           ]);
+        },
+        onDone: (data) => {
+          const targetId = assistantIdRef.current;
+          const usage = data.usage as ChatMessage["usage"] | undefined;
+          if (targetId && (usage || data.content)) {
+            setMessages((m) =>
+              m.map((row) =>
+                row.id === targetId
+                  ? {
+                      ...row,
+                      content: typeof data.content === "string" ? data.content : row.content,
+                      usage: usage ?? row.usage,
+                    }
+                  : row
+              )
+            );
+          }
+          if (resolvedConversationId) {
+            qc.invalidateQueries({ queryKey: ["conversations"] });
+            qc.invalidateQueries({ queryKey: ["conversation", resolvedConversationId] });
+          }
         },
         onError: (err) => {
           const targetId = assistantIdRef.current;
@@ -170,6 +324,13 @@ export function ChatPage() {
             m.map((row) => (row.id === targetId ? { ...row, content: `Hata: ${err}` } : row))
           );
         },
+      }, {
+        conversationId: conversationId || undefined,
+        autoCreate: !conversationId,
+        systemPrompt: buildSystemPromptFromSettings(chatSettings),
+        includeBrainContext: chatSettings.includeBrainContext !== false,
+        responseStyle: chatSettings.responseStyle,
+        pluginFilter: turnPlugin,
       });
 
       if (!assistantText) {
@@ -177,6 +338,8 @@ export function ChatPage() {
         setMessages((m) =>
           m.map((row) => (row.id === targetId ? { ...row, content: "(boş yanıt)" } : row))
         );
+      } else {
+        tts.speak(assistantText);
       }
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Chat hatası", "error");
@@ -190,148 +353,203 @@ export function ChatPage() {
       );
     } finally {
       setStreaming(false);
+      setStreamingMessageId(null);
       assistantIdRef.current = null;
+      composerRef.current?.focus();
     }
   };
 
-  const modelOptions = modelsData?.models
-    ?.flatMap((m) => m.models || [])
-    .filter((n, i, arr) => arr.indexOf(n) === i);
+  sendRef.current = send;
+
+  const modelOptions = useMemo(() => {
+    const fromApi = modelsData?.selectableModels?.length
+      ? modelsData.selectableModels
+      : (modelsData?.availableModels ?? modelsData?.models?.filter((m) => m.available) ?? [])
+          .flatMap((m) => m.models || [])
+          .filter((n, i, arr) => n && arr.indexOf(n) === i);
+    const saved = conversationQuery.data?.model;
+    const merged = [...fromApi];
+    if (saved && !merged.includes(saved)) merged.unshift(saved);
+    if (modelsData?.defaultModel && !merged.includes(modelsData.defaultModel)) {
+      merged.unshift(modelsData.defaultModel);
+    }
+    return merged;
+  }, [modelsData, conversationQuery.data?.model]);
+
+  const sidebar = (
+    <ChatSidebar
+      activeId={conversationId}
+      onSelect={selectConversation}
+      persistenceEnabled={modelsData?.persistenceEnabled}
+    />
+  );
 
   return (
-    <div className="mx-auto flex h-full min-h-0 max-w-4xl flex-col gap-3">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold">LLM Chat</h1>
-          <p className="text-xs text-muted-foreground">
-            {!hasApiKey
-              ? "API key gerekli"
-              : modelsLoading
-                ? "Modeller yükleniyor…"
-                : modelsError
-                  ? "Model listesi alınamadı"
-                  : `${modelsData?.provider ?? "—"} · ${effectiveModel || "—"} · ${modelsData?.toolCount ?? 0} tools`}
-          </p>
-        </div>
-        <select
-          value={effectiveModel}
-          onChange={(e) => setModel(e.target.value)}
-          disabled={!hasApiKey || modelsLoading || !modelsData}
-          className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm disabled:opacity-50"
-        >
-          {!modelsData ? (
-            <option value="">—</option>
-          ) : (
-            (modelOptions?.length ? modelOptions : [modelsData.defaultModel]).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))
-          )}
-        </select>
-      </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <div className="flex h-full min-h-0 flex-1 overflow-hidden">
+        <div className="hidden h-full min-h-0 shrink-0 md:flex">{sidebar}</div>
 
-      {!hasApiKey && (
-        <div className="flex shrink-0 items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <div className="space-y-1">
-            <p className="font-medium">Kimlik doğrulama gerekli</p>
-            <p className="text-muted-foreground">
-              Üst bardan <strong>Token</strong> (localhost) veya HUB anahtarını <strong>Save</strong> ile kaydet.
-            </p>
-            <Link to="/settings" className="text-primary underline-offset-2 hover:underline">
-              Settings →
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {modelsData?.providerAvailable === false && modelsData.providerHint && (
-        <div className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          {modelsData.providerHint}
-        </div>
-      )}
-
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="mb-4 text-sm text-muted-foreground">mcp-hub ile sohbet et</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {EXAMPLE_PROMPTS.map((p) => (
-                  <Button key={p} variant="outline" size="sm" onClick={() => send(p)} disabled={!hasApiKey}>
-                    {p}
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <motion.header
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-md"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="shrink-0 rounded-xl md:hidden">
+                    <Menu className="h-5 w-5" />
                   </Button>
-                ))}
+                </SheetTrigger>
+                <SheetContent side="left" className="flex h-full w-80 flex-col border-border/60 p-0">
+                  <SheetHeader className="sr-only">
+                    <SheetTitle>Sohbetler</SheetTitle>
+                  </SheetHeader>
+                  {sidebar}
+                </SheetContent>
+              </Sheet>
+
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-gradient-to-br from-primary/15 to-accent/10">
+                <Bot className="h-5 w-5 text-primary" />
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-sm font-semibold">
+                    {conversationQuery.data?.title || "Yeni sohbet"}
+                  </h1>
+                  <AnimatePresence>
+                    {streaming && (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                        <Badge variant="success" className="gap-1 text-[10px]">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+                          </span>
+                          Yazıyor
+                        </Badge>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                <p className="truncate text-xs text-muted-foreground">
+                  {modelsLoading
+                    ? "Modeller yükleniyor…"
+                    : modelsError
+                      ? "Model listesi alınamadı"
+                      : `${modelsData?.provider ?? "—"} · ${modelsData?.toolCount ?? 0} araç`}
+                </p>
               </div>
             </div>
-          )}
-          {messages.map((m) => (
-            <motion.div
-              key={m.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
-            >
-              <div
-                className={cn(
-                  "max-w-[85%] rounded-xl px-3 py-2 text-sm",
-                  m.role === "user" && "bg-primary text-primary-foreground",
-                  m.role === "assistant" &&
-                    "border border-border bg-card prose prose-sm max-w-none dark:prose-invert",
-                  m.role === "tool" &&
-                    "whitespace-pre-wrap border border-amber-500/30 bg-amber-500/10 font-mono text-xs text-amber-100"
-                )}
-              >
-                {m.role === "assistant" ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                ) : (
-                  m.content
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </div>
 
-        <div className="flex shrink-0 gap-2 border-t border-border p-3">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            rows={2}
-            placeholder={hasApiKey ? "Mesaj yaz… (Enter gönder)" : "Önce API key kaydet"}
-            className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            disabled={streaming || !hasApiKey}
+            <div className="flex shrink-0 items-center gap-2">
+              <ChatInstructionsSheet
+                settings={chatSettings}
+                persistenceEnabled={modelsData?.persistenceEnabled !== false}
+                onSave={handleSaveSettings}
+                disabled={modelsLoading}
+              />
+              <Select
+                value={model || conversationQuery.data?.model || modelsData?.defaultModel || ""}
+                onValueChange={(v) => {
+                  setCustomModel("");
+                  setModel(v);
+                }}
+                disabled={modelsLoading || !modelsData}
+              >
+              <SelectTrigger className="w-[min(180px,36vw)] rounded-xl border-border/60 bg-card/60 backdrop-blur-sm">
+                <Sparkles className="mr-2 h-3.5 w-3.5 shrink-0 text-primary" />
+                <SelectValue placeholder="Model seç" />
+              </SelectTrigger>
+              <SelectContent>
+                {(modelOptions.length ? modelOptions : [modelsData?.defaultModel || "default"]).map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              className="hidden w-[min(140px,30vw)] rounded-xl border-border/60 bg-card/60 sm:block"
+              placeholder="Özel model"
+              value={customModel}
+              onChange={(e) => setCustomModel(e.target.value)}
+              disabled={modelsLoading}
+              title="Sunucudaki herhangi bir model adını yazabilirsiniz"
+            />
+            </div>
+          </motion.header>
+
+          <AnimatePresence>
+            {modelsData?.providerAvailable === false && modelsData.providerHint && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="shrink-0 overflow-hidden px-4 pt-3"
+              >
+                <Alert variant="warning">
+                  <AlertDescription>{modelsData.providerHint}</AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="relative min-h-0 flex-1 overflow-hidden">
+            <ChatMessageList
+              messages={messages}
+              streaming={streaming}
+              streamingMessageId={streamingMessageId}
+              onExample={send}
+              scrollRef={scrollRef}
+            />
+          </div>
+
+          <ChatComposer
+            ref={composerRef}
+            input={input}
+            streaming={streaming}
+            speechSupported={speech.supported}
+            speechListening={speech.listening}
+            ttsEnabled={tts.enabled}
+            ttsSupported={tts.supported}
+            plugins={slashPlugins}
+            activePlugin={activePlugin}
+            onActivePluginChange={setActivePlugin}
+            onInputChange={setInput}
+            onSend={() => send()}
+            onSpeechStart={() => speech.start()}
+            onSpeechStop={() => speech.stop()}
+            onTtsToggle={tts.toggle}
           />
-          <Button onClick={() => send()} disabled={streaming || !input.trim() || !hasApiKey}>
-            {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
         </div>
-      </Card>
+      </div>
 
       <Dialog open={!!approval} onOpenChange={(open) => !open && handleApproval(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Tool onayı gerekli</DialogTitle>
-            <DialogDescription>Policy/destructive tool — devam etmek için onayla</DialogDescription>
-          </DialogHeader>
-          <p className="font-mono text-sm text-primary">{approval?.tool}</p>
-          <pre className="max-h-40 overflow-auto rounded-lg border border-border bg-muted p-3 text-xs">
-            {JSON.stringify(approval?.arguments ?? {}, null, 2)}
-          </pre>
-          <div className="flex justify-end gap-2">
+        <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
+          <div className="border-b border-border/60 bg-amber-500/10 px-6 py-4">
+            <DialogHeader>
+              <DialogTitle>Araç onayı gerekli</DialogTitle>
+              <DialogDescription>
+                Bu işlem politika gereği onayını istiyor. Devam etmeden önce parametreleri kontrol et.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="space-y-3 px-6 py-4">
+            <p className="font-mono text-sm font-medium text-primary">{approval?.tool}</p>
+            <pre className="max-h-48 overflow-auto rounded-xl border border-border/60 bg-muted/40 p-3 text-xs leading-relaxed">
+              {JSON.stringify(approval?.arguments ?? {}, null, 2)}
+            </pre>
+          </div>
+          <DialogFooter className="border-t border-border/60 bg-muted/20 px-6 py-4">
             <Button variant="outline" onClick={() => handleApproval(false)}>
               Reddet
             </Button>
             <Button variant="destructive" onClick={() => handleApproval(true)}>
-              Onayla
+              Onayla ve çalıştır
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -14,6 +14,7 @@ import { auditLog } from "../../core/audit/index.js";
 import { routeTask } from "../llm-router/index.js";
 import { getRecentCommits, getProjectStructure, getOpenIssues, getSimilarCommits, BASE_REPO_PATH } from "./repo.core.js";
 import { repoAnalyze } from "./repo.analyze.js";
+import { requireScopeByMethod } from "../../core/auth.js";
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ const analyzeBodySchema = z.object({
 
 export function register(app) {
   const router = Router();
+  router.use(requireScopeByMethod());
 
   // ── Health ─────────────────────────────────────────────────────────────────
 

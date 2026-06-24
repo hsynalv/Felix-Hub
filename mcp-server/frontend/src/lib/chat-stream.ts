@@ -6,6 +6,13 @@ export interface ChatMessage {
   content: string;
   toolName?: string;
   toolPhase?: "start" | "end";
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    estimatedCostUsd?: number;
+    iterations?: number;
+  };
 }
 
 export interface ApprovalPayload {
@@ -28,7 +35,15 @@ export async function streamChat(
   message: string,
   history: Array<{ role: string; content: string }>,
   model: string | undefined,
-  callbacks: ChatStreamCallbacks
+  callbacks: ChatStreamCallbacks,
+  options?: {
+    conversationId?: string;
+    autoCreate?: boolean;
+    systemPrompt?: string;
+    includeBrainContext?: boolean;
+    responseStyle?: "concise" | "detailed";
+    pluginFilter?: string | null;
+  }
 ): Promise<void> {
   const key = getApiKey();
   if (!key) throw new Error("API key gerekli");
@@ -38,8 +53,20 @@ export async function streamChat(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
+      "x-project-id": localStorage.getItem("mcp-hub-project-id") || "default",
+      "x-env": localStorage.getItem("mcp-hub-project-env") || "development",
     },
-    body: JSON.stringify({ message, history, model }),
+    body: JSON.stringify({
+      message,
+      history,
+      model,
+      conversationId: options?.conversationId,
+      autoCreate: options?.autoCreate ?? true,
+      systemPrompt: options?.systemPrompt,
+      includeBrainContext: options?.includeBrainContext,
+      responseStyle: options?.responseStyle,
+      pluginFilter: options?.pluginFilter || undefined,
+    }),
   });
 
   if (!res.ok) {

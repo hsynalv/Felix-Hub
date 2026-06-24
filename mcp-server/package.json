@@ -17,7 +17,7 @@
     "start:hub": "npm run ui:build && node src/index.js",
     "ui:dev": "npm run dev --prefix frontend",
     "ui:build": "npm run build --prefix frontend",
-    "dev:all": "concurrently -n api,ui -c blue,magenta \"npm run dev\" \"npm run ui:dev\"",
+    "dev:all": "npx --yes concurrently -n api,ui -c blue,magenta \"npm run dev\" \"npm run ui:dev\"",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.js\"",
@@ -25,7 +25,12 @@
     "prepare": "husky",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "validate:plugins": "node scripts/validate-plugin-meta.js",
+    "sync:plugin-meta-env": "node scripts/sync-plugin-meta-env.js",
+    "scaffold:plugin-meta": "node scripts/scaffold-plugin-meta.js",
+    "test:integration": "vitest run --config vitest.integration.config.js",
+    "test:integration:stable": "vitest run --config vitest.integration.stable.config.js"
   },
   "keywords": [
     "ai",

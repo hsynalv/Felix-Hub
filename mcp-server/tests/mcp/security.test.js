@@ -7,11 +7,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import express from "express";
-import { createMcpHttpMiddleware } from "../src/mcp/http-transport.js";
-import { registerTool, clearTools } from "../src/core/tool-registry.js";
+import { createMcpHttpMiddleware } from "../../src/mcp/http-transport.js";
+import { registerTool, clearTools } from "../../src/core/tool-registry.js";
 
 // Mock policy engine to allow all requests
-vi.mock("../src/plugins/policy/policy.engine.js", () => ({
+vi.mock("../../src/plugins/policy/policy.engine.js", () => ({
   evaluate: vi.fn(() => ({ allowed: true })),
 }));
 
@@ -26,7 +26,6 @@ describe("MCP Security Tests", () => {
   beforeEach(() => {
     // Reset environment
     process.env = { ...originalEnv };
-    delete process.env.HUB_AUTH_ENABLED;
     delete process.env.HUB_READ_KEY;
     delete process.env.HUB_WRITE_KEY;
     delete process.env.HUB_ADMIN_KEY;
@@ -48,6 +47,7 @@ describe("MCP Security Tests", () => {
       registerTool({
         name: "public_tool",
         description: "A public tool",
+        inputSchema: { type: "object", properties: {} },
         handler: async () => "success",
       });
 
@@ -61,13 +61,12 @@ describe("MCP Security Tests", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.isError).toBe(false);
+      expect(res.body.result.isError).toBe(false);
     });
   });
 
   describe("API Key authentication", () => {
     beforeEach(() => {
-      process.env.HUB_AUTH_ENABLED = "true";
       process.env.HUB_READ_KEY = "read-secret-key";
       process.env.HUB_WRITE_KEY = "write-secret-key";
       process.env.HUB_ADMIN_KEY = "admin-secret-key";
@@ -116,13 +115,14 @@ describe("MCP Security Tests", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.tools).toBeDefined();
+      expect(res.body.result.tools).toBeDefined();
     });
 
     it("should accept valid write key", async () => {
       registerTool({
         name: "write_tool",
         description: "A write tool",
+        inputSchema: { type: "object", properties: {} },
         handler: async () => "written",
       });
 

@@ -7,6 +7,7 @@
 
 import { Router } from "express";
 import { createTransport } from "nodemailer";
+import { requireScope } from "../../core/auth.js";
 import { ToolTags } from "../../core/tool-registry.js";
 
 // Email configuration
@@ -264,7 +265,7 @@ export function register(app) {
   const router = Router();
 
   // Send email
-  router.post("/send", async (req, res) => {
+  router.post("/send", requireScope("write"), async (req, res) => {
     try {
       const result = await sendEmail(req.body);
       res.json({ ok: true, data: result });
@@ -274,7 +275,7 @@ export function register(app) {
   });
 
   // Send templated email
-  router.post("/send-template", async (req, res) => {
+  router.post("/send-template", requireScope("write"), async (req, res) => {
     const { template, data, ...options } = req.body || {};
 
     if (!template || !data) {
@@ -293,13 +294,13 @@ export function register(app) {
   });
 
   // Get history
-  router.get("/history", (req, res) => {
+  router.get("/history", requireScope("read"), (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     res.json({ ok: true, data: { emails: getHistory(limit) } });
   });
 
   // Health check
-  router.get("/health", async (_req, res) => {
+  router.get("/health", requireScope("read"), async (_req, res) => {
     const status = await verifyConnection();
     res.json({
       ok: status.ok,

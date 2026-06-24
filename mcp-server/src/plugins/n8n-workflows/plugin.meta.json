@@ -1,0 +1,34 @@
+{
+  "name": "n8n-workflows",
+  "version": "1.0.0",
+  "status": "beta",
+  "owner": "core-team",
+  "description": "n8n-workflows plugin",
+  "requiresAuth": true,
+  "supportsJobs": true,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "write",
+    "dangerousCombinations": [
+      "write"
+    ],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": true
+  },
+  "dependencies": [],
+  "envVars": []
+}

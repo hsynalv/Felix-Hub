@@ -17,9 +17,16 @@ import { loadPresetsAtStartup, policyGuardrailMiddleware } from "./policy-guard.
 import { getApprovalStore } from "./policy-hooks.js";
 import { callTool } from "./tool-registry.js";
 import { createMcpHttpMiddleware } from "../mcp/http-transport.js";
-import { issueUiTokenWithNotification } from "./ui-tokens.js";
+import { issueUiToken, issueUiTokenWithNotification } from "./ui-tokens.js";
 import { registerUiChatRoutes } from "./ui-chat.js";
+import { registerUsageRoutes } from "./usage/routes.js";
+import { purgeOlderThan } from "./usage/usage-ledger.service.js";
 import { initPersistence, getPersistenceStatus, isPersistenceHealthy } from "./persistence/index.js";
+import { initMasterKey } from "./settings/crypto.js";
+import { loadSettingsOverlay } from "./settings/effective-config.js";
+import { registerSettingsRoutes } from "./settings/routes.js";
+import { registerReloadHooks } from "./settings/reload-registry.js";
+import { rateLimitMiddleware } from "./ratelimit.js";
 
 import { workspaceContextMiddleware } from "./workspace.js";
 
@@ -198,10 +205,37 @@ function projectContextMiddleware(req, res, next) {
 export async function createServer() {
   const app = express();
 
-  app.use(cors());
+  const corsOrigins = process.env.CORS_ALLOWED_ORIGINS?.trim();
+  if (corsOrigins) {
+    const originList = corsOrigins.split(",").map((s) => s.trim()).filter(Boolean);
+    app.use(cors({ origin: originList.length === 1 ? originList[0] : originList }));
+  } else {
+    app.use(cors());
+  }
   app.use(morgan("dev"));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  const hubRateLimitRpm = Number(
+    process.env.HUB_RATE_LIMIT_RPM ?? (config.nodeEnv === "production" ? 120 : 0)
+  );
+  if (hubRateLimitRpm > 0) {
+    app.use(
+      rateLimitMiddleware({
+        name: "hub-api",
+        maxRequests: hubRateLimitRpm,
+        windowMs: 60_000,
+        keyGenerator: (req) => {
+          const apiKey = req.headers["x-api-key"];
+          if (typeof apiKey === "string" && apiKey) {
+            return `key:${apiKey.slice(0, 12)}`;
+          }
+          return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+        },
+      })
+    );
+  }
+
   app.use(correlationIdMiddleware);
   app.use(projectContextMiddleware);
   app.use(workspaceContextMiddleware);
@@ -597,8 +631,14 @@ export async function createServer() {
       });
     }
 
-    const ttlMs = Number(process.env.UI_TOKEN_TTL_MS) || 5 * 60 * 1000;
-    issueUiTokenWithNotification({ ttlMs })
+    const silent = req.body?.silent === true;
+    const defaultTtl = silent ? 24 * 60 * 60 * 1000 : 5 * 60 * 1000;
+    const ttlMs = Number(process.env.UI_TOKEN_TTL_MS) || defaultTtl;
+    const issue = silent
+      ? Promise.resolve(issueUiToken({ ttlMs }))
+      : issueUiTokenWithNotification({ ttlMs });
+
+    issue
       .then(({ token, expiresAt }) => {
         res.json({
           ok: true,
@@ -606,7 +646,7 @@ export async function createServer() {
             token,
             expiresAt,
             ttlMs,
-            delivery: "notification",
+            delivery: silent ? "silent" : "notification",
           },
           meta: { requestId: req.requestId },
         });
@@ -621,10 +661,30 @@ export async function createServer() {
   });
 
   registerUiChatRoutes(app);
+  registerUsageRoutes(app);
 
   // ── Plugin loader ──────────────────────────────────────────────────────────
 
   await initPersistence();
+  try {
+    initMasterKey();
+  } catch (err) {
+    console.warn(`[settings] Master key init failed: ${err.message}`);
+  }
+  if (isPersistenceHealthy()) {
+    const count = await loadSettingsOverlay();
+    if (count > 0) console.log(`[settings] Loaded ${count} encrypted setting(s) from MSSQL`);
+
+    purgeOlderThan(90).then((deleted) => {
+      if (deleted > 0) console.log(`[usage-ledger] Purged ${deleted} event(s) older than 90 days`);
+    }).catch((err) => console.warn("[usage-ledger] Purge failed:", err.message));
+
+    setInterval(() => {
+      purgeOlderThan(90).catch((err) => console.warn("[usage-ledger] Scheduled purge failed:", err.message));
+    }, 24 * 60 * 60 * 1000);
+  }
+  registerSettingsRoutes(app);
+
   const persistenceStatus = getPersistenceStatus();
   const auditSinks = ["memory"];
   if (persistenceStatus.status === "healthy") {
@@ -639,6 +699,24 @@ export async function createServer() {
   initializeToolHooks();
 
   await loadPlugins(app);
+
+  try {
+    const { startTelegramPolling } = await import("../plugins/notifications/telegram.webhook.js");
+    startTelegramPolling();
+  } catch (err) {
+    console.warn("[telegram] Polling startup skipped:", err.message);
+  }
+
+  try {
+    const { clearLlmClientCache } = await import("../plugins/llm-router/index.js");
+    const mssqlAdapter = await import("../plugins/database/adapters/mssql.js");
+    registerReloadHooks({
+      llmClients: async () => clearLlmClientCache(),
+      databasePool: async () => mssqlAdapter.reloadPool(),
+    });
+  } catch (err) {
+    console.warn("[settings] Reload hooks registration failed:", err.message);
+  }
 
   // ── React SPA static + HTML fallback ───────────────────────────────────────
 
@@ -656,6 +734,9 @@ export async function createServer() {
     "/ui/token",
     "/whoami",
     "/brain",
+    "/settings/reload",
+    "/settings/effective",
+    "/settings/connections",
     "/observability/health",
     "/observability/metrics",
     "/observability/errors",

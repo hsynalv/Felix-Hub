@@ -9,7 +9,7 @@ describe("Shell Plugin", () => {
   describe("Plugin Metadata", () => {
     it("should have correct name and version", () => {
       expect(shell.name).toBe("shell");
-      expect(shell.version).toBe("1.0.0");
+      expect(shell.version).toBe("1.1.0");
     });
 
     it("should have required exports", () => {
@@ -54,7 +54,7 @@ describe("Shell Plugin", () => {
 
       expect(result.ok).toBe(true);
       expect(result.data.allowed).toBe(true);
-      expect(result.data.allowedCommand).toBe(true);
+      expect(result.data.commandAllowed).toBe(true);
     });
 
     it("should block dangerous commands", async () => {
@@ -63,7 +63,7 @@ describe("Shell Plugin", () => {
 
       expect(result.ok).toBe(true);
       expect(result.data.allowed).toBe(false);
-      expect(result.data.allowedCommand).toBe(false);
+      expect(result.data.commandAllowed).toBe(false);
     });
 
     it("should validate working directory", async () => {

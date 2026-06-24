@@ -1,5 +1,18 @@
 import { getApiKey } from "./auth";
 
+const PROJECT_ID_KEY = "mcp-hub-project-id";
+const PROJECT_ENV_KEY = "mcp-hub-project-env";
+
+function projectHeaders(): Record<string, string> {
+  if (typeof localStorage === "undefined") {
+    return { "x-project-id": "default", "x-env": "development" };
+  }
+  return {
+    "x-project-id": localStorage.getItem(PROJECT_ID_KEY) || "default",
+    "x-env": localStorage.getItem(PROJECT_ENV_KEY) || "development",
+  };
+}
+
 export class ApiError extends Error {
   code?: string;
   status?: number;
@@ -15,6 +28,7 @@ export class ApiError extends Error {
 function authHeaders(extra: HeadersInit = {}): HeadersInit {
   const key = getApiKey();
   return {
+    ...projectHeaders(),
     Accept: "application/json",
     ...(key ? { Authorization: `Bearer ${key}` } : {}),
     ...extra,
@@ -44,6 +58,56 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body ?? {}),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(
+      (json as { error?: { message?: string } })?.error?.message || res.statusText,
+      (json as { error?: { code?: string } })?.error?.code,
+      res.status
+    );
+  }
+  return unwrap<T>(json);
+}
+
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body ?? {}),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(
+      (json as { error?: { message?: string } })?.error?.message || res.statusText,
+      (json as { error?: { code?: string } })?.error?.code,
+      res.status
+    );
+  }
+  return unwrap<T>(json);
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(path, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(
+      (json as { error?: { message?: string } })?.error?.message || res.statusText,
+      (json as { error?: { code?: string } })?.error?.code,
+      res.status
+    );
+  }
+  return unwrap<T>(json);
+}
+
+export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "PATCH",
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body ?? {}),
   });
@@ -117,7 +181,10 @@ export interface ChatModelsData {
   providerAvailable?: boolean;
   providerHint?: string | null;
   toolCount: number;
+  persistenceEnabled?: boolean;
   models?: Array<{ provider?: string; name?: string; models?: string[]; available?: boolean }>;
+  availableModels?: Array<{ provider?: string; name?: string; models?: string[]; available?: boolean }>;
+  selectableModels?: string[];
 }
 
 export interface WhoamiData {

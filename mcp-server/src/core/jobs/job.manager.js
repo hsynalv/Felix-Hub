@@ -1,6 +1,9 @@
 /**
  * Job Manager
  *
+ * @deprecated Use ../jobs.js (submitJob, getJob, registerJobRunner) instead.
+ * The production job queue runs through jobs.js with optional Redis backing.
+ *
  * Central job management system - submit, process, monitor jobs.
  */
 

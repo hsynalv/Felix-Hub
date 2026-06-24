@@ -1,6 +1,9 @@
 /**
  * Core Registry Module
  *
+ * @deprecated Use ../plugins.js (loadPlugins, getPlugins) instead.
+ * This alternate registry is not wired at server startup.
+ *
  * Central plugin management system exports.
  */
 

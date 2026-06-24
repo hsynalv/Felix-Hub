@@ -4,13 +4,15 @@
  */
 
 import { config } from "../../core/config.js";
+import { getEnvValue } from "../../core/settings/effective-config.js";
 import { withResilience } from "../../core/resilience.js";
 
 const NOTION_VERSION = "2022-06-28";
+export const NOTION_VERSION_LATEST = "2025-09-03";
 const BASE_URL = "https://api.notion.com/v1";
 
 function getApiKey() {
-  return config.notion?.apiKey ?? process.env.NOTION_API_KEY ?? "";
+  return getEnvValue("NOTION_API_KEY") || config.notion?.apiKey || "";
 }
 
 function classifyError(status) {
@@ -25,13 +27,13 @@ function classifyError(status) {
 /**
  * Raw single request to Notion API (no retry).
  */
-async function _notionRequest(method, path, body, apiKey) {
+async function _notionRequest(method, path, body, apiKey, notionVersion = NOTION_VERSION) {
   const url = `${BASE_URL}${path}`;
   const res = await fetch(url, {
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Notion-Version": NOTION_VERSION,
+      "Notion-Version": notionVersion,
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -50,7 +52,11 @@ async function _notionRequest(method, path, body, apiKey) {
     return {
       ok: false,
       error: classifyError(res.status),
-      details: { status: res.status, message: json.message ?? JSON.stringify(json) },
+      details: {
+        status: res.status,
+        message: json.message ?? JSON.stringify(json),
+        body: json,
+      },
     };
   }
 
@@ -65,17 +71,23 @@ async function _notionRequest(method, path, body, apiKey) {
  * @param {object|null} body
  * @returns {Promise<{ ok: boolean, data?: object, error?: string, details?: object }>}
  */
-export async function notionRequest(method, path, body = null) {
+export async function notionRequest(method, path, body = null, options = {}) {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, error: "missing_api_key", message: "NOTION_API_KEY is not set" };
   }
 
+  const notionVersion = options.notionVersion || NOTION_VERSION;
+
   try {
-    return await withResilience("notion-api", () => _notionRequest(method, path, body, apiKey), {
-      circuit: { failureThreshold: 10, resetTimeoutMs: 60000 },
-      retry: { maxAttempts: 3, backoffMs: 500 },
-    });
+    return await withResilience(
+      "notion-api",
+      () => _notionRequest(method, path, body, apiKey, notionVersion),
+      {
+        circuit: { failureThreshold: 10, resetTimeoutMs: 60000 },
+        retry: { maxAttempts: 3, backoffMs: 500 },
+      }
+    );
   } catch (err) {
     return {
       ok: false,
@@ -83,4 +95,9 @@ export async function notionRequest(method, path, body = null) {
       details: { message: err.message },
     };
   }
+}
+
+/** @deprecated use notionRequest with options.notionVersion */
+export async function notionRequestWithVersion(method, path, body, notionVersion) {
+  return notionRequest(method, path, body, { notionVersion });
 }

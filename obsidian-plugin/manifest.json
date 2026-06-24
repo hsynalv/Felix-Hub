@@ -1,0 +1,10 @@
+{
+  "id": "mcp-hub-brain-sync",
+  "name": "MCP Hub Brain Sync",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Sync brain memories with MCP Hub — push, pull, status bar health.",
+  "author": "mcp-hub",
+  "authorUrl": "https://github.com",
+  "isDesktopOnly": false
+}

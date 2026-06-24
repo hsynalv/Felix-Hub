@@ -14,6 +14,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import OpenAI from "openai";
+import { recordUsageEvent } from "../../core/usage/usage-ledger.service.js";
+import { computeCostUsd } from "../../core/usage/usage-pricing.js";
+import { usageContextFromRequest } from "../../core/usage/usage-context.js";
 import { createPluginErrorHandler } from "../../core/error-standard.js";
 import { ToolTags } from "../../core/tool-registry.js";
 import { MemoryStore } from "./stores/memory.store.js";
@@ -75,25 +78,66 @@ function keywordEmbedding(text) {
   return vocab.map(word => words.filter(w => w === word).length / words.length);
 }
 
+async function ollamaEmbedding(text) {
+  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
+  const model = process.env.OLLAMA_EMBEDDING_MODEL || process.env.OLLAMA_MODEL || "nomic-embed-text";
+  const res = await fetch(`${baseUrl}/api/embeddings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, prompt: text.slice(0, 8_191) }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Ollama embedding ${res.status}: ${errText.slice(0, 120)}`);
+  }
+  const data = await res.json();
+  const vector = data.embedding;
+  if (!Array.isArray(vector) || !vector.length) {
+    throw new Error("Ollama returned empty embedding");
+  }
+  return { vector, model: `ollama:${model}` };
+}
+
 /**
  * Create an embedding for a text chunk.
  *
  * Strategy:
  *   1. Check cache — return cached vector if fresh.
  *   2. If OPENAI_API_KEY present → call text-embedding-3-small.
- *   3. On error or missing key → keyword fallback.
+ *   3. If OLLAMA_BASE_URL set → Ollama embeddings API.
+ *   4. On error or missing key → keyword fallback.
  *
  * @returns {{ vector: number[], model: string }}
  */
-async function createEmbedding(text) {
+async function createEmbedding(text, context = {}) {
   const cacheKey = text.slice(0, 200);
   const cached   = embeddingCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
+    const base = usageContextFromRequest(context, { toolName: context.toolName || "rag_embedding", operationType: "embedding" });
+    await recordUsageEvent({
+      ...base,
+      provider: "cache",
+      model: cached.model,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      estimatedCostUsd: 0,
+      metadata: { cache_hit: true },
+    });
     return { vector: cached.vector, model: cached.model };
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
+    if (process.env.OLLAMA_BASE_URL || process.env.OLLAMA_EMBEDDING_MODEL) {
+      try {
+        const ollama = await ollamaEmbedding(text);
+        embeddingCache.set(cacheKey, { vector: ollama.vector, model: ollama.model, expiresAt: Date.now() + EMBEDDING_CACHE_TTL });
+        return ollama;
+      } catch (err) {
+        console.warn(`[rag] Ollama embedding failed, using keyword fallback: ${err.message}`);
+      }
+    }
     const vector = keywordEmbedding(text);
     return { vector, model: "keyword-fallback" };
   }
@@ -105,6 +149,21 @@ async function createEmbedding(text) {
       input: text.slice(0, 8_191), // API limit
     });
     const vector = res.data[0].embedding;
+    const promptTokens = res.usage?.prompt_tokens ?? res.usage?.total_tokens ?? 0;
+    const base = usageContextFromRequest(context, {
+      toolName: context.toolName || "rag_embedding",
+      pluginName: "rag",
+      operationType: "embedding",
+    });
+    await recordUsageEvent({
+      ...base,
+      provider: "openai",
+      model: EMBEDDING_MODEL,
+      promptTokens,
+      completionTokens: 0,
+      totalTokens: promptTokens,
+      estimatedCostUsd: computeCostUsd(EMBEDDING_MODEL, promptTokens, 0),
+    });
     embeddingCache.set(cacheKey, { vector, model: EMBEDDING_MODEL, expiresAt: Date.now() + EMBEDDING_CACHE_TTL });
     return { vector, model: EMBEDDING_MODEL };
   } catch (err) {
@@ -217,7 +276,9 @@ async function indexDocument(wsId, { content, metadata, id: customId }) {
   const chunks = chunkText(content);
 
   // Embed every chunk (real semantic search needs per-chunk vectors)
-  const chunkEmbeddings = await Promise.all(chunks.map(c => createEmbedding(c)));
+  const chunkEmbeddings = await Promise.all(
+    chunks.map((c) => createEmbedding(c, { toolName: "rag_index", pluginName: "rag", source: "plugin" }))
+  );
   const vectors         = chunkEmbeddings.map(e => e.vector);
   const embeddingModel  = chunkEmbeddings[0]?.model || "keyword-fallback";
 
@@ -353,7 +414,12 @@ export const tools = [
         return { ok: false, error: { code: "query_too_long", message: `Query exceeds max length of ${MAX_QUERY_LENGTH} chars` } };
       }
 
-      const { vector: queryVector, model } = await createEmbedding(args.query);
+      const { vector: queryVector, model } = await createEmbedding(args.query, {
+        ...context,
+        toolName: "rag_search",
+        pluginName: "rag",
+        source: context.source || "mcp_tool",
+      });
       const limit    = Math.min(args.limit || 5, MAX_TOTAL_RESULTS);
       const minScore = args.minScore ?? 0.1;
 
@@ -511,7 +577,11 @@ export function register(app) {
     const { query, limit, minScore } = parsed.data;
     const wsId = ctx.workspaceId || "global";
 
-    const { vector: queryVector, model } = await createEmbedding(query);
+    const { vector: queryVector, model } = await createEmbedding(query, {
+      toolName: "rag_search",
+      pluginName: "rag",
+      source: "http",
+    });
     const rawResults = await store.searchDocuments(wsId, queryVector, { limit, minScore });
 
     const results = rawResults.map(r => ({

@@ -11,6 +11,8 @@ const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "migrations");
 
 const MIGRATION_FILES = [
   { version: 1, file: "001_hub_schema.sql" },
+  { version: 2, file: "002_chat_conversations.sql" },
+  { version: 3, file: "003_llm_usage.sql" },
 ];
 
 /**

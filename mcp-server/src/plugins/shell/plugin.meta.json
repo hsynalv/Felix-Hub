@@ -9,13 +9,15 @@
   "supportsStreaming": true,
   "testLevel": "integration",
   "resilience": {
-    "retry": false,
+    "retry": true,
     "timeout": 30000,
     "circuitBreaker": false
   },
   "security": {
     "scope": "write",
-    "dangerousCombinations": ["write"],
+    "dangerousCombinations": [
+      "write"
+    ],
     "requiresApproval": true
   },
   "performance": {
@@ -29,12 +31,40 @@
   },
   "dependencies": [],
   "envVars": [
-    "SHELL_ALLOWLIST",
-    "SHELL_DEFAULT_TIMEOUT_MS",
-    "SHELL_MAX_TIMEOUT_MS",
-    "ALLOWED_WORKING_DIRS",
-    "SHELL_AUDIT_TYPE",
-    "SHELL_AUDIT_FILE_PATH",
-    "SHELL_AUDIT_MAX_ENTRIES"
+    {
+      "name": "ALLOWED_WORKING_DIRS",
+      "required": false,
+      "description": ""
+    },
+    {
+      "name": "SHELL_ALLOWLIST",
+      "required": false,
+      "description": ""
+    },
+    {
+      "name": "SHELL_AUDIT_FILE_PATH",
+      "required": false,
+      "description": ""
+    },
+    {
+      "name": "SHELL_AUDIT_MAX_ENTRIES",
+      "required": false,
+      "description": ""
+    },
+    {
+      "name": "SHELL_AUDIT_TYPE",
+      "required": false,
+      "description": ""
+    },
+    {
+      "name": "SHELL_DEFAULT_TIMEOUT_MS",
+      "required": false,
+      "description": ""
+    },
+    {
+      "name": "SHELL_MAX_TIMEOUT_MS",
+      "required": false,
+      "description": ""
+    }
   ]
 }

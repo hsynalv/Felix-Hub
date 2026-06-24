@@ -4,3 +4,4 @@ cache/
 data/
 .pnpm-store/
 *.tgz
+src/public/app/assets/

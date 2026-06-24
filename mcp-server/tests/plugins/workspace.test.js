@@ -7,9 +7,6 @@ import {
   searchFiles,
   patchFile,
   extractContext,
-  auditEntry,
-  getAuditLogEntries,
-  generateCorrelationId,
 } from "../../src/plugins/workspace/workspace.core.js";
 
 /**
@@ -185,71 +182,6 @@ describe("Workspace Plugin - Context Extraction", () => {
 
     const context = extractContext(mockReq);
     expect(context.actor).toBe("anonymous");
-  });
-});
-
-describe("Workspace Plugin - Audit Logging", () => {
-  it("should generate unique correlation IDs", () => {
-    const id1 = generateCorrelationId();
-    const id2 = generateCorrelationId();
-    expect(id1).not.toBe(id2);
-    expect(id1).toMatch(/^ws-\d+-/);
-  });
-
-  it("should add audit entries", () => {
-    const entry = auditEntry({
-      operation: "read",
-      path: "test.txt",
-      allowed: true,
-      actor: "user-123",
-      workspaceId: "ws-1",
-      projectId: "proj-1",
-      correlationId: "ws-test-123",
-      durationMs: 100,
-      metadata: { size: 1024 },
-    });
-
-    expect(entry.operation).toBe("read");
-    expect(entry.path).toBe("test.txt");
-    expect(entry.allowed).toBe(true);
-    expect(entry.actor).toBe("user-123");
-    expect(entry.workspaceId).toBe("ws-1");
-    expect(entry.metadata.size).toBe(1024);
-    expect(entry.timestamp).toBeDefined();
-  });
-
-  it("should log denied operations", () => {
-    const entry = auditEntry({
-      operation: "write",
-      path: "/etc/passwd",
-      allowed: false,
-      actor: "user-123",
-      reason: "path_traversal",
-      error: "Path traversal detected",
-    });
-
-    expect(entry.allowed).toBe(false);
-    expect(entry.reason).toBe("path_traversal");
-    expect(entry.error).toBe("Path traversal detected");
-  });
-
-  it("should retrieve audit log entries", () => {
-    auditEntry({
-      operation: "test-retrieve",
-      path: "test.txt",
-      allowed: true,
-    });
-
-    const entries = getAuditLogEntries(10);
-    expect(Array.isArray(entries)).toBe(true);
-
-    const found = entries.find(e => e.operation === "test-retrieve");
-    expect(found).toBeDefined();
-  });
-
-  it("should respect limit parameter", () => {
-    const entries = getAuditLogEntries(5);
-    expect(entries.length).toBeLessThanOrEqual(5);
   });
 });
 

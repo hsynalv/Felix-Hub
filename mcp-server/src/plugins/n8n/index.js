@@ -17,6 +17,7 @@ import {
 } from "./validate.js";
 import { applyWorkflow, executeWorkflow, getExecution } from "./write.js";
 import { config } from "../../core/config.js";
+import { requireScopeByMethod } from "../../core/auth.js";
 import { ToolTags } from "../../core/tool-registry.js";
 import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/index.js";
 import { createPluginErrorHandler } from "../../core/error-standard.js";
@@ -116,6 +117,7 @@ function requireWrite(res) {
 
 export function register(app) {
   const router = Router();
+  router.use(requireScopeByMethod());
 
   // ── Health ───────────────────────────────────────────────────────────────
 

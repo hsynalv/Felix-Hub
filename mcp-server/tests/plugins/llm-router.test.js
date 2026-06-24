@@ -16,6 +16,8 @@ import {
   getAuditLogEntries,
   validatePromptLimits,
   extractContext,
+  resolveProviderConfig,
+  isProviderConfigured,
 } from "../../src/plugins/llm-router/index.js";
 
 describe("LLM Router Plugin", () => {
@@ -327,7 +329,43 @@ describe("LLM Router Plugin - Context Extraction", () => {
   });
 });
 
-describe("LLM Router Plugin - Error Codes", () => {
+describe("LLM Router Plugin - Provider resolution", () => {
+  const envBackup = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...envBackup };
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+    delete process.env.MISTRAL_API_KEY;
+    delete process.env.VLLM_BASE_URL;
+    delete process.env.OLLAMA_BASE_URL;
+  });
+
+  it("skips anthropic when key missing and uses openai", () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    const rule = {
+      primary: { provider: "anthropic", model: "claude-sonnet-4-5" },
+      fallback: { provider: "openai", model: "gpt-4.1" },
+    };
+    const resolved = resolveProviderConfig(rule);
+    expect(resolved.provider).toBe("openai");
+    expect(isProviderConfigured("anthropic")).toBe(false);
+    expect(isProviderConfigured("openai")).toBe(true);
+  });
+
+  it("uses vllm when only custom endpoint is configured", () => {
+    process.env.VLLM_BASE_URL = "http://localhost:8000/v1";
+    process.env.VLLM_MODEL = "mistral-7b";
+    const rule = {
+      primary: { provider: "anthropic", model: "claude-sonnet-4-5" },
+      fallback: { provider: "openai", model: "gpt-4.1" },
+    };
+    const resolved = resolveProviderConfig(rule, { model: "mistral-7b" });
+    expect(resolved.provider).toBe("vllm");
+    expect(resolved.model).toBe("mistral-7b");
+  });
+});
   it("should include expected error codes", () => {
     const expectedCodes = [
       "prompt_limit_exceeded",

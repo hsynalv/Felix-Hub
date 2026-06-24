@@ -1,0 +1,32 @@
+{
+  "name": "repo-intelligence",
+  "version": "1.0.0",
+  "status": "beta",
+  "owner": "core-team",
+  "description": "repo-intelligence plugin",
+  "requiresAuth": true,
+  "supportsJobs": false,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "read",
+    "dangerousCombinations": [],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": true
+  },
+  "dependencies": [],
+  "envVars": []
+}

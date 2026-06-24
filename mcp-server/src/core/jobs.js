@@ -51,7 +51,8 @@ export const JobState = {
   QUEUED: "queued",
   RUNNING: "running",
   COMPLETED: "completed",
-  DONE: "done",
+  /** @deprecated Use COMPLETED — kept for backward compatibility */
+  DONE: "completed",
   FAILED: "failed",
   CANCELLED: "cancelled",
 };
@@ -112,24 +113,29 @@ export function submitJob(type, payload = {}, context = {}) {
     createdAt: now,
     startedAt: null,
     finishedAt: null,
+    useMemoryStore: false,
   };
 
   // Initialize store if needed
   initStore();
 
   // Store in Redis or memory
+  const startJob = () => setImmediate(() => runJob(id));
+
   if (useRedis && store) {
-    store.enqueue(job).catch((err) => {
-      console.error("[jobs] Failed to enqueue job in Redis:", err);
-      // Fallback to memory
-      jobs.set(id, job);
-    });
+    store
+      .enqueue(job)
+      .then(() => startJob())
+      .catch((err) => {
+        console.error("[jobs] Failed to enqueue job in Redis:", err);
+        job.useMemoryStore = true;
+        jobs.set(id, job);
+        startJob();
+      });
   } else {
     jobs.set(id, job);
+    startJob();
   }
-
-  // Start job execution asynchronously
-  setImmediate(() => runJob(id));
 
   console.log(`[jobs] submitted ${type} job ${id}`);
   return publicView(job);
@@ -143,52 +149,61 @@ async function runJob(id) {
   let job;
   if (useRedis && store) {
     job = await store.get(id);
+    if (!job) {
+      job = jobs.get(id);
+    }
   } else {
     job = jobs.get(id);
   }
 
   if (!job || job.state !== JobState.QUEUED) return;
 
+  const persistInRedis = useRedis && store && !job.useMemoryStore;
+
   const runner = jobRunners.get(job.type);
   if (!runner) {
     const error = "Runner not found";
-    if (useRedis && store) {
+    if (persistInRedis) {
       await store.markFailed(id, error);
     } else {
       job.state = JobState.FAILED;
       job.error = error;
       job.finishedAt = new Date().toISOString();
+      jobs.set(id, job);
     }
     return;
   }
 
   // Update state to running
-  if (useRedis && store) {
+  if (persistInRedis) {
     await store.set(id, { ...job, state: JobState.RUNNING, startedAt: new Date().toISOString() });
     await store.redis.sadd(`${store.keyPrefix}jobs:running`, id);
   } else {
     job.state = JobState.RUNNING;
     job.startedAt = new Date().toISOString();
+    jobs.set(id, job);
   }
 
   // Helper functions for runner with Redis persistence
   const updateProgress = async (percent) => {
     const progress = Math.min(100, Math.max(0, Math.round(percent)));
-    if (useRedis && store) {
+    if (persistInRedis) {
       await store.updateProgress(id, progress);
     } else {
       job.progress = progress;
+      jobs.set(id, job);
     }
   };
 
   const log = async (message) => {
     const timestamp = new Date().toISOString();
     const entry = `[${timestamp}] ${message}`;
-    if (useRedis && store) {
+    if (persistInRedis) {
       await store.addLog(id, message);
     } else {
       job.logs.push(entry);
       if (job.logs.length > 1000) job.logs.shift();
+      jobs.set(id, job);
     }
   };
 
@@ -196,7 +211,7 @@ async function runJob(id) {
   const legacyJob = {
     ...job,
     succeed: async (result) => {
-      if (useRedis && store) {
+      if (persistInRedis) {
         const current = await store.get(id);
         if (current && current.state === JobState.RUNNING) {
           await store.markCompleted(id, result ?? null);
@@ -206,12 +221,13 @@ async function runJob(id) {
           job.state = JobState.COMPLETED;
           job.result = result ?? null;
           job.finishedAt = new Date().toISOString();
+          jobs.set(id, job);
         }
       }
     },
     fail: async (err) => {
       const errorMsg = err?.message ?? String(err);
-      if (useRedis && store) {
+      if (persistInRedis) {
         const current = await store.get(id);
         if (current && current.state === JobState.RUNNING) {
           await store.markFailed(id, errorMsg);
@@ -221,6 +237,7 @@ async function runJob(id) {
           job.state = JobState.FAILED;
           job.error = errorMsg;
           job.finishedAt = new Date().toISOString();
+          jobs.set(id, job);
         }
       }
     },
@@ -231,7 +248,7 @@ async function runJob(id) {
     const result = await runner(legacyJob, updateProgress, log);
 
     // If runner didn't call succeed/fail, mark as done
-    if (useRedis && store) {
+    if (persistInRedis) {
       const current = await store.get(id);
       if (current && current.state === JobState.RUNNING) {
         await store.markCompleted(id, result ?? null);
@@ -242,13 +259,14 @@ async function runJob(id) {
         job.result = result ?? null;
         job.finishedAt = new Date().toISOString();
         job.progress = 100;
+        jobs.set(id, job);
       }
     }
 
     await log(`Job completed`);
   } catch (err) {
     const errorMsg = err?.message ?? String(err);
-    if (useRedis && store) {
+    if (persistInRedis) {
       const current = await store.get(id);
       if (current && current.state === JobState.RUNNING) {
         await store.markFailed(id, errorMsg);
@@ -258,6 +276,7 @@ async function runJob(id) {
         job.state = JobState.FAILED;
         job.error = errorMsg;
         job.finishedAt = new Date().toISOString();
+        jobs.set(id, job);
       }
     }
     await log(`Job failed: ${errorMsg}`);
@@ -281,10 +300,13 @@ export async function listJobs({ state, type, limit = 50 } = {}) {
 export async function getJob(id) {
   if (useRedis && store) {
     const job = await store.get(id);
-    return job ? publicView(job) : null;
+    if (job) {
+      return publicView(job);
+    }
   }
-  const job = jobs.get(id);
-  return job ? publicView(job) : null;
+
+  const memoryJob = jobs.get(id);
+  return memoryJob ? publicView(memoryJob) : null;
 }
 
 export async function getJobLogs(id) {
@@ -338,10 +360,15 @@ export async function getJobStats() {
 
 /** Strip internal methods before sending to client. */
 function publicView(job) {
+  const state =
+    job.state === "done" || job.state === JobState.DONE
+      ? JobState.COMPLETED
+      : job.state;
+
   return {
     id: job.id,
     type: job.type,
-    state: job.state,
+    state,
     context: job.context,
     progress: job.progress || 0,
     logCount: job.logs?.length || 0,
@@ -365,3 +392,10 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+
+/** Clear in-memory job state (test isolation). */
+export function resetJobsForTests() {
+  jobs.clear();
+  store = null;
+  useRedis = false;
+}

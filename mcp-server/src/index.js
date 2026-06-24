@@ -10,12 +10,19 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", (reason) => {
   console.error("[FATAL] unhandledRejection:", reason);
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
 });
 
 const app = await createServer();
 
-app.listen(config.port, "0.0.0.0", () => {
-  console.log(`mcp-server listening on http://localhost:${config.port}`);
+const bindHost =
+  process.env.HUB_BIND_HOST?.trim() ||
+  (process.env.NODE_ENV === "production" ? "127.0.0.1" : "0.0.0.0");
+
+app.listen(config.port, bindHost, () => {
+  console.log(`mcp-server listening on http://${bindHost === "0.0.0.0" ? "localhost" : bindHost}:${config.port}`);
 });

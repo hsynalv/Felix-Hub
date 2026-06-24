@@ -1,5 +1,11 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { isStrictPluginMeta } from "./plugin-strict.js";
+import {
+  PLUGIN_ENV_CATALOG,
+  getMissingCatalogEnvVars,
+  normalizeEnvVarEntries,
+} from "./plugin-env-catalog.js";
 
 /**
  * Plugin Metadata Validator
@@ -26,6 +32,10 @@ export function validatePluginMeta(pluginDir, pluginName) {
   
   // Check if meta file exists
   if (!existsSync(metaPath)) {
+    if (isStrictPluginMeta()) {
+      errors.push("Missing plugin.meta.json (STRICT_PLUGIN_META=true)");
+      return { valid: false, meta: null, errors, warnings };
+    }
     warnings.push(`Missing plugin.meta.json - using defaults (experimental status)`);
     return {
       valid: true,
@@ -75,6 +85,25 @@ export function validatePluginMeta(pluginDir, pluginName) {
   // Validate security scope
   if (meta.security?.scope && !VALID_SCOPES.includes(meta.security.scope)) {
     errors.push(`Invalid security.scope: ${meta.security.scope} (must be one of: ${VALID_SCOPES.join(", ")})`);
+  }
+
+  const missingEnvVars = getMissingCatalogEnvVars(pluginName, meta.envVars);
+  for (const envName of missingEnvVars) {
+    const msg = `Missing envVars entry: ${envName}`;
+    if (isStrictPluginMeta()) {
+      errors.push(msg);
+    } else {
+      warnings.push(msg);
+    }
+  }
+
+  if (PLUGIN_ENV_CATALOG[pluginName]?.length && normalizeEnvVarEntries(meta.envVars).length === 0) {
+    const msg = "envVars is empty but plugin has documented environment variables";
+    if (isStrictPluginMeta()) {
+      errors.push(msg);
+    } else {
+      warnings.push(msg);
+    }
   }
   
   // Warnings for stable plugins
@@ -147,7 +176,7 @@ function applyDefaults(meta, pluginName) {
       apiReference: meta.documentation?.apiReference ?? false,
     },
     dependencies: meta.dependencies || [],
-    envVars: meta.envVars || [],
+    envVars: normalizeEnvVarEntries(meta.envVars),
   };
 }
 

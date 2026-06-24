@@ -1,6 +1,9 @@
 /**
  * Tool Registry
  *
+ * @deprecated Use ../tool-registry.js (registerTool, listTools, callTool) instead.
+ * This discovery-based registry is not wired at server startup.
+ *
  * Central registry for managing and caching discovered tools.
  */
 

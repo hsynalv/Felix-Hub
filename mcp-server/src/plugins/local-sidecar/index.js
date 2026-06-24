@@ -12,6 +12,8 @@ import { spawn } from "child_process";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { basename } from "path";
+import { requireScopeByMethod } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 export const name = "local-sidecar";
 export const version = "1.0.0";
@@ -20,6 +22,7 @@ export const capabilities = ["read", "write"];
 export const requires = [];
 
 export const endpoints = [
+  { method: "GET", path: "/local/health", description: "Plugin health", scope: "read" },
   { method: "GET", path: "/local/fs/list", description: "List directory contents", scope: "read" },
   { method: "GET", path: "/local/fs/read", description: "Read file contents", scope: "read" },
   { method: "POST", path: "/local/fs/write", description: "Write file contents", scope: "write" },
@@ -288,6 +291,10 @@ async function uploadWithRclone(localPath, remote, destination, fileName) {
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
+  router.use(requireScopeByMethod({
+    pathScopes: { "/drive/upload": "admin" },
+  }));
 
   // GET /local/fs/list
   router.get("/fs/list", async (req, res) => {

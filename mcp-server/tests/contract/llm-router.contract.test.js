@@ -14,8 +14,8 @@ describe("llm-router - Contract Tests", () => {
       expect(meta.status).toBe("stable");
     });
 
-    it("should support jobs", () => {
-      expect(meta.supportsJobs).toBe(true);
+    it("should reflect job support from plugin.meta.json", () => {
+      expect(meta.supportsJobs).toBe(false);
     });
 
     it("should have resilience enabled", () => {

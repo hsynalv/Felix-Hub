@@ -30,6 +30,11 @@ async function ensureDir() {
 /** Migrate v1 document (content) to v2 (sections) */
 function migrateDoc(doc) {
   if (doc.sections && typeof doc.sections === "object") return doc;
+  if (doc.content != null) {
+    console.warn(
+      `[prompt-registry] v1 prompt "${doc.id || doc.name || "unknown"}" migrated to v2 sections — v1 content field is deprecated`
+    );
+  }
   return {
     ...doc,
     mode: doc.mode || "agent",

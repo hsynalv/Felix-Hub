@@ -15,6 +15,8 @@ import { ToolTags } from "../../core/tool-registry.js";
 import { createPluginErrorHandler } from "../../core/error-standard.js";
 import { auditLog } from "../../core/audit/index.js";
 import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/index.js";
+import { requireScopeByMethod } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 const pluginError = createPluginErrorHandler("github");
 
@@ -43,6 +45,7 @@ export const capabilities = ["read", "write"];
 export const requires    = [];
 
 export const endpoints = [
+  { method: "GET",  path: "/github/health",                            description: "Plugin health",                             scope: "read"  },
   { method: "GET",  path: "/github/repos",                               description: "List authenticated user repos",             scope: "read"  },
   { method: "GET",  path: "/github/users/:username/repos",               description: "List public repos for any user/org",        scope: "read"  },
   { method: "GET",  path: "/github/analyze",                             description: "Full repo snapshot (flat, AI-friendly)",    scope: "read"  },
@@ -421,6 +424,8 @@ export const tools = [
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
+  router.use(requireScopeByMethod());
 
   // ── User repos ──────────────────────────────────────────────────────────────
 

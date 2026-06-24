@@ -1,0 +1,14 @@
+{
+  "name": "mcp-hub-brain-sync",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild main.ts --bundle --outfile=main.js --format=cjs --external:obsidian --platform=node"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.24.0",
+    "obsidian": "latest",
+    "typescript": "^5.0.0"
+  }
+}

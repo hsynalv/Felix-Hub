@@ -10,6 +10,7 @@ const AuditPage = lazy(() => import("@/pages/AuditPage").then((m) => ({ default:
 const AdminPage = lazy(() => import("@/pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const ObservabilityPage = lazy(() => import("@/pages/ObservabilityPage").then((m) => ({ default: m.ObservabilityPage })));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const UsagePage = lazy(() => import("@/pages/UsagePage").then((m) => ({ default: m.UsagePage })));
 const BrainPage = lazy(() => import("@/pages/BrainPage").then((m) => ({ default: m.BrainPage })));
 
 function PageLoader() {
@@ -78,6 +79,14 @@ export default function App() {
             element={
               <Suspense fallback={<PageLoader />}>
                 <ObservabilityPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="usage"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <UsagePage />
               </Suspense>
             }
           />

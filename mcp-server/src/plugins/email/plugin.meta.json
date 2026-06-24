@@ -1,0 +1,55 @@
+{
+  "name": "email",
+  "version": "1.0.0",
+  "status": "experimental",
+  "owner": "core-team",
+  "description": "Send and receive emails via SMTP",
+  "requiresAuth": true,
+  "supportsJobs": false,
+  "supportsStreaming": false,
+  "testLevel": "unit",
+  "resilience": {
+    "retry": false,
+    "timeout": 30000,
+    "circuitBreaker": false
+  },
+  "security": {
+    "scope": "write",
+    "dangerousCombinations": [
+      "write"
+    ],
+    "requiresApproval": false
+  },
+  "performance": {
+    "avgResponseTimeMs": 500,
+    "maxConcurrent": 10
+  },
+  "documentation": {
+    "readme": true,
+    "examples": false,
+    "apiReference": false
+  },
+  "dependencies": [],
+  "envVars": [
+    {
+      "name": "SMTP_HOST",
+      "required": true,
+      "description": "SMTP server hostname"
+    },
+    {
+      "name": "SMTP_PASS",
+      "required": true,
+      "description": "SMTP password"
+    },
+    {
+      "name": "SMTP_PORT",
+      "required": false,
+      "description": "SMTP port (default 587)"
+    },
+    {
+      "name": "SMTP_USER",
+      "required": true,
+      "description": "SMTP username"
+    }
+  ]
+}

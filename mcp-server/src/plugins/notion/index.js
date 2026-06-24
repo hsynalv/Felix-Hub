@@ -3,12 +3,22 @@ import { z } from "zod";
 import { notionRequest } from "./notion.client.js";
 import { toNotionBlock, toNotionBlocks, taskDatabaseSchema, toTaskProperties, buildNotionProperty, buildDatabaseSchema } from "./blocks.js";
 import { config } from "../../core/config.js";
+import { getEnvValue } from "../../core/settings/effective-config.js";
+import { getNotionEnvId } from "./notion-ids.js";
+import {
+  queryNotionDatabase,
+  clearNotionDataSourceCache,
+  createNotionDatabaseRow,
+  listDatabaseDataSources,
+} from "./notion-database-parent.js";
 import { validateBody } from "../../core/validate.js";
 import { ToolTags } from "../../core/tool-registry.js";
 import { createPluginErrorHandler } from "../../core/error-standard.js";
 import { auditLog } from "../../core/audit/index.js";
 import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/index.js";
 import { withResilience } from "../../core/resilience.js";
+import { requireScopeByMethod } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 const pluginError = createPluginErrorHandler("notion");
 
@@ -56,12 +66,145 @@ export const notionFields = {
   taskDone:    process.env.NOTION_TASK_DONE_FIELD    || "",
 };
 
+function notionDbIds() {
+  return {
+    projectsDbId: getNotionEnvId(getEnvValue, "NOTION_PROJECTS_DB_ID") || config.notion?.projectsDbId || "",
+    tasksDbId:
+      getNotionEnvId(getEnvValue, "NOTION_TASKS_DB_ID") ||
+      getNotionEnvId(getEnvValue, "NOTION_TASK_DATABASE_ID") ||
+      config.notion?.tasksDbId ||
+      "",
+    rootPageId: getNotionEnvId(getEnvValue, "NOTION_ROOT_PAGE_ID") || config.notion?.rootPageId || "",
+  };
+}
+
+function pageTitleProperty(title) {
+  return {
+    title: {
+      title: [{ type: "text", text: { content: title } }],
+    },
+  };
+}
+
+export { clearNotionDataSourceCache } from "./notion-database-parent.js";
+
+const createDatabaseRow = createNotionDatabaseRow;
+
+/**
+ * Create project row + linked tasks (same logic as POST /notion/setup-project)
+ */
+export async function setupProjectInNotion(data) {
+  const { projectsDbId, tasksDbId } = notionDbIds();
+  if (!projectsDbId || !tasksDbId) {
+    return {
+      ok: false,
+      error: "config_error",
+      details: {
+        message:
+          "NOTION_PROJECTS_DB_ID ve NOTION_TASKS_DB_ID ayarlanmalı (Ayarlar → Entegrasyonlar → notion)",
+      },
+    };
+  }
+
+  const projectProperties = {
+    [notionFields.projectName]: { title: [{ type: "text", text: { content: data.name } }] },
+    [notionFields.projectStatus]: { status: { name: data.status || notionFields.statusNotStarted } },
+    [notionFields.projectPriority]: { select: { name: data.oncelik || notionFields.priorityNormal } },
+  };
+  if (data.baslangic?.trim()) {
+    projectProperties[notionFields.projectStart] = { date: { start: data.baslangic.trim() } };
+  }
+  if (data.bitis?.trim()) {
+    projectProperties[notionFields.projectEnd] = { date: { start: data.bitis.trim() } };
+  }
+
+  const projectRes = await createDatabaseRow(projectsDbId, projectProperties);
+  if (!projectRes.ok) return projectRes;
+
+  const projectId = projectRes.data.id;
+  const projectUrl =
+    projectRes.data.url ?? `https://www.notion.so/${(projectRes.data.id ?? "").replace(/-/g, "")}`;
+
+  const tasks = data.tasks ?? [];
+  const taskResults = await Promise.all(
+    tasks.map((task) => {
+      const taskProperties = {
+        [notionFields.taskName]: { title: [{ type: "text", text: { content: task.gorev } }] },
+        [notionFields.taskProject]: { relation: [{ id: projectId }] },
+      };
+      if (task.sonTarih) {
+        taskProperties[notionFields.taskDueDate] = { date: { start: task.sonTarih } };
+      }
+      return createDatabaseRow(tasksDbId, taskProperties);
+    })
+  );
+
+  const createdTasks = taskResults
+    .filter((r) => r.ok)
+    .map((r) => ({
+      id: r.data.id,
+      gorev: r.data.properties?.[notionFields.taskName]?.title?.[0]?.plain_text ?? "?",
+      url: r.data.url,
+    }));
+
+  return {
+    ok: true,
+    data: {
+      project: {
+        id: projectId,
+        name: data.name,
+        status: data.status,
+        oncelik: data.oncelik,
+        url: projectUrl,
+      },
+      tasks: {
+        created: createdTasks.length,
+        failed: taskResults.filter((r) => !r.ok).length,
+        items: createdTasks,
+      },
+    },
+  };
+}
+
+/** Create a child page under NOTION_ROOT_PAGE_ID or parentPageId */
+export async function createNotionPage({ title, parentPageId, blocks, icon, explanation }) {
+  const { rootPageId } = notionDbIds();
+  const parent = parentPageId || rootPageId;
+  if (!parent) {
+    return {
+      ok: false,
+      error: "missing_parent",
+      details: { message: "NOTION_ROOT_PAGE_ID veya parentPageId gerekli" },
+    };
+  }
+
+  const payload = {
+    parent: { page_id: parent },
+    properties: pageTitleProperty(title),
+  };
+  if (icon) payload.icon = { type: "emoji", emoji: icon };
+  if (blocks?.length) payload.children = toNotionBlocks(blocks);
+
+  const result = await notionRequest("POST", "/pages", payload);
+  if (!result.ok) return result;
+
+  return {
+    ok: true,
+    data: {
+      id: result.data.id,
+      url: result.data.url,
+      explanation,
+    },
+  };
+}
+
 export const name = "notion";
 export const version = "1.1.0";
 export const description = "Notion pages, databases, projects and tasks";
 export const capabilities = ["read", "write"];
 export const requires = ["NOTION_API_KEY"];
 export const endpoints = [
+  { method: "GET",    path: "/notion/health",              description: "Plugin health",                              scope: "read"  },
   { method: "GET",    path: "/notion/search",              description: "Search pages and databases",                 scope: "read"  },
   { method: "GET",    path: "/notion/sections",            description: "List all accessible pages and databases",    scope: "read"  },
   { method: "GET",    path: "/notion/projects",            description: "List projects from Projeler database",       scope: "read"  },
@@ -126,22 +269,19 @@ export const tools = [
       required: ["title", "explanation"],
     },
     handler: async (args) => {
-      const payload = {
-        parent: { page_id: args.parentPageId },
-        properties: { title: [{ text: { content: args.title } }] },
-      };
-      if (args.icon) payload.icon = { type: "emoji", emoji: args.icon };
-      if (args.blocks) payload.children = toNotionBlocks(args.blocks);
-      const result = await notionRequest("POST", "/pages", payload);
-      if (!result.ok) return result;
-      return { 
-        ok: true, 
-        data: { 
-          id: result.data.id, 
-          url: result.data.url,
-          explanation: args.explanation,
-        } 
-      };
+      const parentPageId = args.parentPageId || args.parentId;
+      const blocks =
+        args.blocks ||
+        (args.content
+          ? [{ type: "paragraph", text: String(args.content) }]
+          : undefined);
+      return createNotionPage({
+        title: args.title,
+        parentPageId,
+        blocks,
+        icon: args.icon,
+        explanation: args.explanation || "Project orchestrator page",
+      });
     },
   },
   {
@@ -509,10 +649,7 @@ export const tools = [
         else if (type === "phone_number") properties[key] = { phone_number: String(value) };
       }
 
-      const result = await notionRequest("POST", "/pages", {
-        parent: { database_id: args.databaseId },
-        properties,
-      });
+      const result = await createDatabaseRow(args.databaseId, properties);
 
       if (!result.ok) return result;
       return {
@@ -680,6 +817,8 @@ function notionAudit(req, operation, success, meta = {}) {
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name: metadata.name, version: metadata.version });
+  router.use(requireScopeByMethod());
 
   // ── Search ──────────────────────────────────────────────────────────────────
 
@@ -732,14 +871,12 @@ export function register(app) {
     if (!data) return;
 
     const payload = {
-      parent: { page_id: data.parentPageId ?? process.env.NOTION_ROOT_PAGE_ID },
-      properties: {
-        title: [{ type: "text", text: { content: data.title } }],
-      },
+      parent: { page_id: data.parentPageId ?? notionDbIds().rootPageId },
+      properties: pageTitleProperty(data.title),
     };
 
     if (!payload.parent.page_id) {
-      return err(res, 400, "missing_parent", "Provide parentPageId or set NOTION_ROOT_PAGE_ID in .env");
+      return err(res, 400, "missing_parent", "Provide parentPageId or set NOTION_ROOT_PAGE_ID");
     }
 
     if (data.icon) {
@@ -962,6 +1099,16 @@ export function register(app) {
   });
 
   /**
+   * GET /notion/databases/:id/data-sources
+   * Resolve data_source_id values for a database (Notion API 2025-09-03).
+   */
+  router.get("/databases/:id/data-sources", async (req, res) => {
+    const result = await listDatabaseDataSources(req.params.id);
+    if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
+    res.json({ ok: true, ...result.data });
+  });
+
+  /**
    * GET /notion/databases/:id/rows
    * Query rows from a database with cursor-based pagination.
    *
@@ -976,7 +1123,7 @@ export function register(app) {
     const payload = { page_size: limit };
     if (cursor) payload.start_cursor = cursor;
 
-    const result = await notionRequest("POST", `/databases/${req.params.id}/query`, payload);
+    const result = await queryNotionDatabase(req.params.id, payload);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     const rows = (result.data.results ?? []).map(formatRow);
@@ -999,10 +1146,7 @@ export function register(app) {
     const data = validate(addTaskSchema, req.body, res);
     if (!data) return;
 
-    const result = await notionRequest("POST", "/pages", {
-      parent: { database_id: req.params.id },
-      properties: toTaskProperties(data),
-    });
+    const result = await createDatabaseRow(req.params.id, toTaskProperties(data));
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     res.json({ ok: true, row: formatRow(result.data) });
@@ -1023,7 +1167,7 @@ export function register(app) {
     if (data.sorts) payload.sorts = data.sorts;
     if (data.pageSize) payload.page_size = data.pageSize;
 
-    const result = await notionRequest("POST", `/databases/${req.params.id}/query`, payload);
+    const result = await queryNotionDatabase(req.params.id, payload);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     const rows = (result.data.results ?? []).map(formatRow);
@@ -1141,12 +1285,7 @@ export function register(app) {
     // ── Step 4: Add all tasks in parallel ──────────────────────────────────
     const tasks = data.tasks ?? [];
     const taskResults = await Promise.all(
-      tasks.map((task) =>
-        notionRequest("POST", "/pages", {
-          parent: { database_id: database.id },
-          properties: toTaskProperties(task),
-        })
-      )
+      tasks.map((task) => createDatabaseRow(database.id, toTaskProperties(task)))
     );
 
     const createdTasks = taskResults
@@ -1209,7 +1348,7 @@ export function register(app) {
     let tasks = [];
     if (dbBlocks.length) {
       const dbId = dbBlocks[0].id;
-      const tasksRes = await notionRequest("POST", `/databases/${dbId}/query`, {
+      const tasksRes = await queryNotionDatabase(dbId, {
         page_size: 100,
       });
       if (tasksRes.ok) {
@@ -1294,10 +1433,7 @@ export function register(app) {
     if (data.baslangic) properties[notionFields.projectStart] = { date: { start: data.baslangic } };
     if (data.bitis)     properties[notionFields.projectEnd]   = { date: { start: data.bitis } };
 
-    const result = await notionRequest("POST", "/pages", {
-      parent: { database_id: dbId },
-      properties,
-    });
+    const result = await createDatabaseRow(dbId, properties);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     const row = result.data;
@@ -1332,7 +1468,7 @@ export function register(app) {
     }
     payload.sorts = [{ property: notionFields.projectStart, direction: "descending" }];
 
-    const result = await notionRequest("POST", `/databases/${dbId}/query`, payload);
+    const result = await queryNotionDatabase(dbId, payload);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     const projects = (result.data.results ?? []).map((p) => ({
@@ -1368,10 +1504,7 @@ export function register(app) {
     if (data.sonTarih) properties[notionFields.taskDueDate] = { date: { start: data.sonTarih } };
     if (data.projeId)  properties[notionFields.taskProject]  = { relation: [{ id: data.projeId }] };
 
-    const result = await notionRequest("POST", "/pages", {
-      parent: { database_id: dbId },
-      properties,
-    });
+    const result = await createDatabaseRow(dbId, properties);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     const row = result.data;
@@ -1413,7 +1546,7 @@ export function register(app) {
     if (filters.length === 1) payload.filter = filters[0];
     else if (filters.length > 1) payload.filter = { and: filters };
 
-    const result = await notionRequest("POST", `/databases/${dbId}/query`, payload);
+    const result = await queryNotionDatabase(dbId, payload);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     const tasks = (result.data.results ?? []).map((p) => ({
@@ -1452,72 +1585,17 @@ export function register(app) {
    */
   router.post("/setup-project", validateBody(setupProjectSchema), async (req, res) => {
     const data = req.validatedBody;
-
-    const projectsDbId = config.notion.projectsDbId;
-    const tasksDbId = config.notion.tasksDbId;
-    if (!projectsDbId || !tasksDbId) {
-      return err(res, 500, "config_error", "NOTION_PROJECTS_DB_ID or NOTION_TASKS_DB_ID not set in .env");
+    const result = await setupProjectInNotion(data);
+    if (!result.ok) {
+      return err(res, 502, result.error, result.details?.message, result.details);
     }
 
-    // ── Step 1: Create project ─────────────────────────────────────────────
-    const projectProperties = {
-      [notionFields.projectName]:     { title: [{ type: "text", text: { content: data.name } }] },
-      [notionFields.projectStatus]:   { status: { name: data.status } },
-      [notionFields.projectPriority]: { select: { name: data.oncelik } },
-    };
-    if (data.baslangic?.trim()) projectProperties[notionFields.projectStart] = { date: { start: data.baslangic.trim() } };
-    if (data.bitis?.trim())     projectProperties[notionFields.projectEnd]   = { date: { start: data.bitis.trim() } };
-
-    const projectRes = await notionRequest("POST", "/pages", {
-      parent: { database_id: projectsDbId },
-      properties: projectProperties,
+    notionAudit(req, "setup_project", true, {
+      projectId: result.data.project.id,
+      name: data.name,
+      taskCount: result.data.tasks.created,
     });
-    if (!projectRes.ok) return err(res, 502, projectRes.error, projectRes.details?.message, projectRes.details);
-
-    const projectId  = projectRes.data.id;
-    const projectUrl = projectRes.data.url
-      ?? `https://www.notion.so/${(projectRes.data.id ?? "").replace(/-/g, "")}`;
-
-    // ── Step 2: Create all tasks in parallel, linked to project ───────────
-    const tasks = data.tasks ?? [];
-    const taskResults = await Promise.all(
-      tasks.map((task) => {
-        const taskProperties = {
-          [notionFields.taskName]:    { title: [{ type: "text", text: { content: task.gorev } }] },
-          [notionFields.taskProject]: { relation: [{ id: projectId }] },
-        };
-        if (task.sonTarih) taskProperties[notionFields.taskDueDate] = { date: { start: task.sonTarih } };
-        return notionRequest("POST", "/pages", {
-          parent: { database_id: tasksDbId },
-          properties: taskProperties,
-        });
-      })
-    );
-
-    const createdTasks = taskResults
-      .filter((r) => r.ok)
-      .map((r) => ({
-        id: r.data.id,
-        gorev: r.data.properties?.Görev?.title?.[0]?.plain_text ?? "?",
-        url: r.data.url,
-      }));
-
-    notionAudit(req, "setup_project", true, { projectId, name: data.name, taskCount: createdTasks.length });
-    res.json({
-      ok: true,
-      project: {
-        id: projectId,
-        name: data.name,
-        status: data.status,
-        oncelik: data.oncelik,
-        url: projectUrl,
-      },
-      tasks: {
-        created: createdTasks.length,
-        failed: taskResults.filter((r) => !r.ok).length,
-        items: createdTasks,
-      },
-    });
+    res.json({ ok: true, ...result.data });
   });
 
   // ── Archive (soft-delete) rows ───────────────────────────────────────────────
@@ -1614,10 +1692,7 @@ export function register(app) {
       ...extra,
     };
 
-    const result = await notionRequest("POST", "/pages", {
-      parent: { database_id: databaseId },
-      properties,
-    });
+    const result = await createDatabaseRow(databaseId, properties);
     if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
 
     const page = result.data;
@@ -1894,16 +1969,16 @@ export async function applyTemplate(templateName, inputs = {}) {
  */
 export async function createTask(databaseId, task) {
   const properties = {
-    Name: { title: [{ text: { content: task.name } }] },
-    ...(task.status ? { Status: { status: { name: task.status } } } : {}),
-    ...(task.priority ? { Priority: { select: { name: task.priority } } } : {}),
-    ...(task.dueDate ? { "Due Date": { date: { start: task.dueDate } } } : {}),
+    [notionFields.taskName]: { title: [{ type: "text", text: { content: task.name } }] },
   };
+  if (task.dueDate && notionFields.taskDueDate) {
+    properties[notionFields.taskDueDate] = { date: { start: task.dueDate } };
+  }
+  if (task.projectId && notionFields.taskProject) {
+    properties[notionFields.taskProject] = { relation: [{ id: task.projectId }] };
+  }
 
-  const result = await notionRequest("POST", "/pages", {
-    parent: { database_id: databaseId },
-    properties,
-  });
+  const result = await createDatabaseRow(databaseId, properties);
 
   if (!result.ok) return result;
 

@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
+import { requireScope } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 import { slackRequest } from "./slack.client.js";
 
 export const name = "slack";
@@ -8,6 +10,7 @@ export const description = "Slack team communication and bot integration";
 export const capabilities = ["read", "write"];
 export const requires = ["SLACK_BOT_TOKEN"];
 export const endpoints = [
+  { method: "GET",    path: "/slack/health",                description: "Plugin health",                             scope: "read"  },
   { method: "GET",    path: "/slack/channels",              description: "List all channels",                         scope: "read"  },
   { method: "GET",    path: "/slack/channels/:id",         description: "Get channel information",                    scope: "read"  },
   { method: "POST",   path: "/slack/message",               description: "Send message to channel",                   scope: "write" },
@@ -116,6 +119,7 @@ function formatMessage(message) {
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
 
   // ── Channels ───────────────────────────────────────────────────────────────
 
@@ -127,7 +131,7 @@ export function register(app) {
    *   types = comma-separated list (public_channel,private_channel,im,mpim)
    *   limit = max results (default: 100)
    */
-  router.get("/channels", async (req, res) => {
+  router.get("/channels", requireScope("read"), async (req, res) => {
     const types = req.query.types || "public_channel,private_channel";
     const limit = Math.min(Number(req.query.limit ?? 100), 1000);
 
@@ -146,7 +150,7 @@ export function register(app) {
    * GET /slack/channels/:id
    * Get detailed information about a specific channel.
    */
-  router.get("/channels/:id", async (req, res) => {
+  router.get("/channels/:id", requireScope("read"), async (req, res) => {
     const channelId = req.params.id;
     const result = await slackRequest("GET", "conversations.info", {
       channel: channelId,
@@ -165,7 +169,7 @@ export function register(app) {
    *   limit = max messages (default: 50)
    *   cursor = pagination cursor
    */
-  router.get("/conversations/:id/history", async (req, res) => {
+  router.get("/conversations/:id/history", requireScope("read"), async (req, res) => {
     const channelId = req.params.id;
     const limit = Math.min(Number(req.query.limit ?? 50), 200);
     const cursor = req.query.cursor;
@@ -195,7 +199,7 @@ export function register(app) {
    * 
    * Body: { channel: "C123", text: "Hello!", thread_ts?: "123.456", blocks?: [...] }
    */
-  router.post("/message", async (req, res) => {
+  router.post("/message", requireScope("write"), async (req, res) => {
     const data = validate(sendMessageSchema, req.body, res);
     if (!data) return;
 
@@ -219,7 +223,7 @@ export function register(app) {
    * 
    * Body: { channel: "C123", timestamp: "123.456", name: "thumbsup" }
    */
-  router.post("/reactions/add", async (req, res) => {
+  router.post("/reactions/add", requireScope("write"), async (req, res) => {
     const data = validate(addReactionSchema, req.body, res);
     if (!data) return;
 
@@ -244,7 +248,7 @@ export function register(app) {
    *   limit = max results (default: 100)
    *   cursor = pagination cursor
    */
-  router.get("/users", async (req, res) => {
+  router.get("/users", requireScope("read"), async (req, res) => {
     const limit = Math.min(Number(req.query.limit ?? 100), 1000);
     const cursor = req.query.cursor;
 
@@ -269,7 +273,7 @@ export function register(app) {
    * GET /slack/users/:id
    * Get detailed information about a specific user.
    */
-  router.get("/users/:id", async (req, res) => {
+  router.get("/users/:id", requireScope("read"), async (req, res) => {
     const userId = req.params.id;
     const result = await slackRequest("GET", "users.info", { user: userId });
 
@@ -292,7 +296,7 @@ export function register(app) {
    *   initial_comment?: "Check this out"
    * }
    */
-  router.post("/files/upload", async (req, res) => {
+  router.post("/files/upload", requireScope("write"), async (req, res) => {
     const data = validate(uploadFileSchema, req.body, res);
     if (!data) return;
 

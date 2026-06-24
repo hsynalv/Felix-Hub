@@ -6,6 +6,7 @@ import sql from "mssql";
 import { createHash, randomUUID } from "crypto";
 import { config } from "../config.js";
 import { runMigrations, getSchemaVersion } from "./migrate.js";
+import { mssqlConfigFromConnectionString } from "./mssql-config.js";
 
 /** @type {import("mssql").ConnectionPool|null} */
 let pool = null;
@@ -43,11 +44,7 @@ function buildPoolConfig() {
   if (!connectionString) {
     throw new Error("HUB_MSSQL_URL or MSSQL_CONNECTION_STRING required when persistence enabled");
   }
-  return {
-    connectionString,
-    pool: { max: 5, min: 0, idleTimeoutMillis: 30000 },
-    options: { encrypt: true, trustServerCertificate: true },
-  };
+  return mssqlConfigFromConnectionString(connectionString);
 }
 
 export async function initPersistence() {
@@ -86,6 +83,18 @@ export async function initPersistence() {
   }
 
   return getPersistenceStatus();
+}
+
+export async function reconnectPersistence() {
+  if (pool) {
+    try {
+      await pool.close();
+    } catch {
+      /* ignore */
+    }
+    pool = null;
+  }
+  return initPersistence();
 }
 
 export function getPersistencePool() {

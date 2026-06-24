@@ -9,6 +9,8 @@ import { Router } from "express";
 import { watch } from "fs";
 import { resolve, relative } from "path";
 import { ToolTags } from "../../core/tool-registry.js";
+import { requireScopeByMethod } from "../../core/auth.js";
+import { mountPluginHealth } from "../../core/plugin-health.js";
 
 // Active watchers registry
 const watchers = new Map(); // id -> { watcher, path, options, createdAt }
@@ -118,6 +120,7 @@ export const description = "Watch directories for file changes and trigger AI ac
 export const capabilities = ["read", "write"];
 export const requires = [];
 export const endpoints = [
+  { method: "GET", path: "/file-watcher/health", description: "Plugin health", scope: "read" },
   { method: "POST", path: "/file-watcher/watch", description: "Start watching a directory", scope: "write" },
   { method: "DELETE", path: "/file-watcher/:id", description: "Stop a watcher", scope: "write" },
   { method: "GET", path: "/file-watcher", description: "List all watchers", scope: "read" },
@@ -230,6 +233,8 @@ export const tools = [
 
 export function register(app) {
   const router = Router();
+  mountPluginHealth(router, { name, version });
+  router.use(requireScopeByMethod());
 
   // Start watching
   router.post("/watch", (req, res) => {

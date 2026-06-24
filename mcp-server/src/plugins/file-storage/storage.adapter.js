@@ -3,6 +3,8 @@
  * All adapters must implement: list, read, write, delete, copy, move.
  */
 
+import { auditLog as coreAuditLog } from "../../core/audit/index.js";
+
 const BACKENDS = ["s3", "gdrive", "local"];
 
 // Sensitive file patterns - blocked for read/write/delete operations
@@ -233,6 +235,25 @@ export function auditEntry(entry) {
   if (auditLog.length > MAX_AUDIT_LOG_SIZE) {
     auditLog.pop();
   }
+
+  void coreAuditLog({
+    plugin: "file-storage",
+    operation: entry.operation,
+    actor: entry.actor || "anonymous",
+    workspaceId: entry.workspaceId || "global",
+    projectId: entry.projectId || null,
+    correlationId: entry.correlationId || null,
+    allowed: entry.allowed,
+    success: entry.allowed && !entry.error,
+    durationMs: entry.durationMs || 0,
+    reason: entry.reason || null,
+    error: entry.error || null,
+    metadata: {
+      path: entry.path,
+      backend: entry.backend,
+      sizeBytes: entry.sizeBytes ?? null,
+    },
+  }).catch(() => {});
 
   // Also log to console for visibility
   const status = entry.allowed ? "ALLOWED" : "DENIED";

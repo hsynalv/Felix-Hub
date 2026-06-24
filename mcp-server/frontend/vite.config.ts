@@ -26,6 +26,7 @@ export default defineConfig({
       "/approve": "http://localhost:8787",
       "/ui": "http://localhost:8787",
       "/brain": "http://localhost:8787",
+      "/settings": "http://localhost:8787",
       "/observability": "http://localhost:8787",
       "/openapi.json": "http://localhost:8787",
     },

@@ -4,9 +4,16 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { config } from "./config.js";
 import { registerTool } from "./tool-registry.js";
 import { validatePluginMeta, getQualitySummary } from "./plugin-meta.js";
+import { isStrictPluginLoading } from "./plugin-strict.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PLUGINS_DIR = join(__dirname, "../plugins");
+
+function resolvePluginsDir() {
+  if (process.env.PLUGINS_TEST_DIR) {
+    return process.env.PLUGINS_TEST_DIR;
+  }
+  return join(__dirname, "../plugins");
+}
 
 const loaded = [];
 const failedPlugins = [];
@@ -31,7 +38,7 @@ export async function loadPlugins(app) {
   // Reset arrays to avoid duplication on reload
   loaded.length = 0;
   failedPlugins.length = 0;
-  const dirs = readdirSync(PLUGINS_DIR, { withFileTypes: true })
+  const dirs = readdirSync(resolvePluginsDir(), { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name);
 
@@ -59,7 +66,7 @@ export async function loadPlugins(app) {
     }
 
     // Validate plugin folder structure
-    const pluginIndexPath = join(PLUGINS_DIR, dir, "index.js");
+    const pluginIndexPath = join(resolvePluginsDir(), dir, "index.js");
     if (!existsSync(pluginIndexPath)) {
       const reason = "missing index.js";
       console.warn(`[plugins] "${dir}" ${reason} — skipped`);
@@ -68,7 +75,7 @@ export async function loadPlugins(app) {
       continue;
     }
 
-    const pluginDir = join(PLUGINS_DIR, dir);
+    const pluginDir = join(resolvePluginsDir(), dir);
     const url = pathToFileURL(pluginIndexPath).href;
 
     // Validate plugin metadata
@@ -178,7 +185,7 @@ export async function loadPlugins(app) {
   printQualitySummary(qualitySummary);
 
   // STRICT mode: fail startup if any plugin failed
-  if (process.env.PLUGIN_STRICT_MODE === "true" && failedPlugins.length > 0) {
+  if (isStrictPluginLoading() && failedPlugins.length > 0) {
     throw new Error(`STRICT mode: ${failedPlugins.length} plugin(s) failed to load. Check logs above.`);
   }
 }
