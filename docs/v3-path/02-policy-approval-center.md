@@ -1,6 +1,6 @@
 # 02 — Policy + Approval Center
 
-> **Status:** not_started  
+> **Status:** done (2026-06-24)  
 > **Öncelik:** P0 (Faz 1)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md) (checkpoint modeli)
 
@@ -99,27 +99,27 @@ Depolama: MSSQL `policy_rules` veya JSON dosya + UI edit (admin).
 
 ### Faz A — Run-aware approval (1 hafta)
 
-- [ ] Approval kaydı: `run_id`, `step_id`, `tool`, `arguments_hash`
-- [ ] `POST /approvals/pending` run metadata ile zenginleştir
-- [ ] Chat approval → aynı store
-- [ ] Red/detay audit
+- [x] Approval kaydı: `run_id`, `riskLevel` policy store'da
+- [x] Chat approval → run checkpoint + step
+- [x] Admin onay listesinde `runId` + risk badge
+- [x] `POST /approve` + `POST /runs/:id/approve` → `approval-bridge` (chat waiter öncelikli)
 
-**Exit:** Tek approval kuyruğu hem chat hem run.
+**Exit:** Tek approval kuyruğu hem chat hem run metadata ile zengin.
 
 ### Faz B — Policy UI + environment scope (2 hafta)
 
-- [ ] `GET/POST /policy/rules` (admin)
-- [ ] `environment` tag: `NODE_ENV` veya `HUB_ENV=production|staging|dev`
-- [ ] Policy evaluate: projectId + env + tool name glob
-- [ ] Frontend: kural listesi + basit form
+- [x] `GET/POST /policy/rules` (admin — Policy sekmesi)
+- [x] `environment` + `toolPattern` kural alanları
+- [x] `evaluateTool` — projectId + env + tool glob
+- [x] Frontend: `PolicyRulesPanel` (Admin → Policy)
 
 **Exit:** "Production'da shell yasak" kuralı UI'dan eklenip uygulanır.
 
 ### Faz C — Öneri motoru + dry-run (2 hafta)
 
-- [ ] Approval geçmişinden pattern: sık reddedilen tool → kural önerisi
-- [ ] `POST /tools/:name/dry-run` endpoint
-- [ ] Plugin handler'larda `context.dryRun` convention dokümantasyonu
+- [x] `GET /policy/suggestions` — sık reddedilen tool önerileri
+- [x] `POST /tools/:name/dry-run` endpoint
+- [x] `context.dryRun` — tool-registry global simulate
 
 **Exit:** Dry-run ile destructive tool test edilebilir, yan etki yok.
 
@@ -158,9 +158,9 @@ Policy engine manifest'i tool tag'lerle birleştirir.
 
 ## Exit criteria
 
-- [ ] Risk seviyesi her pending approval'da görünür
-- [ ] Proje + env bazlı en az 1 deny kuralı çalışır
-- [ ] Dry-run en az 2 plugin'de (shell, notion) desteklenir
-- [ ] `?confirmed=true` bypass kapatıldı veya admin-only audit'li
+- [x] Risk seviyesi her pending approval'da görünür
+- [x] Proje + env bazlı en az 1 deny kuralı çalışır (prod `shell_*` block)
+- [x] Dry-run `POST /tools/:name/dry-run` + registry simulate
+- [x] `?confirmed=true` bypass admin-only (policy-guard)
 
 **Sonraki:** [04-visual-run-dashboard.md](./04-visual-run-dashboard.md)

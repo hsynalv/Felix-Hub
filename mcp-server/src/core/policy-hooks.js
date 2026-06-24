@@ -11,22 +11,12 @@
  */
 
 let policyEvaluator = null;
+let evaluateToolFn = null;
 let approvalStore = null;
 
-/**
- * Register policy system hooks
- * Called by the policy plugin during initialization
- *
- * @param {Object} hooks
- * @param {Function} hooks.evaluate - Policy evaluation function
- * @param {Function} hooks.createApproval - Create approval request
- * @param {Function} hooks.updateApprovalStatus - Update approval status
- * @param {Function} hooks.getApproval - Get approval by ID
- * @param {Function} hooks.listApprovals - List approvals
- * @param {Function} hooks.loadPolicyConfig - Load policy configuration
- */
 export function registerPolicyHooks({
   evaluate,
+  evaluateTool,
   createApproval,
   updateApprovalStatus,
   getApproval,
@@ -34,6 +24,7 @@ export function registerPolicyHooks({
   loadPolicyConfig,
 }) {
   policyEvaluator = evaluate;
+  evaluateToolFn = evaluateTool || null;
   approvalStore = {
     createApproval,
     updateApprovalStatus,
@@ -44,9 +35,12 @@ export function registerPolicyHooks({
   console.log("[policy-hooks] Policy system registered");
 }
 
-/** Get the policy evaluator function */
 export function getPolicyEvaluator() {
   return policyEvaluator;
+}
+
+export function getEvaluateTool() {
+  return evaluateToolFn;
 }
 
 /** Get the approval store functions */

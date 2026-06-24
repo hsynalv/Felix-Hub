@@ -25,6 +25,7 @@ import {
 } from "@/components/ops/OpsPrimitives";
 import { apiGet, apiGetRaw, apiPost, type PluginInfo } from "@/lib/api-client";
 import { cn, formatTime } from "@/lib/utils";
+import { PolicyRulesPanel } from "@/components/admin/PolicyRulesPanel";
 import { useToast } from "@/providers/ToastProvider";
 
 interface JobRow {
@@ -38,6 +39,8 @@ interface ApprovalRow {
   id?: string;
   toolName?: string;
   path?: string;
+  runId?: string;
+  riskLevel?: string;
 }
 
 function jobStateTone(state?: string) {
@@ -51,7 +54,7 @@ function jobStateTone(state?: string) {
 export function AdminPage() {
   const qc = useQueryClient();
   const toast = useToast();
-  const [tab, setTab] = useState<"approvals" | "jobs" | "plugins">("approvals");
+  const [tab, setTab] = useState<"approvals" | "jobs" | "plugins" | "policy">("approvals");
 
   const { data: plugins = [] } = useQuery({
     queryKey: ["plugins"],
@@ -110,6 +113,9 @@ export function AdminPage() {
             <OpsPill active={tab === "plugins"} onClick={() => setTab("plugins")}>
               Plugins
             </OpsPill>
+            <OpsPill active={tab === "policy"} onClick={() => setTab("policy")}>
+              Policy
+            </OpsPill>
           </div>
         }
       />
@@ -164,11 +170,21 @@ export function AdminPage() {
                   className="flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Sparkles className="h-4 w-4 shrink-0 text-amber-500" />
                       <span className="truncate font-mono text-sm font-medium">{String(a.toolName || a.id || "—")}</span>
+                      {a.riskLevel && (
+                        <Badge variant="default" className="text-[10px] uppercase">
+                          {a.riskLevel}
+                        </Badge>
+                      )}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{String(a.path || "")}</p>
+                    {a.runId && (
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">
+                        run: {a.runId}
+                      </p>
+                    )}
                   </div>
                   <Button
                     size="sm"
@@ -252,6 +268,8 @@ export function AdminPage() {
           </div>
         </OpsPanel>
       )}
+
+      {tab === "policy" && <PolicyRulesPanel />}
     </OpsPageShell>
   );
 }

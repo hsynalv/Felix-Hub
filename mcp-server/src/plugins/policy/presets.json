@@ -1,7 +1,14 @@
 {
   "presets": [
     {
-      "id": "notion-bulk-archive",
+      "id": "prod-no-shell",
+      "toolPattern": "shell_*",
+      "environment": "production",
+      "action": "block",
+      "description": "Production ortamında shell araçları yasak",
+      "riskClass": "DESTRUCTIVE"
+    },
+    {
       "pattern": "POST /notion/rows/archive",
       "action": "require_approval",
       "description": "Notion bulk archive needs manual approval",

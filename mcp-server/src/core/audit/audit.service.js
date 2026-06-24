@@ -67,6 +67,7 @@ export async function logToolExecution(params) {
     user = "anonymous",
     projectId,
     requestId,
+    runId,
     failed = false,
     duration = 0,
   } = params;
@@ -84,6 +85,7 @@ export async function logToolExecution(params) {
     metadata: {
       source: "tool",
       toolName,
+      ...(runId ? { runId } : {}),
     },
   });
 }

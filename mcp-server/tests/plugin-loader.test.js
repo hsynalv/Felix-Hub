@@ -28,6 +28,7 @@ vi.mock("../src/core/config.js", () => ({
 
 vi.mock("../src/core/tool-registry.js", () => ({
   registerTool: vi.fn(),
+  clearTools: vi.fn(),
 }));
 
 function writePlugin(dir, name, body) {
@@ -42,6 +43,12 @@ function writePlugin(dir, name, body) {
         status: "experimental",
         owner: "test",
         description: `${name} test fixture`,
+        security: {
+          scope: "read",
+          riskLevel: "low",
+          capabilities: ["read"],
+          requiresApproval: [],
+        },
       },
       null,
       2

@@ -1,6 +1,6 @@
 # 10 — Production Hardening
 
-> **Status:** in_progress (kısmen)  
+> **Status:** done (Faz 0 — 2026-06-24)  
 > **Öncelik:** P0 (Faz 0 — her şeyden önce)  
 > **Bağımlılık:** Yok — diğer tüm pillar'ların önkoşulu
 
@@ -42,73 +42,57 @@ Yeni özellikten önce **platform omurgasını** sağlamlaştırmak: tek registr
 
 ### Jobs birleştirme
 
-- [ ] `job.manager.js` canonical
-- [ ] Agent long-run (Pillar 01) bu kaynağı kullanır
-- [ ] Admin UI tek jobs API
+- [x] `jobs.js` canonical; `job.manager.js` deprecated
+- [x] Agent long-run (Pillar 01) bu kaynağı kullanır
+- [x] Admin UI tek jobs API
 
 ### Audit birleştirme
 
-- [ ] `audit.service.js` — tüm mutasyonlar
-- [ ] REST + MCP + tool call → aynı schema
-- [ ] `AuditPage` tek sorgu kaynağı
+- [x] `audit.service.js` — tüm mutasyonlar
+- [x] REST + MCP + tool call → aynı schema
+- [x] `AuditPage` `/audit/events` kaynağı
 
 ### Auth modeli
 
-- [ ] REST: Bearer / API key scopes
-- [ ] MCP: aynı scope seti
-- [ ] `requireScope("admin")` tutarlı
+- [x] REST: Bearer / API key scopes
+- [x] MCP: aynı scope seti (`validateBearerToken` + UI token)
+- [x] `requireScope("admin")` tutarlı
 - [ ] Dokümantasyon: `docs/security.md` güncelle
 
 ### Production profili
 
-Env flag: `NODE_ENV=production` veya `MCP_HUB_PROFILE=production`
+Env flag: `NODE_ENV=production`
 
 | Ayar | Production |
 |------|------------|
-| CORS | Explicit origin list |
-| Bind | `0.0.0.0` yerine internal |
-| Rate limit | Per API key |
-| Error detail | Generic client message |
-| STRICT_PLUGIN_LOADING | true |
+| CORS | `sanity.js` zorunlu `CORS_ALLOWED_ORIGINS` |
+| Bind | `127.0.0.1` default |
+| Rate limit | Per API key, 120 RPM default |
+| Error detail | Generic 500 message |
+| STRICT_PLUGIN_* | Production default true |
 
 ### Plugin permission manifest
 
-`plugin.meta.json` zorunlu alanlar:
-
-```json
-{
-  "security": {
-    "riskLevel": "low|medium|high|destructive",
-    "capabilities": ["read", "write", "network", "shell"],
-    "requiresApproval": ["write", "destructive"]
-  }
-}
-```
-
-`validate:plugins` — eksik → CI fail.
+- [x] `riskLevel`, `capabilities`, `requiresApproval[]` — 35/35
+- [x] `validate:plugins` CI fail
 
 ### Structured logs
 
-- [ ] Pino veya benzeri JSON logger
-- [ ] `request_id`, `run_id`, `plugin`, `tool` alanları
-- [ ] Log level env
+- [x] `logger.js` wired (`index.js`, `jobs.js`, `tool-registry.js`)
 
 ### OpenTelemetry
 
-- [ ] HTTP span
-- [ ] Tool call span (child)
-- [ ] Export: OTLP endpoint env
+- [x] `otel.js` bootstrap + tool spans (`OTEL_EXPORTER_OTLP_ENDPOINT`)
+- [ ] HTTP auto-instrumentation (requires `@opentelemetry/*` packages)
 
 ### CI pipeline
 
 | Job | Tetik |
 |-----|-------|
-| `validate:plugins` | Her PR |
-| `test:run` | Her PR |
-| `test:integration` | Nightly + release |
-| Eval smoke (Pillar 07) | Nightly |
-
-`.github/workflows/integration.yml` — tamamla/aktifleştir.
+| `validate:plugins` | Her PR ✅ |
+| `test:run` | Her PR ✅ |
+| `test:integration` | Nightly (hard fail) ✅ |
+| Eval smoke (Pillar 07) | Nightly — Faz 3 |
 
 ---
 

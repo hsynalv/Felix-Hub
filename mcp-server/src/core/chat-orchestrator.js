@@ -20,6 +20,13 @@ import {
   isProviderKeyConfigured,
 } from "./llm-config.js";
 import { getEnvValue } from "./settings/effective-config.js";
+import {
+  recordApprovalPending,
+  recordApprovalResolved,
+  recordLlmStep,
+  recordToolStep,
+} from "./agent-runs/run-orchestrator.js";
+import { withToolRetry } from "./agent-runs/tool-retry.js";
 
 export const MAX_TOOL_ITERATIONS = 8;
 export const APPROVAL_TIMEOUT_MS = 120_000;
@@ -200,12 +207,22 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
   }
 
   onToolCall({ phase: "start", name, arguments: args });
+  const toolStart = Date.now();
   const toolContext = {
     ...context,
     parentCorrelationId: context.parentCorrelationId || context.requestId,
     toolName: name,
+    runId: context.runId,
   };
-  let result = await callTool(name, args, toolContext);
+
+  let result = await withToolRetry(
+    async (attempt) => {
+      const r = await callTool(name, args, { ...toolContext, retryAttempt: attempt });
+      if (r?.status === "approval_required" && r.approval?.id) return r;
+      return r;
+    },
+    { maxAttempts: 3 }
+  );
 
   if (result?.status === "approval_required" && result.approval?.id) {
     if (!allowWriteTools) {
@@ -214,18 +231,44 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
         error: { code: "approval_required_blocked", message: "Tool approval not available in this channel" },
       };
       onToolCall({ phase: "end", name, result: rejected });
+      if (context.runId) {
+        void recordToolStep(context.runId, {
+          toolName: name,
+          input: args,
+          output: rejected,
+          durationMs: Date.now() - toolStart,
+          phase: "end",
+        });
+      }
       return rejected;
+    }
+    if (context.runId) {
+      void recordApprovalPending(context.runId, {
+        approvalId: result.approval.id,
+        toolName: name,
+        args,
+      });
     }
     onApproval({
       approvalId: result.approval.id,
       tool: name,
       arguments: args,
       message: result.message,
+      runId: context.runId,
     });
     result = await waitForApproval(result.approval.id, name, args, context);
   }
 
   onToolCall({ phase: "end", name, result });
+  if (context.runId) {
+    void recordToolStep(context.runId, {
+      toolName: name,
+      input: args,
+      output: result,
+      durationMs: Date.now() - toolStart,
+      phase: "end",
+    });
+  }
   return result;
 }
 
@@ -239,6 +282,7 @@ async function recordChatUsage(context, { model, provider, usage, iteration, dur
   });
   await recordUsageEvent({
     ...base,
+    runId: context.runId || null,
     provider,
     model,
     promptTokens: u.promptTokens,
@@ -248,6 +292,15 @@ async function recordChatUsage(context, { model, provider, usage, iteration, dur
     durationMs,
     metadata: { iteration, stream: true },
   });
+  if (context.runId) {
+    void recordLlmStep(context.runId, {
+      model,
+      provider,
+      usage: u,
+      durationMs,
+      iteration,
+    });
+  }
   return { ...u, estimatedCostUsd: cost || 0 };
 }
 
@@ -494,6 +547,7 @@ export async function runChatTurn({
     channel: context.channel || "telegram",
     source: context.source || "telegram",
     conversationId: context.conversationId,
+    runId: context.runId || null,
   };
 
   let brainBlock = "";
@@ -552,6 +606,13 @@ export async function resolveChatApproval(approvalId, approved) {
   if (!approved) {
     const { getApprovalStore } = await import("./policy-hooks.js");
     getApprovalStore()?.updateApprovalStatus?.(approvalId, "rejected", "ui");
+    if (waiter.context?.runId) {
+      void recordApprovalResolved(waiter.context.runId, {
+        approvalId,
+        approved: false,
+        toolName: waiter.toolName,
+      });
+    }
     waiter.resolve({
       ok: false,
       error: { code: "approval_rejected", message: "Kullanıcı tool çalıştırmayı reddetti" },
@@ -561,6 +622,13 @@ export async function resolveChatApproval(approvalId, approved) {
 
   const approveResult = await approveTool(approvalId, { user: "ui" });
   const toolResult = approveResult.ok ? approveResult.data?.result : approveResult;
+  if (waiter.context?.runId) {
+    void recordApprovalResolved(waiter.context.runId, {
+      approvalId,
+      approved: true,
+      toolName: waiter.toolName,
+    });
+  }
   waiter.resolve(toolResult || approveResult);
   return { status: "approved", result: toolResult };
 }

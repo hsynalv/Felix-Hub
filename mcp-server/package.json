@@ -27,6 +27,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "validate:plugins": "node scripts/validate-plugin-meta.js",
+    "sync:plugin-security": "node scripts/sync-plugin-security-manifest.js",
     "sync:plugin-meta-env": "node scripts/sync-plugin-meta-env.js",
     "scaffold:plugin-meta": "node scripts/scaffold-plugin-meta.js",
     "test:integration": "vitest run --config vitest.integration.config.js",

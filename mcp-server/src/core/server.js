@@ -19,6 +19,11 @@ import { callTool } from "./tool-registry.js";
 import { createMcpHttpMiddleware } from "../mcp/http-transport.js";
 import { issueUiToken, issueUiTokenWithNotification } from "./ui-tokens.js";
 import { registerUiChatRoutes } from "./ui-chat.js";
+import { registerAgentRunRoutes } from "./agent-runs/routes.js";
+import { registerAgentRunJobRunner } from "./agent-runs/agent-run-job.js";
+import { registerWorkflowRunJobRunner } from "./agent-runs/workflow-run-job.js";
+import { registerAgentRunTools } from "./agent-runs/agent-runs.tools.js";
+import { resolvePendingApproval } from "./agent-runs/approval-bridge.js";
 import { registerUsageRoutes } from "./usage/routes.js";
 import { purgeOlderThan } from "./usage/usage-ledger.service.js";
 import { initPersistence, getPersistenceStatus, isPersistenceHealthy } from "./persistence/index.js";
@@ -500,6 +505,29 @@ export async function createServer() {
   // ── Approval routes ──────────────────────────────────────────────────────
 
   /**
+   * POST /tools/:name/dry-run
+   * Simulate tool execution without side effects.
+   */
+  app.post("/tools/:name/dry-run", requireScope("read"), async (req, res) => {
+    const toolName = req.params.name;
+    const args = req.body?.arguments ?? req.body ?? {};
+    try {
+      const result = await callTool(toolName, args, {
+        dryRun: true,
+        scopes: req.authScopes,
+        user: req.actor?.type || "dry-run",
+        projectId: req.projectId,
+        projectEnv: req.projectEnv,
+        requestId: req.requestId,
+        method: "POST",
+      });
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "dry_run_failed", message: err.message } });
+    }
+  });
+
+  /**
    * GET /approvals/pending
    * Return all pending approval requests
    */
@@ -572,52 +600,34 @@ export async function createServer() {
       });
     }
 
-    // Update approval status
-    approvalStore.updateApprovalStatus(approval_id, "approved", req.user || "manual");
+    const runId = approval.runId || null;
+    const outcome = await resolvePendingApproval(approval_id, true, {
+      actor: req.user || req.actor?.type || "manual",
+      runId,
+      scopes: req.authScopes,
+    });
 
-    // Execute the tool call
-    const toolName = approval.toolName || approval.path?.replace("/tools/", "");
-    if (!toolName) {
-      return res.status(400).json({
+    if (!outcome) {
+      return res.status(404).json({
         ok: false,
-        error: {
-          code: "invalid_approval",
-          message: "Approval request missing tool name",
-        },
+        error: { code: "approval_not_found", message: `Approval request not found: ${approval_id}` },
       });
     }
 
-    try {
-      const result = await callTool(toolName, approval.body || {}, {
-        user: req.user || "manual",
-        approvalId: approval_id,
-        method: approval.method || "POST",
-      });
+    console.log(`[APPROVAL] Resolved ${approval_id} via ${outcome.via}`);
 
-      // Log the approval execution
-      console.log(`[APPROVAL] Executed tool ${toolName} for approval ${approval_id}`);
-
-      res.json({
-        ok: true,
-        data: {
-          approval: {
-            id: approval_id,
-            status: "approved",
-            executedAt: new Date().toISOString(),
-          },
-          result,
+    res.json({
+      ok: true,
+      data: {
+        approval: {
+          id: approval_id,
+          status: outcome.status,
+          executedAt: new Date().toISOString(),
         },
-      });
-    } catch (error) {
-      console.error(`[APPROVAL] Error executing tool ${toolName}:`, error);
-      res.status(500).json({
-        ok: false,
-        error: {
-          code: "execution_failed",
-          message: error.message || "Tool execution failed after approval",
-        },
-      });
-    }
+        result: outcome.result,
+        via: outcome.via,
+      },
+    });
   });
 
   // ── MCP Gateway ──────────────────────────────────────────────────────────────
@@ -676,6 +686,9 @@ export async function createServer() {
   });
 
   registerUiChatRoutes(app);
+  registerAgentRunJobRunner();
+  registerWorkflowRunJobRunner();
+  registerAgentRunRoutes(app);
   registerUsageRoutes(app);
 
   // ── Plugin loader ──────────────────────────────────────────────────────────
@@ -714,6 +727,7 @@ export async function createServer() {
   initializeToolHooks();
 
   await loadPlugins(app);
+  registerAgentRunTools();
 
   try {
     const { startTelegramPolling } = await import("../plugins/notifications/telegram.webhook.js");

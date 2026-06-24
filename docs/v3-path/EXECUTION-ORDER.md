@@ -27,40 +27,44 @@
 |------|--------|----------------|------------|
 | 0.1 | [10-production-hardening.md](./10-production-hardening.md) | 2–3 hafta | — |
 
-**Exit gate:**
-- [ ] Tek tool registry + tek audit write path kararı uygulandı
-- [ ] REST + MCP auth modeli birleşik
-- [ ] `npm run test:run` + `validate:plugins` CI'da yeşil
-- [ ] Rate limit / bind / CORS production profili dokümante + uygulandı
+## Faz 0 exit gate
+
+- [x] Tek tool registry + tek audit write path
+- [x] REST + MCP auth modeli birleşik
+- [x] `test:run` + `validate:plugins` CI'da yeşil
+- [x] Rate limit / bind / CORS production profili
 
 ---
 
-## Faz 1 — Çekirdek ürün (agent execution)
+## Faz 1 — Çekirdek ürün (agent execution) — **done** ✅
 
 **Hedef:** "Bu agent ne yaptı?" sorusuna ürün seviyesinde cevap.
 
-| Sıra | Pillar | Süre | Not |
-|------|--------|------|-----|
-| 1.1 | [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md) — Faz A | 2 hafta | Run modeli + persistence |
-| 1.2 | [02-policy-approval-center.md](./02-policy-approval-center.md) — Faz A | 1 hafta | Mevcut policy'yi run'a bağla |
-| 1.3 | [04-visual-run-dashboard.md](./04-visual-run-dashboard.md) — Faz A | 2 hafta | Timeline MVP |
-| 1.4 | [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md) — Faz B | 2 hafta | Job resume, replay |
+| Sıra | Pillar | Durum |
+|------|--------|-------|
+| 1.1 | [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md) Faz A–D | done |
+| 1.2 | [02-policy-approval-center.md](./02-policy-approval-center.md) Faz A–C | done |
+| 1.3 | [04-visual-run-dashboard.md](./04-visual-run-dashboard.md) Faz A–D | done (ops overview MVP) |
+| 1.4 | Agent runtime Faz B (job + SSE) | done |
 
 **Exit gate:**
-- [ ] Tek agent run uçtan uca: plan → tool calls → onay → sonuç
-- [ ] Run listesi + detay timeline UI'da
-- [ ] Approval queue Admin'den yönetilebilir
-- [ ] Örnek senaryo: "repo analiz → issue → branch → PR" tek `run_id` altında izlenebilir
+- [x] Chat tool call'ları `run_id` altında step olarak kayıt
+- [x] Run listesi + detay timeline UI (`/runs`)
+- [x] Approval queue Admin'de `runId` + risk
+- [x] Uçtan uca onay → resume (`approval-bridge`)
+- [x] Örnek repo workflow tek `run_id` (`repo-ship-feature` template)
+
+> **Milestone:** `v3.0-beta` — Faz 1 tamamlandı, Faz 2'ye geçilebilir.
 
 ---
 
-## Faz 2 — Zeka ve maliyet
+## Faz 2 — Zeka ve maliyet — **next**
 
 | Sıra | Pillar | Süre |
 |------|--------|------|
 | 2.1 | [03-project-workspace-intelligence.md](./03-project-workspace-intelligence.md) — Faz A | 3 hafta |
 | 2.2 | [06-usage-cost-quota.md](./06-usage-cost-quota.md) — Faz A–B | 2 hafta |
-| 2.3 | [04-visual-run-dashboard.md](./04-visual-run-dashboard.md) — Faz B | 1 hafta |
+| 2.3 | [04-visual-run-dashboard.md](./04-visual-run-dashboard.md) — cost join (Faz 2) | 1 hafta |
 
 **Exit gate:**
 - [ ] Proje seçildiğinde context graph sorgulanabilir
@@ -106,7 +110,7 @@
 | Etiket | İçerik |
 |--------|--------|
 | `v3.0-alpha` | Faz 0 exit |
-| `v3.0-beta` | Faz 1 exit (run + approval + timeline) |
+| `v3.0-beta` | Faz 1 exit (run + approval + timeline) ✅ |
 | `v3.1` | Faz 2 (project memory + cost) |
 | `v3.2` | Faz 3 (marketplace + eval) |
 | `v3.3` | Faz 4 (sidecar) |

@@ -35,6 +35,7 @@ import {
   buildInstructionsBlock,
   resolveIncludeBrainContext,
 } from "./chat/chat-instructions.js";
+import { ensureRunForChat, completeRun } from "./agent-runs/run-orchestrator.js";
 
 const DEFAULT_TASK = "general";
 
@@ -237,6 +238,20 @@ export function registerUiChatRoutes(app) {
 
     context.conversationId = activeConversationId;
 
+    let activeRun = null;
+    try {
+      activeRun = await ensureRunForChat({
+        conversationId: activeConversationId,
+        goal: message,
+        projectId: context.projectId || null,
+        createdBy: req.actor?.type || "ui",
+        metadata: { source: "chat_ui", requestId: req.requestId },
+      });
+      context.runId = activeRun?.id || null;
+    } catch (err) {
+      console.warn("[ui-chat] run ensure failed:", err.message);
+    }
+
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -299,6 +314,7 @@ export function registerUiChatRoutes(app) {
       brainContext: !!brainBlock,
       pluginFilter: scopedPlugin,
       conversationId: activeConversationId,
+      runId: context.runId,
     });
 
     const toolMessages = [];
@@ -315,8 +331,28 @@ export function registerUiChatRoutes(app) {
             });
           }
           sseWrite(res, "tool", payload);
+          if (context.runId) {
+            sseWrite(res, "run_step", {
+              runId: context.runId,
+              type: "tool",
+              phase: payload.phase,
+              toolName: payload.name,
+              status: payload.phase === "end" ? (payload.result?.ok === false ? "error" : "ok") : "pending",
+            });
+          }
         },
-        onApproval: (payload) => sseWrite(res, "approval", payload),
+        onApproval: (payload) => {
+          sseWrite(res, "approval", payload);
+          if (context.runId) {
+            sseWrite(res, "run_step", {
+              runId: context.runId,
+              type: "approval",
+              toolName: payload.tool,
+              status: "pending",
+              approvalId: payload.approvalId,
+            });
+          }
+        },
       };
 
       const result = useOpenAi
@@ -344,10 +380,25 @@ export function registerUiChatRoutes(app) {
         iterations: result.iterations,
         maxIterations: result.maxIterations,
         conversationId: activeConversationId,
+        runId: context.runId,
         usage: result.usage || null,
       });
+      if (context.runId) {
+        try {
+          await completeRun(context.runId, { usage: result.usage });
+        } catch (err) {
+          console.warn("[ui-chat] run complete failed:", err.message);
+        }
+      }
       res.end();
     } catch (err) {
+      if (context.runId) {
+        try {
+          await completeRun(context.runId, { error: { message: err.message } });
+        } catch {
+          /* ignore */
+        }
+      }
       sseWrite(res, "error", { message: err.message || "Chat failed" });
       res.end();
     }

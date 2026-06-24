@@ -2,10 +2,23 @@
 
 ## P0 — Platform omurgası
 
-### TD-1: Çift registry / jobs / audit stack
-- **Dosyalar:** `plugins.js` vs `core/registry/`, `tool-registry.js` vs `core/tools/`, `jobs.js` vs `job.manager.js`
-- **Etki:** Observability yanıltıcı, "hangi API?" karmaşası
-- **Çözüm:** Tek kaynak seç, diğerini deprecate et veya sil
+### TD-1: Çift registry / jobs / audit stack — **Resolved (Faz 0)**
+- **Çözüm:** `tool-registry.js` + `jobs.js` canonical; observability metrics güncellendi; `audit.service.js` tek write path
+
+### TD-3: MCP auth REST'ten ayrı — **Resolved (Faz 0)**
+- **Çözüm:** `authenticateRequest`, `validateBearerToken` UI token paritesi; `optionalAuthMiddleware`
+
+### TD-6: Rate limiting tanımlı ama mount edilmemiş — **Resolved**
+- Zaten `server.js`'de mount edilmiş; dokümantasyon güncellendi
+
+### TD-8: Policy `?confirmed=true` bypass — **Resolved (Faz 0)**
+- Admin scope zorunlu
+
+### TD-9: Redis job enqueue fallback bug — **Resolved (Faz 0)**
+- Memory fallback `runJob` ile tutarlı; `useMemoryStore` flag
+
+### TD-11: Job state enum tutarsızlığı — **Partial**
+- `JobState.DONE` → `COMPLETED` alias; `publicView` normalizes
 
 ### TD-2: Config schema vs open mode çelişkisi — **Resolved**
 - **Dosyalar:** `config-schema.js`, `auth.js`
@@ -94,9 +107,9 @@ notion, github, llm-router, n8n, n8n-credentials, local-sidecar, project-orchest
 - Gerçek fs watcher testleri teardown eksikse fd leak
 - Ortama bağlı; `afterAll` ile tüm watcher'ları stop etmek gerekir
 
-### TD-22: validate:plugins CI'da yok
-### TD-23: Release workflow npm vs pnpm uyumsuzluğu
-- CI pnpm; release.yml `npm ci` + olmayan `package-lock.json`
+### TD-22: validate:plugins CI'da yok — **Resolved (Faz 0)**
+### TD-23: Release workflow npm vs pnpm uyumsuzluğu — **Resolved (Faz 0)**
+- release.yml pnpm + lint + validate:plugins
 
 ### TD-24: Frontend 0 test
 
@@ -104,9 +117,9 @@ notion, github, llm-router, n8n, n8n-credentials, local-sidecar, project-orchest
 
 ## P5 — Metadata / standartlar
 
-### TD-25: plugin.meta.json scaffold kalitesi
-- 35/35 dosya var ama çoğu generic description, boş `envVars`
-- notifications: `envVars: []` ama `TELEGRAM_*` gerekli
+### TD-25: plugin.meta.json scaffold kalitesi — **Partial (Faz 0)**
+- 35/35 security manifest (`riskLevel`, `capabilities`, `requiresApproval`)
+- `sync-plugin-meta-env.js` + `sync-plugin-security-manifest.js`
 
 ### TD-26: explanation field standardı
 - Sadece `STRICT_TOOL_SCHEMA=true` ile zorunlu
@@ -118,8 +131,8 @@ github, llm-router, notion, shell, n8n-credentials, file-watcher, notifications,
 ### TD-28: prompt-registry v1 deprecation açık
 - v1 hâlâ migrate ediliyor, warning veriyor
 
-### TD-29: Audit API parçalanmış
-- `audit.js`, `audit/index.js`, plugin-local `auditEntry` (file-storage)
+### TD-29: Audit API parçalanmış — **Partial (Faz 0)**
+- `audit.service.js` + `/audit/events`; file-storage local buffer kaldırılmadı (opsiyonel)
 
 ---
 

@@ -26,6 +26,7 @@ export interface ChatStreamCallbacks {
   onMeta?: (data: Record<string, unknown>) => void;
   onToken?: (text: string) => void;
   onTool?: (data: { phase: string; name: string; arguments?: Record<string, unknown>; result?: unknown }) => void;
+  onRunStep?: (data: Record<string, unknown>) => void;
   onApproval?: (payload: ApprovalPayload) => void | Promise<void>;
   onDone?: (data: Record<string, unknown>) => void;
   onError?: (message: string) => void;
@@ -107,6 +108,9 @@ export async function streamChat(
           break;
         case "tool":
           callbacks.onTool?.(payload);
+          break;
+        case "run_step":
+          callbacks.onRunStep?.(payload);
           break;
         case "approval":
           await callbacks.onApproval?.({

@@ -35,9 +35,10 @@ const failedPlugins = [];
  *   tools        { name, description, inputSchema?, handler }[]  — MCP tools
  */
 export async function loadPlugins(app) {
-  // Reset arrays to avoid duplication on reload
+  // Reset arrays and tool registry to avoid duplication on reload
   loaded.length = 0;
   failedPlugins.length = 0;
+  clearTools();
   const dirs = readdirSync(resolvePluginsDir(), { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name);

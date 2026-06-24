@@ -7,6 +7,13 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
 
+/** @type {{ rules: object[]; approvals: object[] } | null} */
+let memoryTestStore = null;
+
+export function resetPolicyStoreForTests() {
+  memoryTestStore = { rules: [], approvals: [] };
+}
+
 function storePath() {
   const dir = process.env.CATALOG_CACHE_DIR || "./cache";
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -14,12 +21,17 @@ function storePath() {
 }
 
 function load() {
+  if (memoryTestStore) return memoryTestStore;
   const p = storePath();
   if (!existsSync(p)) return { rules: [], approvals: [] };
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return { rules: [], approvals: [] }; }
 }
 
 function save(data) {
+  if (memoryTestStore) {
+    memoryTestStore = data;
+    return;
+  }
   writeFileSync(storePath(), JSON.stringify(data, null, 2));
 }
 
@@ -42,7 +54,10 @@ export function addRule(rule) {
   const id = rule.id ?? makeId("rule");
   const newRule = {
     id,
-    pattern:     rule.pattern,
+    pattern:     rule.pattern ?? null,
+    toolPattern: rule.toolPattern ?? null,
+    environment: rule.environment ?? null,
+    projectId:   rule.projectId ?? null,
     action:      rule.action,
     scope:       rule.scope ?? "write",
     description: rule.description ?? "",
@@ -78,7 +93,7 @@ export function getApproval(id) {
   return (data.approvals ?? []).find((a) => a.id === id) ?? null;
 }
 
-export function createApproval({ ruleId, path, method, body, requestedBy, toolName, explanation }) {
+export function createApproval({ ruleId, path, method, body, requestedBy, toolName, explanation, runId, stepId, riskLevel }) {
   const data = load();
   data.approvals ??= [];
 
@@ -91,6 +106,9 @@ export function createApproval({ ruleId, path, method, body, requestedBy, toolNa
     requestedBy: requestedBy ?? "agent",
     toolName:    toolName ?? null,
     explanation: explanation ?? null,
+    runId:       runId ?? null,
+    stepId:      stepId ?? null,
+    riskLevel:   riskLevel ?? null,
     status:      "pending",
     createdAt:   new Date().toISOString(),
     decidedAt:   null,
@@ -99,6 +117,36 @@ export function createApproval({ ruleId, path, method, body, requestedBy, toolNa
   data.approvals.push(approval);
   save(data);
   return approval;
+}
+
+export function listApprovalHistory({ limit = 50 } = {}) {
+  const data = load();
+  const approvals = (data.approvals ?? [])
+    .filter((a) => a.status === "approved" || a.status === "rejected")
+    .sort((a, b) => new Date(b.decidedAt || b.createdAt) - new Date(a.decidedAt || a.createdAt));
+  return approvals.slice(0, limit);
+}
+
+export function getPolicySuggestions() {
+  const rejected = listApprovals({ status: "rejected" });
+  const counts = {};
+  for (const a of rejected) {
+    const key = a.toolName || a.path || "unknown";
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([tool, count]) => ({
+      tool,
+      rejectCount: count,
+      suggestedRule: {
+        toolPattern: tool.includes("*") ? tool : `${tool.split("_")[0]}_*`,
+        action: "require_approval",
+        description: `Auto-suggested: ${tool} rejected ${count} times`,
+      },
+    }));
 }
 
 export function updateApprovalStatus(id, status, decidedBy = "manual") {

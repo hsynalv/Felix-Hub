@@ -98,6 +98,7 @@ export function AuditPage() {
   const [limit, setLimit] = useState("100");
   const [tab, setTab] = useState<"archive" | "requests">("archive");
   const [search, setSearch] = useState("");
+  const [runIdFilter, setRunIdFilter] = useState("");
 
   const { data: archiveData, isLoading: archiveLoading } = useQuery({
     queryKey: ["audit-archive", plugin, limit],
@@ -127,14 +128,17 @@ export function AuditPage() {
 
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return entries;
-    return entries.filter(
-      (e) =>
+    const runQ = runIdFilter.trim().toLowerCase();
+    return entries.filter((e) => {
+      if (runQ && !JSON.stringify(e.metadata ?? {}).toLowerCase().includes(runQ)) return false;
+      if (!q) return true;
+      return (
         e.plugin?.toLowerCase().includes(q) ||
         e.operation?.toLowerCase().includes(q) ||
         JSON.stringify(e.metadata ?? "").toLowerCase().includes(q)
-    );
-  }, [entries, search]);
+      );
+    });
+  }, [entries, search, runIdFilter]);
 
   const filteredLogs = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -194,6 +198,12 @@ export function AuditPage() {
             className="h-9 rounded-xl border-border/50 bg-background/60 pl-9"
           />
         </div>
+        <Input
+          placeholder="run_id filtresi"
+          value={runIdFilter}
+          onChange={(e) => setRunIdFilter(e.target.value)}
+          className="h-9 w-full max-w-[180px] rounded-xl border-border/50 bg-background/60 font-mono text-xs"
+        />
         <Input
           placeholder="Plugin filtresi"
           value={plugin}

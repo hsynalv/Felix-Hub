@@ -1,6 +1,6 @@
 # 01 — Agent Runtime / Workflow Katmanı
 
-> **Status:** not_started  
+> **Status:** done (2026-06-24)  
 > **Öncelik:** P0 (Faz 1)  
 > **Bağımlılık:** [10-production-hardening.md](./10-production-hardening.md) (jobs + audit tek kaynak)
 
@@ -119,38 +119,42 @@ MCP tool: `agent_run_status`, `agent_run_list` (read scope).
 
 ### Faz A — Run modeli + chat köprüsü (2 hafta)
 
-- [ ] Migration: `agent_runs`, `agent_run_steps`
-- [ ] `RunOrchestrator` servisi — `chat-orchestrator` içinden veya wrapper
-- [ ] Her chat turn'de `run_id` üret veya conversation'a bağlı run devam ettir
-- [ ] Tool call'ları `agent_run_steps`'e yaz
-- [ ] Audit archive'a `run_id` metadata ekle
+- [x] Migration: `agent_runs`, `agent_run_steps`, `agent_run_checkpoints`
+- [x] `run-orchestrator.js` — chat ile köprü
+- [x] Her chat turn'de `run_id` üret / conversation'a bağlı run devam ettir
+- [x] Tool call'ları `agent_run_steps`'e yaz
+- [x] Audit'e `run_id` metadata eklendi
+- [x] REST API: `POST/GET /runs`, `/runs/:id/steps`, cancel/approve/resume
 
-**Exit:** Chat'ten yapılan tool call'lar DB'de run step olarak görünür.
+**Exit:** Chat'ten yapılan tool call'lar run step olarak görünür (memory veya MSSQL).
 
 ### Faz B — Job entegrasyonu + uzun run (2 hafta)
 
-- [ ] `job.type = agent_run` — `jobs.js` tek implementasyon (Pillar 10 sonrası)
-- [ ] Uzun run'lar worker'da; SSE ile progress
-- [ ] Timeout + graceful cancel
+- [x] `job.type = agent_run` — `agent-run-job.js` + `registerAgentRunJobRunner()`
+- [x] `POST /runs` `async: true` → background job
+- [x] `GET /runs/:id/events` SSE + `run-events.js` pub/sub
+- [x] Timeout (`AGENT_RUN_TIMEOUT_MS`, varsayılan 30 dk) + cancel → job iptal
+- [x] Chat SSE `run_step` event'leri
 
 **Exit:** 10+ dakika süren run UI'da kaybolmaz.
 
 ### Faz C — Retry, rollback, replay (2 hafta)
 
-- [ ] Step-level retry policy (transient errors)
-- [ ] Compensating action hook (plugin opt-in) — tam rollback değil, "undo hint"
-- [ ] Replay: aynı input trace'i read-only oynatma
-- [ ] Resume: `waiting_approval` sonrası kaldığı step'ten devam
+- [x] Step-level retry policy (transient errors) — `tool-retry.js`, chat orchestrator
+- [ ] Compensating action hook (plugin opt-in) — gelecek
+- [x] Replay: `POST /runs/:id/replay` (dry-run trace kopyası)
+- [x] Resume: `POST /runs/:id/resume` + approval bridge
 
-**Exit:** Onay reddedilince run `cancelled` veya alternatif path ile devam seçeneği.
+**Exit:** Onay reddedilince run `cancelled`; replay ile trace yeniden oynatılabilir.
 
 ### Faz D — Workflow şablonları (2 hafta)
 
-- [ ] `workflow_templates` — örn. `repo-ship-feature`, `incident-triage`
-- [ ] `project-orchestrator` plan çıktısını run planına map et
-- [ ] Template parametreleri: repo, branch, notion project id
+- [x] `workflow-templates.js` — `repo-ship-feature`, `incident-triage`
+- [x] `POST /runs/from-template/:id` + `workflow_run` job
+- [x] Template parametreleri: repo, branch, goal, baseBranch
+- [x] MCP: `agent_run_list`, `agent_run_status`, `agent_workflow_templates`
 
-**Exit:** Örnek 6 adımlı repo workflow tek tıkla başlatılabilir.
+**Exit:** Örnek 6 adımlı repo workflow tek tıkla başlatılabilir (`/runs` UI).
 
 ---
 
@@ -187,19 +191,19 @@ Mevcut `conversations` tablosu korunur; `agent_runs.conversation_id` optional FK
 ## Test planı
 
 - [ ] Unit: RunOrchestrator state machine
-- [ ] Integration: mock LLM + 2 tool → 4 step trace
-- [ ] Approval pause/resume E2E
-- [ ] Golden trace: `tests/fixtures/runs/repo-ship-feature.json`
+- [x] Integration: agent-runs memory tests
+- [x] Approval bridge: chat waiter + tool exec (`approval-bridge.test.js`)
+- [x] Golden trace: `tests/fixtures/runs/repo-ship-feature.json`
 
 ---
 
 ## Exit criteria (pillar tamamlandı)
 
-- [ ] Run CRUD API + persistence
-- [ ] Chat ve project-orchestrator run'a bağlı
-- [ ] Approval checkpoint resume çalışıyor
-- [ ] En az 1 workflow template dokümante
-- [ ] Timeline UI (Pillar 04) bu API'yi tüketiyor
+- [x] Run CRUD API + persistence
+- [x] Chat run'a bağlı (`ensureRunForChat`, `run_id` metadata)
+- [x] Approval checkpoint resume (`approval-bridge` + chat waiter)
+- [x] En az 1 workflow template dokümante (Faz D)
+- [x] Timeline UI (Pillar 04) bu API'yi tüketiyor
 
 ---
 

@@ -62,24 +62,49 @@
   "dependencies": [],
   "envVars": [
     {
-      "name": "OPENAI_API_KEY",
-      "required": false,
-      "description": "OpenAI API key — enables GPT-4.1, gpt-4o, o3-mini"
-    },
-    {
-      "name": "OPENAI_CHAT_MODEL",
-      "required": false,
-      "description": "Default chat model id (e.g. gpt-4o-mini)"
-    },
-    {
       "name": "ANTHROPIC_API_KEY",
       "required": false,
       "description": "Anthropic API key — enables Claude Opus/Sonnet/Haiku"
     },
     {
+      "name": "CHAT_LLM_MODEL",
+      "required": false,
+      "description": "Sohbet varsayılan modeli"
+    },
+    {
+      "name": "CHAT_LLM_PROVIDER",
+      "required": false,
+      "description": "Sohbet sağlayıcısı: openai, vllm, ollama"
+    },
+    {
       "name": "GOOGLE_API_KEY",
       "required": false,
       "description": "Google API key — enables Gemini 2.0 Flash/Pro"
+    },
+    {
+      "name": "LLM_KEY_MODE",
+      "required": false,
+      "description": "unified (tek anahtar) veya split (ayrı atama)"
+    },
+    {
+      "name": "LLM_MAX_OUTPUT_TOKENS",
+      "required": false,
+      "description": "Max output tokens per request (default: 4096)"
+    },
+    {
+      "name": "LLM_MAX_PROMPT_LENGTH",
+      "required": false,
+      "description": "Max prompt character length (default: 100000)"
+    },
+    {
+      "name": "LLM_TIMEOUT_MS",
+      "required": false,
+      "description": "Global LLM timeout in milliseconds (default: 60000)"
+    },
+    {
+      "name": "LLM_UNIFIED_API_KEY",
+      "required": false,
+      "description": "Birleşik OpenAI anahtarı (unified mod)"
     },
     {
       "name": "MISTRAL_API_KEY",
@@ -92,29 +117,39 @@
       "description": "Ollama local server URL (default: http://localhost:11434)"
     },
     {
-      "name": "LLM_TIMEOUT_MS",
+      "name": "OLLAMA_MODEL",
       "required": false,
-      "description": "Global LLM timeout in milliseconds (default: 60000)"
+      "description": "Ollama varsayılan model adı"
     },
     {
-      "name": "LLM_MAX_PROMPT_LENGTH",
+      "name": "OPENAI_API_KEY",
       "required": false,
-      "description": "Max prompt character length (default: 100000)"
+      "description": "OpenAI API key — enables GPT-4.1, gpt-4o, o3-mini"
     },
     {
-      "name": "LLM_MAX_OUTPUT_TOKENS",
+      "name": "OPENAI_CHAT_MODEL",
       "required": false,
-      "description": "Max output tokens per request (default: 4096)"
+      "description": "Default chat model id (e.g. gpt-4o-mini)"
     },
     {
-      "name": "VLLM_BASE_URL",
+      "name": "ROUTER_LLM_MODEL",
       "required": false,
-      "description": "vLLM or any OpenAI-compatible server URL (e.g. http://my-server:8000/v1)"
+      "description": "LLM router varsayılan modeli"
+    },
+    {
+      "name": "ROUTER_LLM_PROVIDER",
+      "required": false,
+      "description": "LLM router sağlayıcısı"
     },
     {
       "name": "VLLM_API_KEY",
       "required": false,
       "description": "API key for the vLLM server if authentication is enabled (default: not-needed)"
+    },
+    {
+      "name": "VLLM_BASE_URL",
+      "required": false,
+      "description": "vLLM or any OpenAI-compatible server URL (e.g. http://my-server:8000/v1)"
     },
     {
       "name": "VLLM_MODEL",

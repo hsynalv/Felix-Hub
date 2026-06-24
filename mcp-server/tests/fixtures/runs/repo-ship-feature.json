@@ -1,0 +1,19 @@
+{
+  "id": "golden-repo-ship-feature",
+  "templateId": "repo-ship-feature",
+  "goal": "Repo analiz → branch → PR",
+  "parameters": {
+    "repo": "octocat/Hello-World",
+    "branch": "feature/agent-demo",
+    "goal": "Add agent run trace docs",
+    "baseBranch": "main"
+  },
+  "expectedSteps": [
+    { "type": "tool", "toolName": "repo_analyze" },
+    { "type": "tool", "toolName": "repo_open_issues" },
+    { "type": "tool", "toolName": "git_branch_create" },
+    { "type": "tool", "toolName": "git_status" },
+    { "type": "tool", "toolName": "github_branch_create" },
+    { "type": "tool", "toolName": "github_pr_create" }
+  ]
+}

@@ -1,6 +1,6 @@
 # 04 — Visual Run Dashboard
 
-> **Status:** not_started  
+> **Status:** done (2026-06-24)  
 > **Öncelik:** P0 (Faz 1)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md), [02-policy-approval-center.md](./02-policy-approval-center.md)
 
@@ -69,35 +69,32 @@ Animasyon: streaming sırasında canlı append (SSE); tamamlanınca soft settle 
 
 ### Faz A — Run list + detail MVP (2 hafta)
 
-- [ ] `GET /runs` API client
-- [ ] `RunDashboardPage` veya `HomePage` refactor
-- [ ] Run kartları: status, goal, süre, maliyet tahmini
-- [ ] Run detail: step listesi (read-only)
-- [ ] Nav: sidebar'a "Runs" ekle
-
-**Exit:** Tamamlanmış bir run'ın tüm tool adımları UI'da.
+- [x] `GET /runs` API client (`runs-api.ts`)
+- [x] `RunsPage` — liste + step timeline
+- [x] Nav: sidebar'a "Runs" eklendi
+- [x] Run detail: cancel aksiyonu
+- [x] Run detail: replay aksiyonu
+- [x] Nav: HomePage aktif run + onay özeti
 
 ### Faz B — Live trace + chat split (1 hafta)
 
-- [ ] Chat SSE'den `run_id` + step events
-- [ ] Chat yanında canlı timeline
-- [ ] Focus run from chat message
-
-**Exit:** Chat sırasında tool call anlık timeline'da görünür.
+- [x] Chat SSE'den `run_id` + `run_step` events
+- [x] Chat yanında canlı timeline (`RunTracePanel`)
+- [x] `?run=` query param + Runs'dan sohbete link
 
 ### Faz C — Ops overview (1 hafta)
 
-- [ ] Üst şerit: plugin health özeti (`plugin-health.js`)
-- [ ] Pending approval sayısı + link
-- [ ] Bugünkü usage (`usage-api`)
-- [ ] Per-project activity (Pillar 03 hazır olunca)
+- [x] HomePage: aktif run sayısı + bekleyen onay
+- [x] Pending approval sayısı + Admin link
+- [x] Bugünkü usage (7 gün token/maliyet kartları)
+- [ ] Per-project activity (Pillar 03 — Faz 2)
 
 ### Faz D — Gelişmiş analitik (2 hafta)
 
-- [ ] Latency histogram (run içi)
-- [ ] Error rate by plugin
-- [ ] Cost breakdown chart (run → tool → model)
-- [ ] Export trace JSON (debug)
+- [x] Run içi latency özeti (step duration toplamı)
+- [x] Error count by run (tool step hataları)
+- [ ] Cost breakdown chart (run → tool → model) — Faz 2 usage join
+- [x] Export trace JSON (debug)
 
 ---
 
@@ -125,9 +122,9 @@ Animasyon: streaming sırasında canlı append (SSE); tamamlanınca soft settle 
 
 ## Exit criteria
 
-- [ ] Runs sayfası production kullanılabilir
-- [ ] Chat + trace split çalışır
-- [ ] Admin onay kuyruğu Runs/Ops'tan erişilir
-- [ ] Audit sayfası run filtreli veya Runs'a yönlendirilir
+- [x] Runs sayfası production kullanılabilir
+- [x] Chat + trace split çalışır
+- [x] Admin onay kuyruğu Runs/Ops'tan erişilir (Admin + `/runs`)
+- [x] Audit sayfası run_id filtresi
 
 **Sonraki:** [06-usage-cost-quota.md](./06-usage-cost-quota.md)

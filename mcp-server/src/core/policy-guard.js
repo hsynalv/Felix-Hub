@@ -48,6 +48,8 @@ export function loadPresetsAtStartup() {
       if (preset.enabled !== false) {
         approvalStore.addRule({
           pattern: preset.pattern,
+          toolPattern: preset.toolPattern,
+          environment: preset.environment,
           action: preset.action,
           description: preset.description ?? `Preset: ${preset.id}`,
           scope: preset.scope ?? "write",
@@ -124,7 +126,10 @@ export function policyGuardrailMiddleware(req, res, next) {
     ? `key:${req.authScopes?.join(",") || "read"}`
     : "anonymous";
 
-  const result = evaluate(req.method, req.path, req.body, requestedBy);
+  const result = evaluate(req.method, req.path, req.body, requestedBy, {
+    environment: req.projectEnv || process.env.HUB_ENV || process.env.NODE_ENV,
+    projectId: req.projectId,
+  });
 
   if (result.allowed) {
     return next();

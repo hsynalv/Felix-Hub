@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Menu, Sparkles } from "lucide-react";
+import { Bot, Menu, PanelRight, Sparkles } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatComposer, type ChatComposerHandle } from "@/components/chat/ChatComposer";
+import { RunTracePanel, dispatchRunStepEvent } from "@/components/chat/RunTracePanel";
 import { apiGet, type ChatModelsData, type PluginInfo } from "@/lib/api-client";
 import { getConversation, updateConversation } from "@/lib/conversations-api";
 import {
@@ -79,6 +80,8 @@ export function ChatPage() {
     ...DEFAULT_CONVERSATION_SETTINGS,
   });
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(() => searchParams.get("run"));
+  const [traceOpen, setTraceOpen] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePlugin, setActivePlugin] = useState<string | null>(null);
   const approvalResolve = useRef<((v: boolean) => void) | null>(null);
@@ -253,8 +256,24 @@ export function ChatPage() {
           if (data.conversationId && typeof data.conversationId === "string") {
             resolvedConversationId = data.conversationId;
             if (!conversationId) {
-              setSearchParams({ c: data.conversationId }, { replace: true });
+              const params: Record<string, string> = { c: data.conversationId };
+              if (typeof data.runId === "string") params.run = data.runId;
+              setSearchParams(params, { replace: true });
             }
+          }
+          if (typeof data.runId === "string") {
+            setActiveRunId(data.runId);
+          }
+        },
+        onRunStep: (data) => {
+          if (typeof data.runId === "string") {
+            dispatchRunStepEvent({
+              runId: data.runId,
+              type: typeof data.type === "string" ? data.type : "tool",
+              toolName: typeof data.toolName === "string" ? data.toolName : undefined,
+              phase: typeof data.phase === "string" ? data.phase : undefined,
+              status: typeof data.status === "string" ? data.status : "pending",
+            });
           }
         },
         onToken: (t) => {
@@ -444,6 +463,15 @@ export function ChatPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-xl"
+                title="Run trace"
+                onClick={() => setTraceOpen((o) => !o)}
+              >
+                <PanelRight className="h-4 w-4" />
+              </Button>
               <ChatInstructionsSheet
                 settings={chatSettings}
                 persistenceEnabled={modelsData?.persistenceEnabled !== false}
@@ -524,6 +552,12 @@ export function ChatPage() {
             onTtsToggle={tts.toggle}
           />
         </div>
+
+        {traceOpen && (
+          <div className="hidden h-full min-h-0 w-72 shrink-0 border-l border-border/60 bg-card/30 lg:flex xl:w-80">
+            <RunTracePanel runId={activeRunId} live={streaming} className="w-full" />
+          </div>
+        )}
       </div>
 
       <Dialog open={!!approval} onOpenChange={(open) => !open && handleApproval(false)}>

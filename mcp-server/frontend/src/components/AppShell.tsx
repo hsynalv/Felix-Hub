@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bot,
   Brain,
+  GitBranch,
   Home,
   LayoutGrid,
   Menu,
@@ -39,6 +40,7 @@ import { useAuth } from "@/providers/AuthProvider";
 const nav = [
   { to: "/", label: "Panel", icon: Home },
   { to: "/chat", label: "Sohbet", icon: Bot },
+  { to: "/runs", label: "Runs", icon: GitBranch },
   { to: "/usage", label: "Kullanım", icon: BarChart3 },
   { to: "/brain", label: "Brain", icon: Brain },
   { to: "/tools", label: "Araçlar", icon: Wrench },
@@ -52,6 +54,7 @@ const nav = [
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Kontrol Paneli",
   "/chat": "Sohbet",
+  "/runs": "Agent Runs",
   "/usage": "Kullanım",
   "/brain": "Brain",
   "/tools": "Araçlar",

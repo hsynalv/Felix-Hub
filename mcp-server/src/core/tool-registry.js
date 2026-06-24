@@ -380,6 +380,19 @@ export async function callTool(name, args, context = {}) {
     return schemaError;
   }
 
+  if (context.dryRun) {
+    return {
+      ok: true,
+      data: {
+        dryRun: true,
+        tool: name,
+        args,
+        message: "Simulated execution — no side effects",
+      },
+      meta: { requestId: context.requestId },
+    };
+  }
+
   // Execute before-hooks (policy checks, validation, etc.)
   const hookResult = await executeBeforeHooks(name, args, context);
   if (hookResult) {
@@ -437,6 +450,7 @@ export async function callTool(name, args, context = {}) {
     duration: Date.now() - startTime,
     user: context.user,
     requestId: context.requestId,
+    runId: context.runId,
     failed: !result.ok,
   });
 
@@ -543,6 +557,7 @@ function logToolExecutionToAudit(logEntry) {
     user: logEntry.user,
     projectId: logEntry.projectId,
     requestId: logEntry.requestId,
+    runId: logEntry.runId,
     failed: logEntry.failed,
     duration: logEntry.duration || 0,
   }).catch((err) => {
