@@ -30,6 +30,18 @@ async function syncMemoryToPersistence(memoryId, action, content = null) {
   }
 }
 
+function queueObsidianExport(mem) {
+  import("./brain.obsidian.js")
+    .then((mod) => mod.exportMemory(mem))
+    .catch(() => {});
+}
+
+function queueObsidianDelete(mem) {
+  import("./brain.obsidian.js")
+    .then((mod) => mod.deleteMemoryFromVault(mem))
+    .catch(() => {});
+}
+
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 const NS              = process.env.BRAIN_NAMESPACE || process.env.BRAIN_USER_ID || "default";
@@ -132,6 +144,7 @@ export async function addMemory({
   await r.setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(mem));
   await r.sadd(MEM_INDEX_KEY, id);
   await syncMemoryToPersistence(id, "create", content);
+  queueObsidianExport(mem);
   return mem;
 }
 
@@ -167,14 +180,17 @@ export async function updateMemory(id, fields) {
 
   await r.setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(updated));
   await syncMemoryToPersistence(id, "update", updated.content);
+  queueObsidianExport(updated);
   return updated;
 }
 
 /** Delete a memory entry and remove it from the index. */
 export async function deleteMemory(id) {
+  const existing = await getMemory(id);
   await getRedis().del(memKey(id));
   await getRedis().srem(MEM_INDEX_KEY, id);
   await syncMemoryToPersistence(id, "delete");
+  if (existing) queueObsidianDelete(existing);
   return { deleted: true, id };
 }
 

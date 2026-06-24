@@ -1,13 +1,21 @@
-# Faz 3 — Obsidian Bellek Görselleştirme
+# Faz 3 — Brain Memory UI (+ opsiyonel Obsidian export)
+
+> **Pivot (2026-06-24):** Birincil teslimat hub-içi `/brain` React UI (liste, markdown CRUD, filtreler). Obsidian vault export **ikincil/opsiyonel** (Faz 3C). Kullanım: [brain-ui.md](../brain-ui.md).
 
 **Öncelik:** 3 / 5  
 **Karmaşıklık:** M  
-**Durum:** Planlandı  
+**Durum:** Tamamlandı (3A + 3B + 3C kod)  
 **Gate:** Faz 2 tamamlanmadan başlanmaz
 
 ---
 
-## Hedef
+## Hedef (güncel)
+
+Kullanıcı hub içinde brain belleklerini görsün, filtrelesin ve markdown olarak düzenlesin. Obsidian yalnızca “dışarı aktar” isteyenler için opsiyonel kalır.
+
+*(Aşağıdaki Obsidian odaklı plan orijinal Faz 3 taslağıdır; export `brain.obsidian.js` ile 3C kapsamında uygulandı.)*
+
+## Eski hedef (Obsidian-first — superseded)
 
 Brain plugin'in Redis'te tuttuğu bellek verilerini **Obsidian vault** formatında görselleştirmek ve export etmek. Kullanıcı ikinci beyin (second brain) workflow'unu Obsidian graph, backlink ve tag'lerle kullanabilsin.
 

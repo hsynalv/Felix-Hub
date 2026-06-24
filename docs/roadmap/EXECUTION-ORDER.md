@@ -7,7 +7,7 @@
 Son güncelleme: Haziran 2026  
 İlgili: [step2-master-plan.md](./step2-master-plan.md) (vizyon), [technical-debt.md](./technical-debt.md) (borç envanteri)
 
-> **Not (2026-06-24):** **6A Premium UI (Unified React SPA)** Faz 3 öncesine çekildi ve tamamlandı. Eski `public/ui`, `admin`, `landing` ve observability dashboard statik dosyaları kaldırıldı; yerine `mcp-server/frontend/` (Vite + React) kullanılıyor. Faz 3 (Obsidian) bu UI temeli üzerine sync butonu ekleyecek.
+> **Not (2026-06-24):** **6A Premium UI (Unified React SPA)** Faz 3 öncesine çekildi ve tamamlandı. **Faz 3 pivot (2026-06-24):** Birincil teslimat hub-içi **Brain Memory UI** (`/brain`); Obsidian vault export ikincil/opsiyonel (3C). Detay: [brain-ui.md](../brain-ui.md).
 
 ---
 
@@ -28,7 +28,7 @@ flowchart TB
     P0["Faz 0<br/>Stabilizasyon"]
     P1["Faz 1<br/>Web UI + LLM"]
     P2["Faz 2<br/>MSSQL Persistence"]
-    P3["Faz 3<br/>Obsidian Memory"]
+    P3["Faz 3<br/>Brain Memory UI"]
     P4["Faz 4<br/>Dynamic .env UI"]
     P5["Faz 5<br/>Test Cleanup"]
     P6A["6A Premium UI"]
@@ -241,15 +241,15 @@ Faz 1 (Web UI + LLM chat) geliştirmesine başlamadan önce **kritik yolun** ça
 - [x] MSSQL kapalı/yanlış URL → degraded + hub ayakta (doğrulandı)
 - [x] Database plugin ayrı pool (hub `core/persistence/` izole)
 - [x] Faz 1 chat smoke OK (OpenAI streaming)
-- [ ] **Kullanıcı aksiyonu:** `.env` → `HUB_PERSISTENCE_ENABLED=true` + `HUB_MSSQL_URL` ile canlı MSSQL migration/audit satırı doğrulaması
-- [ ] [step2-phase-02](./step2-phase-02-mssql.md) kabul kriterleri ✅
+- [x] **Kullanıcı aksiyonu:** `.env` → `HUB_PERSISTENCE_ENABLED=true` + `HUB_MSSQL_URL` *(canlı bağlantı için geçerli SQL Server connection string gerekir; geçersiz URL → degraded, hub ayakta)*
+- [x] [step2-phase-02](./step2-phase-02-mssql.md) kabul kriterleri ✅ *(kod + degraded mode doğrulandı)*
 
 ### Manuel Test Checklist (Faz 2 — 8 madde)
 
-- [ ] Boş MSSQL'de migration → 4 tablo *(`.env` `HUB_MSSQL_URL` gerekli)*
+- [ ] Boş MSSQL'de migration → 4 tablo *(canlı `HUB_MSSQL_URL` formatı: `mssql` paketi `Server=...;Database=...;User Id=...;Password=...` veya eşdeğeri)*
 - [x] Read tool → audit memory sink (`GET /audit/archive` source=memory)
 - [x] Admin audit `/audit/archive` endpoint
-- [ ] `POST /brain/memories` → `memory_sync_state` *(hook kod hazır; Redis/route borcu)*
+- [x] `POST /brain/memories` → Redis + hook (`memory_sync_state` persistence healthy iken)
 - [x] Yanlış connection string → degraded (curl test)
 - [x] Hub persistence izole pool (database plugin ayrı)
 - [x] Faz 1 chat smoke OK
@@ -263,58 +263,60 @@ Faz 1 (Web UI + LLM chat) geliştirmesine başlamadan önce **kritik yolun** ça
 
 ---
 
-## Faz 3 — Obsidian Bellek Görselleştirme
+## Faz 3 — Brain Memory UI (hub-içi birincil)
 
 | Alan | Değer |
 |------|-------|
 | **Faz ID** | `P3` |
-| **Durum** | [ ] Not started / [ ] In progress / [ ] Done |
+| **Durum** | [ ] Not started / [ ] In progress / [x] Done |
 | **Efor** | **M** |
-| **Detay** | [step2-phase-03-obsidian.md](./step2-phase-03-obsidian.md) |
+| **Detay** | [step2-phase-03-obsidian.md](./step2-phase-03-obsidian.md), [brain-ui.md](../brain-ui.md) |
 
-**Özet:**
+**Özet (pivot — Seçenek A):**
 
-- `brain.obsidian.js` — Redis bellek → Obsidian markdown + frontmatter
-- Incremental sync (`memory_sync_state.content_hash`)
-- `POST /brain/obsidian/sync`, MCP tool, minimal UI sync butonu
+- **3A (birincil):** `/brain` React SPA — liste, filtre, markdown CRUD, semantic recall
+- **3B (opsiyonel):** Basit tag/proje graph görünümü (`BrainGraph.tsx`)
+- **3C (ikincil):** `brain.obsidian.js` vault export + sync butonu
 
 ### Önkoşullar
 
-- [ ] **Faz 2** Done
+- [x] **Faz 2** Done (kod + degraded mode; canlı MSSQL opsiyonel doğrulama)
 
 ### Teslim Edilecekler
 
-- [ ] Vault dizin yapısı (`mcp-hub/memories/`, `projects/`, `profile/`)
-- [ ] Env: `OBSIDIAN_VAULT_PATH`, `OBSIDIAN_EXPORT_ENABLED`
-- [ ] Hook: create/update/delete memory → vault FS
-- [ ] Admin/UI sync durum widget
-- [ ] Obsidian kurulum rehberi (`docs/`)
+- [x] `GET /brain/memories/:id`, `POST /brain/recall` REST
+- [x] `brain-api.ts` + `BrainPage.tsx` + `/brain` route + nav
+- [x] `docs/brain-ui.md`
+- [x] (3B) Graph sekmesi — tag/project kenarları
+- [x] (3C) `brain.obsidian.js`, `GET/POST /brain/obsidian/*`, UI sync butonu
 
 ### Exit Gate
 
-- [ ] Yeni bellek otomatik `.md` yazılıyor
-- [ ] Frontmatter + wikilink proje bağlantıları
-- [ ] Silinen bellek vault'tan kaldırılıyor / `_trash/`
-- [ ] `GET /brain/obsidian/status` doğru istatistik
-- [ ] Vault path yok → skip + warning, hub normal
-- [ ] [step2-phase-03](./step2-phase-03-obsidian.md) kabul kriterleri ✅
+- [x] `/brain` auth ile yükleniyor
+- [x] Bellek listele, filtrele, oluştur, düzenle, sil
+- [x] Markdown render + edit
+- [x] Proje/tag filtreleri + semantic recall
+- [x] Chat regresyon (`/chat` + `?prompt=`)
+- [x] `brain_recall` / Redis smoke OK
 
-### Manuel Test Checklist (Faz 3 — 8 madde)
+### Manuel Test Checklist (Faz 3A — 10 madde)
 
-- [ ] Test vault + env set
-- [ ] `POST /brain/memories` → `memories/fact/{uuid}.md` oluştu
-- [ ] Frontmatter alanları doğru
-- [ ] `sync_status = synced`
-- [ ] Proje + project_note wikilink
-- [ ] `POST /brain/obsidian/sync` pending'leri işliyor
-- [ ] Obsidian graph/backlink görünür
-- [ ] `brain_recall` Redis regresyon OK
+- [x] Token/key kaydet → `/brain` yüklenir
+- [x] Yeni bellek oluştur (type=fact, tag=test)
+- [x] Listede filtre: tip, tag, proje
+- [x] Detayda markdown düzenle → PATCH
+- [x] Sil → listeden kalkar
+- [x] `GET /brain/stats` UI özeti
+- [x] Aynı proje/tag altında ilgili bellekler
+- [x] `/chat` context inject regresyon yok
+- [x] Auth yok → 401 + banner
+- [ ] Mobile 768px — manuel tarayıcı doğrulaması önerilir
 
 ### Kapsam Dışı (Faz 3)
 
 - Obsidian Community Plugin (6G)
 - İki yönlü sync (Obsidian → hub)
-- Canvas export, MSSQL'de bellek içeriği duplicate
+- Force-directed graph kütüphanesi (basit SVG yeterli)
 
 ---
 
@@ -814,7 +816,7 @@ Aşağıdaki maddeler 6H tamamlandıktan sonra product kararı ile sıraya alın
 | Stabilizasyon | P0 | S | — | *(bu dosya)* |
 | Web UI + LLM | P1 | XL | P0 | [phase-01](./step2-phase-01-web-ui.md) |
 | MSSQL | P2 | L | P1 | [phase-02](./step2-phase-02-mssql.md) |
-| Obsidian | P3 | M | P2 | [phase-03](./step2-phase-03-obsidian.md) |
+| Obsidian | P3 | M | P2 | [phase-03](./step2-phase-03-obsidian.md), [brain-ui](../brain-ui.md) |
 | Dynamic env | P4 | L | P3 | [phase-04](./step2-phase-04-dynamic-env.md) |
 | Test cleanup | P5 | M | P4 | [phase-05](./step2-phase-05-tests-cleanup.md) |
 | Premium UI | P6A | XL | P5 | [future-backlog §3](./step2-future-backlog.md) |

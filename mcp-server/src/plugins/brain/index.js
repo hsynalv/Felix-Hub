@@ -41,6 +41,14 @@ import {
 } from "./brain.memory.js";
 
 import { buildContext, buildCompactContext } from "./brain.context.js";
+import { runRecall } from "./brain.recall.js";
+import {
+  exportMemory,
+  deleteMemoryFromVault,
+  syncAllToVault,
+  getObsidianStatus,
+  isExportEnabled,
+} from "./brain.obsidian.js";
 
 // ── Plugin Metadata ───────────────────────────────────────────────────────────
 
@@ -59,7 +67,10 @@ export const metadata = createMetadata({
     { method: "GET",    path: "/brain/profile",            description: "Get user profile",            scope: "read"  },
     { method: "PUT",    path: "/brain/profile",            description: "Update user profile",         scope: "write" },
     { method: "GET",    path: "/brain/memories",           description: "List / filter memories",      scope: "read"  },
-    { method: "POST",   path: "/brain/memories",           description: "Add a memory",                scope: "write" },
+    { method: "GET",    path: "/brain/memories/:id",       description: "Get memory by ID",              scope: "read"  },
+    { method: "POST",   path: "/brain/recall",             description: "Semantic memory search",        scope: "read"  },
+    { method: "POST",   path: "/brain/obsidian/sync",      description: "Export memories to Obsidian", scope: "write" },
+    { method: "GET",    path: "/brain/obsidian/status",    description: "Obsidian export status",        scope: "read"  },
     { method: "PATCH",  path: "/brain/memories/:id",       description: "Update a memory",             scope: "write" },
     { method: "DELETE", path: "/brain/memories/:id",       description: "Delete a memory",             scope: "write" },
     { method: "GET",    path: "/brain/projects",           description: "List projects",               scope: "read"  },
@@ -72,6 +83,11 @@ export const metadata = createMetadata({
 });
 
 const handleError = createPluginErrorHandler("brain");
+
+function pluginErrorResponse(req, res, err, operation) {
+  const standardized = handleError.wrap(err, operation);
+  res.status(standardized.statusCode || 500).json(standardized.serialize(req.requestId));
+}
 
 // ── Audit helper ─────────────────────────────────────────────────────────────
 
@@ -102,6 +118,15 @@ const memoryUpdateSchema = z.object({
 });
 
 const profileSchema  = z.record(z.string());
+
+const recallSchema = z.object({
+  query:     z.string().min(1),
+  type:      z.enum(["fact", "decision", "preference", "event", "project_note"]).optional(),
+  projectId: z.string().optional(),
+  tags:      z.array(z.string()).optional(),
+  limit:     z.number().int().min(1).max(50).optional(),
+  minScore:  z.number().min(0).max(1).optional(),
+});
 
 const projectSchema  = z.object({
   name:         z.string().min(1),
@@ -170,7 +195,7 @@ export function register(app) {
         },
       });
     } catch (err) {
-      res.status(500).json(handleError(err, "health"));
+      pluginErrorResponse(req, res, err, "health");
     }
   });
 
@@ -195,7 +220,7 @@ export function register(app) {
         },
       });
     } catch (err) {
-      res.status(500).json(handleError(err, "stats"));
+      pluginErrorResponse(req, res, err, "stats");
     }
   });
 
@@ -205,7 +230,7 @@ export function register(app) {
     try {
       res.json({ ok: true, data: await getProfile() });
     } catch (err) {
-      res.status(500).json(handleError(err, "get_profile"));
+      pluginErrorResponse(req, res, err, "get_profile");
     }
   });
 
@@ -217,7 +242,7 @@ export function register(app) {
       await brainAudit("update_profile", { actor: req.user?.sub });
       res.json({ ok: true, data: updated });
     } catch (err) {
-      res.status(500).json(handleError(err, "update_profile"));
+      pluginErrorResponse(req, res, err, "update_profile");
     }
   });
 
@@ -235,7 +260,22 @@ export function register(app) {
       });
       res.json({ ok: true, data: { total: mems.length, memories: mems } });
     } catch (err) {
-      res.status(500).json(handleError(err, "list_memories"));
+      pluginErrorResponse(req, res, err, "list_memories");
+    }
+  });
+
+  router.get("/memories/:id", requireScope("read"), async (req, res) => {
+    try {
+      const mem = await getMemory(req.params.id);
+      if (!mem) {
+        return res.status(404).json({
+          ok: false,
+          error: { code: "not_found", message: "Memory not found" },
+        });
+      }
+      res.json({ ok: true, data: mem });
+    } catch (err) {
+      pluginErrorResponse(req, res, err, "get_memory");
     }
   });
 
@@ -263,7 +303,7 @@ export function register(app) {
       await brainAudit("add_memory", { actor: req.user?.sub, memId: mem.id, type: mem.type });
       res.status(201).json({ ok: true, data: mem });
     } catch (err) {
-      res.status(500).json(handleError(err, "add_memory"));
+      pluginErrorResponse(req, res, err, "add_memory");
     }
   });
 
@@ -286,7 +326,7 @@ export function register(app) {
       await brainAudit("update_memory", { actor: req.user?.sub, memId: req.params.id });
       res.json({ ok: true, data: updated });
     } catch (err) {
-      res.status(500).json(handleError(err, "update_memory"));
+      pluginErrorResponse(req, res, err, "update_memory");
     }
   });
 
@@ -296,7 +336,45 @@ export function register(app) {
       await brainAudit("delete_memory", { actor: req.user?.sub, memId: req.params.id });
       res.json({ ok: true, data: result });
     } catch (err) {
-      res.status(500).json(handleError(err, "delete_memory"));
+      pluginErrorResponse(req, res, err, "delete_memory");
+    }
+  });
+
+  router.post("/recall", requireScope("read"), async (req, res) => {
+    try {
+      const parsed = recallSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.flatten() });
+      const data = await runRecall(parsed.data);
+      res.json({ ok: true, data });
+    } catch (err) {
+      pluginErrorResponse(req, res, err, "recall");
+    }
+  });
+
+  router.get("/obsidian/status", requireScope("read"), async (req, res) => {
+    try {
+      res.json({ ok: true, data: getObsidianStatus() });
+    } catch (err) {
+      pluginErrorResponse(req, res, err, "obsidian_status");
+    }
+  });
+
+  router.post("/obsidian/sync", requireScope("write"), async (_req, res) => {
+    try {
+      if (!isExportEnabled()) {
+        return res.status(400).json({
+          ok: false,
+          error: {
+            code: "obsidian_disabled",
+            message: "Set OBSIDIAN_EXPORT_ENABLED=true and OBSIDIAN_VAULT_PATH",
+          },
+        });
+      }
+      const result = await syncAllToVault();
+      await brainAudit("obsidian_sync", { synced: result.synced, errors: result.errors });
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      pluginErrorResponse(req, res, err, "obsidian_sync");
     }
   });
 
@@ -307,7 +385,7 @@ export function register(app) {
       const projects = await listProjects(req.query.status || undefined);
       res.json({ ok: true, data: { total: projects.length, projects } });
     } catch (err) {
-      res.status(500).json(handleError(err, "list_projects"));
+      pluginErrorResponse(req, res, err, "list_projects");
     }
   });
 
@@ -319,7 +397,7 @@ export function register(app) {
       await brainAudit("register_project", { actor: req.user?.sub, projectName: project.name });
       res.status(201).json({ ok: true, data: project });
     } catch (err) {
-      res.status(500).json(handleError(err, "register_project"));
+      pluginErrorResponse(req, res, err, "register_project");
     }
   });
 
@@ -330,7 +408,7 @@ export function register(app) {
       await brainAudit("update_project", { actor: req.user?.sub, slug: req.params.slug });
       res.json({ ok: true, data: updated });
     } catch (err) {
-      res.status(500).json(handleError(err, "update_project"));
+      pluginErrorResponse(req, res, err, "update_project");
     }
   });
 
@@ -344,7 +422,7 @@ export function register(app) {
         : await buildContext({ task, projectId, includeFs, maxMemories });
       res.json({ ok: true, data: ctx });
     } catch (err) {
-      res.status(500).json(handleError(err, "get_context"));
+      pluginErrorResponse(req, res, err, "get_context");
     }
   });
 
@@ -360,7 +438,7 @@ export function register(app) {
       await brainAudit("index_filesystem", { actor: req.user?.sub, paths, totalFiles: result.totalFiles });
       res.json({ ok: true, data: result });
     } catch (err) {
-      res.status(500).json(handleError(err, "index_filesystem"));
+      pluginErrorResponse(req, res, err, "index_filesystem");
     }
   });
 
@@ -373,7 +451,7 @@ export function register(app) {
       const result = await summarizeAndSaveSession({ sessionId, messages, projectId });
       res.json({ ok: true, data: result });
     } catch (err) {
-      res.status(500).json(handleError(err, "summarize_session"));
+      pluginErrorResponse(req, res, err, "summarize_session");
     }
   });
 
@@ -533,53 +611,8 @@ export const tools = [
     },
     handler: async (args) => {
       try {
-        const limit = Math.min(args.limit || 10, 50);
-
-        // Semantic search (fix-9: use actual score for ranking later)
-        const ragResult = await useTool("rag_search", {
-          query:    args.query,
-          limit:    limit * 2,
-          minScore: args.minScore ?? 0.1,
-        }, { workspaceId: "brain-memories" });
-
-        const semanticMap = new Map(); // id → semantic score
-        if (ragResult.ok) {
-          for (const r of ragResult.data?.results || []) {
-            semanticMap.set(r.id, r.score);
-          }
-        }
-
-        // Redis-based filter
-        const filtered = await listMemories({
-          type:      args.type      || undefined,
-          projectId: args.projectId || undefined,
-          tags:      args.tags      || undefined,
-          limit:     limit * 4,
-        });
-
-        // fix-9: combined ranking formula
-        const ranked = filtered
-          .map(m => ({
-            ...m,
-            _score: recallScore(
-              semanticMap.get(m.id) || 0,
-              m.importance,
-              m.createdAt,
-            ),
-          }))
-          .sort((a, b) => b._score - a._score)
-          .slice(0, limit)
-          .map(({ _score, ...m }) => m);
-
-        return {
-          ok: true,
-          data: {
-            query:        args.query,
-            total:        ranked.length,
-            semanticHits: semanticMap.size,
-            memories:     ranked,
-          },
-        };
+        const data = await runRecall(args);
+        return { ok: true, data };
       } catch (err) {
         return { ok: false, error: { code: "brain_recall_failed", message: err.message } };
       }

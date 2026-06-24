@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
@@ -37,8 +38,9 @@ function nextMessageId() {
 }
 
 export function ChatPage() {
+  const [searchParams] = useSearchParams();
   const [messages, setMessages] = useState<Array<ChatMessage & { id: string }>>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => searchParams.get("prompt") || "");
   const [streaming, setStreaming] = useState(false);
   const [model, setModel] = useState("");
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);

@@ -94,6 +94,15 @@ function responseEnvelopeMiddleware(req, res, next) {
       }
     }
 
+    // Plugin routes often return { ok, data } without meta — normalize once.
+    if (isPlainObject(payload) && payload.ok === true && "data" in payload && !payload.meta) {
+      return originalJson({
+        ok: true,
+        data: payload.data,
+        meta: { requestId },
+      });
+    }
+
     // Success normalization.
     const out = {
       ok: true,
@@ -646,6 +655,7 @@ export async function createServer() {
     "/ui/chat",
     "/ui/token",
     "/whoami",
+    "/brain",
     "/observability/health",
     "/observability/metrics",
     "/observability/errors",

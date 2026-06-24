@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
   Bot,
+  Brain,
   Home,
   LayoutGrid,
   Menu,
@@ -29,6 +30,7 @@ import { useToast } from "@/providers/ToastProvider";
 const nav = [
   { to: "/", label: "Dashboard", icon: Home },
   { to: "/chat", label: "Chat", icon: Bot },
+  { to: "/brain", label: "Brain", icon: Brain },
   { to: "/tools", label: "Tools", icon: Wrench },
   { to: "/plugins", label: "Plugins", icon: LayoutGrid },
   { to: "/audit", label: "Audit", icon: Shield },
@@ -180,7 +182,9 @@ export function AppShell() {
         <main
           className={cn(
             "flex flex-1 flex-col min-h-0 p-4 md:p-6",
-            location.pathname === "/chat" ? "overflow-hidden" : "overflow-auto"
+            location.pathname === "/chat" || location.pathname === "/brain"
+              ? "overflow-hidden"
+              : "overflow-auto"
           )}
         >
           <AnimatePresence mode="wait">
@@ -190,7 +194,10 @@ export function AppShell() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
-              className={cn(location.pathname === "/chat" && "flex min-h-0 flex-1 flex-col")}
+              className={cn(
+                (location.pathname === "/chat" || location.pathname === "/brain") &&
+                  "flex min-h-0 flex-1 flex-col"
+              )}
             >
               <Outlet />
             </motion.div>

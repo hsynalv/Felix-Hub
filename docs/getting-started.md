@@ -115,6 +115,7 @@ npm run dev:all      # API + Vite eşzamanlı (concurrently)
 |-------|--------|
 | `/` | Dashboard — health, plugin/tool sayıları |
 | `/chat` | LLM streaming sohbet + MCP tool loop |
+| `/brain` | Brain bellek gezgini — liste, markdown CRUD, semantic arama ([brain-ui.md](./brain-ui.md)) |
 | `/tools` | Tool registry |
 | `/plugins` | Plugin grid |
 | `/audit` | Audit archive + request logs |
