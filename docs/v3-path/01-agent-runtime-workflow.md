@@ -1,7 +1,8 @@
 # 01 — Agent Runtime / Workflow Katmanı
 
-> **Status:** v1 done (2026-06-24) — v2 backlog Faz 5  
-> **Öncelik:** P0 (Faz 1 tamamlandı); v2 = Faz 5  
+> **Status:** mvp_done (v3.6) — formal state machine guards v3.7  
+> **Öncelik:** P0 tamamlandı; v2 engine MVP done  
+> **Last reviewed:** 2026-06-25  
 > **Bağımlılık:** [10-production-hardening.md](./10-production-hardening.md) (jobs + audit tek kaynak)
 
 ---
@@ -16,15 +17,16 @@ Tool hub'un üzerine **agent çalıştırma motoru** eklemek: çok adımlı plan
 
 ## Mevcut durum
 
-| Var | Eksik |
-|-----|-------|
-| `chat-orchestrator.js` — LLM + tool loop, SSE | Run entity yok (sadece conversation) |
-| `project-orchestrator` — `project_init` vb. | Genel workflow engine değil |
-| `jobs.js` — async job queue | Agent run ≠ job (ayrı modeller) |
-| `audit/` — tool archive | Run ile ilişkilendirilmiş değil |
-| Chat approval (SSE `onApproval`) | Checkpoint persistence + resume |
+| Var | Eksik / backlog |
+|-----|-----------------|
+| `agent_runs` + `agent_run_steps` + checkpoints (MSSQL + memory) | Formal status transition guards |
+| `workflow-executor.js` — conditional, checkpoint, compensate | Replay full re-execution |
+| `run-orchestrator.js` — chat + workflow step trace | Cost waterfall chart |
+| SSE run events + `/runs` UI (approval/resume/retry) | — |
+| `workflow-templates.js` — repo-ship-feature, incident-triage | — |
+| Checkpoint resume — `current_step` + checkpoint payload (v3.6) | — |
 
-**İlgili dosyalar:** `mcp-server/src/core/chat-orchestrator.js`, `mcp-server/src/core/jobs.js`, `mcp-server/src/plugins/project-orchestrator/index.js`
+**İlgili dosyalar:** `mcp-server/src/core/agent-runs/`, `mcp-server/src/core/chat-orchestrator.js`
 
 ---
 

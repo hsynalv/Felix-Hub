@@ -404,6 +404,58 @@ export async function createCheckpoint(runId, { stepId = null, approvalId = null
   return checkpoint;
 }
 
+export async function updateRunCurrentStep(runId, stepIndex) {
+  const idx = Number(stepIndex);
+  if (!Number.isFinite(idx) || idx < 0) return null;
+
+  if (useMemory()) {
+    const run = memoryRuns.get(runId);
+    if (!run) return null;
+    run.currentStep = idx;
+    run.updatedAt = new Date().toISOString();
+    return { ...run, stepCount: (memorySteps.get(runId) || []).length };
+  }
+
+  await persistenceQuery(
+    `UPDATE agent_runs SET current_step = @stepIndex, updated_at = SYSUTCDATETIME() WHERE id = @runId`,
+    { runId, stepIndex: idx }
+  );
+  return getRun(runId);
+}
+
+export async function getLatestCheckpoint(runId, { type = null } = {}) {
+  if (useMemory()) {
+    const list = memoryCheckpoints.get(runId) || [];
+    const filtered = type ? list.filter((c) => c.type === type) : list;
+    return filtered.length ? filtered[filtered.length - 1] : null;
+  }
+
+  const inputs = { runId };
+  let typeFilter = "";
+  if (type) {
+    typeFilter = " AND checkpoint_type = @type";
+    inputs.type = type;
+  }
+  const result = await persistenceQuery(
+    `SELECT TOP 1 id, run_id, step_id, approval_id, checkpoint_type, payload_json, created_at
+     FROM agent_run_checkpoints
+     WHERE run_id = @runId${typeFilter}
+     ORDER BY created_at DESC`,
+    inputs
+  );
+  const row = result.recordset[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    runId: row.run_id,
+    stepId: row.step_id,
+    approvalId: row.approval_id,
+    type: row.checkpoint_type,
+    payload: parseJson(row.payload_json),
+    createdAt: row.created_at,
+  };
+}
+
 /** Test isolation */
 export function resetAgentRunsForTests() {
   memoryRuns.clear();

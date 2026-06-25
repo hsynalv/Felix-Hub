@@ -28,6 +28,19 @@ export interface AgentRun {
     totalTokens?: number;
     estimatedCostUsd?: number;
   } | null;
+  stepUsage?: Array<{
+    stepIndex: number;
+    type?: string;
+    toolName?: string | null;
+    status?: string;
+    durationMs?: number | null;
+    usage?: {
+      totalTokens?: number;
+      estimatedCostUsd?: number;
+      promptTokens?: number;
+      completionTokens?: number;
+    } | null;
+  }>;
 }
 
 export interface RunStep {

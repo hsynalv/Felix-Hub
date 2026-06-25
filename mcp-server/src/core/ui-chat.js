@@ -72,6 +72,7 @@ export function registerUiChatRoutes(app) {
   app.get("/ui/chat/conversations", requireScope("read"), async (req, res) => {
     if (!isPersistenceHealthy()) return persistenceError(res);
     try {
+      res.setHeader("Cache-Control", "no-store");
       const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
       const offset = parseInt(req.query.offset, 10) || 0;
       const projectId = req.query.projectId || req.projectId || null;
@@ -103,6 +104,7 @@ export function registerUiChatRoutes(app) {
   app.get("/ui/chat/conversations/:id", requireScope("read"), async (req, res) => {
     if (!isPersistenceHealthy()) return persistenceError(res);
     try {
+      res.setHeader("Cache-Control", "no-store");
       const conversation = await getConversation(req.params.id);
       if (!conversation) {
         return res.status(404).json({ ok: false, error: { code: "not_found", message: "Conversation not found" } });

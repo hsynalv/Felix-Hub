@@ -13,6 +13,8 @@ import {
 import {
   getProjectContext,
   getProjectChanges,
+  searchContextForGoal,
+  getProjectImpact,
 } from "../../core/project-context/project-context.service.js";
 import { syncProjectIndex } from "../../core/project-context/project-indexer.js";
 import { submitJob } from "../../core/jobs.js";
@@ -30,6 +32,8 @@ export const endpoints = [
   { method: "GET",    path: "/projects/:name",      description: "Get project detail",            scope: "read"   },
   { method: "GET",    path: "/projects/:name/context", description: "Project context graph",     scope: "read"   },
   { method: "GET",    path: "/projects/:name/changes", description: "Recent project changes",   scope: "read"   },
+  { method: "GET",    path: "/projects/:name/ask", description: "Goal-oriented context search", scope: "read" },
+  { method: "GET",    path: "/projects/:name/impact", description: "Path impact analysis", scope: "read" },
   { method: "PUT",    path: "/projects/:name/links", description: "Update project links",        scope: "write"  },
   { method: "POST",   path: "/projects/:name/sync", description: "Sync project index",         scope: "write"  },
   { method: "GET",    path: "/projects/:name/:env", description: "Get resolved env config",      scope: "read"   },
@@ -166,6 +170,33 @@ export function register(app) {
       res.json({ ok: true, data });
     } catch (err) {
       res.status(500).json({ ok: false, error: "changes_failed", message: err.message });
+    }
+  });
+
+  router.get("/:name/ask", requireScope("read"), async (req, res) => {
+    try {
+      const q = req.query.q || req.query.goal;
+      if (!q) {
+        return res.status(400).json({ ok: false, error: "invalid_request", message: "Query param q required" });
+      }
+      const limit = Math.min(parseInt(req.query.limit, 10) || 8, 20);
+      const data = await searchContextForGoal(req.params.name, String(q), { limit });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: "ask_failed", message: err.message });
+    }
+  });
+
+  router.get("/:name/impact", requireScope("read"), async (req, res) => {
+    try {
+      const path = req.query.path;
+      if (!path) {
+        return res.status(400).json({ ok: false, error: "invalid_request", message: "Query param path required" });
+      }
+      const data = await getProjectImpact(req.params.name, String(path));
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: "impact_failed", message: err.message });
     }
   });
 

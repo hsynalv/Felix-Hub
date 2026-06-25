@@ -1,6 +1,7 @@
 # 07 — Eval ve Regression Sistemi
 
-> **Status:** faz_a_done (Faz 3 exit)  
+> **Status:** mvp_done (v3.6) — 4 golden traces + schema snapshot; nightly → v3.7  
+> **Last reviewed:** 2026-06-25  
 > **Öncelik:** P2 (Faz 3)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md), [05-connector-marketplace.md](./05-connector-marketplace.md)
 

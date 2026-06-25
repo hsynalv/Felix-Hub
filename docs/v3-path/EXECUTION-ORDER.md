@@ -1,6 +1,6 @@
 # V3 Execution Order
 
-> **Son güncelleme:** 2026-06-24  
+> **Son güncelleme:** 2026-06-25  
 > **Kural:** Yeni pillar'a geçmeden önce bir önceki fazın **Exit criteria** tamamlanmış olmalı.
 
 ---
@@ -178,3 +178,31 @@ V3 Faz 5 (v3.4) tamamlandıktan sonra ürün yönü [V4 path](../v4-path/README.
 - **Uzun vade:** Eval Studio → Cost guardrails → Team packs
 
 Detay: [v4-path/EXECUTION-ORDER.md](../v4-path/EXECUTION-ORDER.md)
+
+---
+
+## Faz 6 — Kalan işler (v3.6) — **in progress**
+
+> **Not:** Faz 0–5 exit gate'leri **MVP seviyesinde** karşılandı. Bu faz dokümantasyon–kod hizalaması ve kalan ürün boşluklarını kapatır.
+
+| Sprint | İçerik | Exit | Durum |
+|--------|--------|------|-------|
+| 6.1 | Doc sync + `REMAINING-WORK.md` | Pillar Status/checkbox hizalı | done |
+| 6.2 | Checkpoint resume + workflow quota | Resume doğru adımdan; `assertRunQuota` | done |
+| 6.3 | Project switcher + Notion sync + ask/impact API | Chat/Runs header; REST sorguları | done |
+| 6.4 | Secrets audit + eval genişletme + step cost | Audit tablosu; 4 golden trace | done |
+| 6.5 | Sidecar persist + marketplace UI + polish | `sidecar_devices`; `/approvals` nav | done |
+
+**Exit gate (v3.6):**
+- [x] `REMAINING-WORK.md` ile kod durumu senkron
+- [x] Checkpoint `current_step` + resume from checkpoint payload
+- [x] `ProjectSwitcher` Chat + Runs
+- [x] `GET /projects/:name/ask` + `/impact`
+- [x] Notion indexer dalı
+- [x] Workflow quota + step maliyet tablosu
+- [x] `settings_audit` migration + UI
+- [x] 4 golden trace + plugin meta snapshot CI
+- [x] `dangerousCombinations` enable uyarısı
+- [x] Sidecar device persistence
+
+> **Milestone:** `v3.6` — V4 Faz 1'e geçiş için hazır. Bilinçli ertelenenler: [REMAINING-WORK.md](./REMAINING-WORK.md) → v3.7 / V4.

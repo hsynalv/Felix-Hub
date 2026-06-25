@@ -34,7 +34,7 @@ export async function listConversations(limit = 50) {
 }
 
 export async function getConversation(id: string) {
-  return apiGet<ConversationDetail>(`/ui/chat/conversations/${id}`);
+  return apiGet<ConversationDetail>(`/ui/chat/conversations/${encodeURIComponent(id)}`);
 }
 
 export async function createConversation(opts?: { title?: string; model?: string }) {
@@ -45,9 +45,9 @@ export async function updateConversation(
   id: string,
   opts: { title?: string; model?: string; metadata?: ConversationSettings | Record<string, unknown> }
 ) {
-  return apiPatch<ConversationDetail>(`/ui/chat/conversations/${id}`, opts);
+  return apiPatch<ConversationDetail>(`/ui/chat/conversations/${encodeURIComponent(id)}`, opts);
 }
 
 export async function deleteConversation(id: string) {
-  return apiDelete<{ id: string; archived: boolean }>(`/ui/chat/conversations/${id}`);
+  return apiDelete<{ id: string; archived: boolean }>(`/ui/chat/conversations/${encodeURIComponent(id)}`);
 }

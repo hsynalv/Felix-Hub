@@ -1,6 +1,7 @@
 # 05 — Connector Marketplace (Kontrollü)
 
-> **Status:** faz_a_b_done (Faz 3 exit)  
+> **Status:** mvp_done (v3.6) — dangerousCombinations UI done  
+> **Last reviewed:** 2026-06-25  
 > **Öncelik:** P2 (Faz 3)  
 > **Bağımlılık:** [08-secrets-env-management.md](./08-secrets-env-management.md), [10-production-hardening.md](./10-production-hardening.md)
 

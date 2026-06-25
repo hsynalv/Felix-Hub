@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -51,10 +51,14 @@ function jobStateTone(state?: string) {
   return "bg-muted text-muted-foreground";
 }
 
-export function AdminPage() {
+export function AdminPage({ defaultTab = "approvals" }: { defaultTab?: "approvals" | "jobs" | "plugins" | "policy" }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [tab, setTab] = useState<"approvals" | "jobs" | "plugins" | "policy">("approvals");
+  const [tab, setTab] = useState<"approvals" | "jobs" | "plugins" | "policy">(defaultTab);
+
+  useEffect(() => {
+    setTab(defaultTab);
+  }, [defaultTab]);
 
   const { data: plugins = [] } = useQuery({
     queryKey: ["plugins"],

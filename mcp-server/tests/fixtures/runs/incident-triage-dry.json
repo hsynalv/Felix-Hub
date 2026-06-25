@@ -1,0 +1,12 @@
+{
+  "id": "golden-incident-triage-dry",
+  "templateId": "incident-triage",
+  "goal": "Incident triage dry-run",
+  "parameters": { "repo": "octocat/Hello-World" },
+  "expectedSteps": [
+    { "type": "tool", "toolName": "repo_summary" },
+    { "type": "tool", "toolName": "repo_recent_commits" },
+    { "type": "tool", "toolName": "repo_open_issues" }
+  ],
+  "orderStrict": true
+}

@@ -6,6 +6,7 @@ import { registerJobRunner } from "../jobs.js";
 import { getWorkflowTemplate } from "./workflow-templates.js";
 import { linkRunToJob } from "./agent-run-job.js";
 import { executeWorkflowRun } from "./workflow-executor.js";
+import { assertRunQuota } from "../usage/run-quota.js";
 
 export const WORKFLOW_RUN_JOB_TYPE = "workflow_run";
 
@@ -24,6 +25,8 @@ export function registerWorkflowRunJobRunner() {
     if (!runId) throw new Error("workflow_run requires runId");
 
     linkRunToJob(runId, job.id);
+
+    await assertRunQuota(context.projectId);
 
     return executeWorkflowRun({
       runId,

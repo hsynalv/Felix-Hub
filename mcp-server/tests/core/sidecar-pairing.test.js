@@ -18,19 +18,20 @@ describe("Sidecar pairing", () => {
     delete process.env.LOCAL_FS_ON_SERVER;
   });
 
-  it("pairs device with valid code", () => {
+  it("pairs device with valid code", async () => {
     const { code } = createPairingCode();
-    const result = consumePairingCode(code, {
+    const result = await consumePairingCode(code, {
       deviceName: "test-mac",
       baseUrl: "http://127.0.0.1:9477",
     });
     expect(result.ok).toBe(true);
     expect(result.authToken).toBeDefined();
-    expect(listSidecarDevices()[0].authToken).toBeDefined();
+    const devices = await listSidecarDevices();
+    expect(devices[0].authToken).toBeDefined();
   });
 
-  it("rejects invalid code", () => {
-    const result = consumePairingCode("000000", { baseUrl: "http://127.0.0.1:9477" });
+  it("rejects invalid code", async () => {
+    const result = await consumePairingCode("000000", { baseUrl: "http://127.0.0.1:9477" });
     expect(result.ok).toBe(false);
   });
 

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatComposer, type ChatComposerHandle } from "@/components/chat/ChatComposer";
@@ -70,8 +71,12 @@ function mapServerMessages(
 
 export function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const conversationId = searchParams.get("c");
-  const normalizedConversationId = normalizeConversationId(conversationId);
+  const urlConversationId = searchParams.get("c");
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    () => normalizeConversationId(urlConversationId)
+  );
+  const activeConversationIdRef = useRef(activeConversationId);
+  activeConversationIdRef.current = activeConversationId;
   const [messages, setMessages] = useState<Array<ChatMessage & { id: string; createdAt?: string }>>([]);
   const [input, setInput] = useState(() => searchParams.get("prompt") || "");
   const [streaming, setStreaming] = useState(false);
@@ -89,7 +94,6 @@ export function ChatPage() {
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePlugin, setActivePlugin] = useState<string | null>(null);
-  const [loadingConversation, setLoadingConversation] = useState(false);
   const [sidebarActiveId, setSidebarActiveId] = useState<string | null>(
     () => normalizeConversationId(searchParams.get("c")) ?? searchParams.get("c")
   );
@@ -105,7 +109,6 @@ export function ChatPage() {
   const activeRunIdRef = useRef<string | null>(searchParams.get("run"));
   const holdLocalMessagesRef = useRef(false);
   const pendingUrlRef = useRef<{ c?: string; run?: string } | null>(null);
-  const loadedConversationRef = useRef<string | null>(null);
   const toast = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -170,15 +173,15 @@ export function ChatPage() {
   });
 
   const conversationQuery = useQuery({
-    queryKey: ["conversation", normalizedConversationId],
-    queryFn: () => getConversation(conversationId!),
+    queryKey: ["conversation", activeConversationId],
+    queryFn: () => getConversation(activeConversationId!),
     enabled:
-      !!conversationId &&
-      !!normalizedConversationId &&
+      !!activeConversationId &&
       !streaming &&
       modelsData?.persistenceEnabled !== false,
     retry: false,
     staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: plugins = [] } = useQuery({
@@ -198,71 +201,68 @@ export function ChatPage() {
     [plugins]
   );
 
+  // URL → state (refresh, back/forward). Sidebar clicks update state first.
   useEffect(() => {
-    if (conversationId) {
-      const normalized = normalizeConversationId(conversationId) ?? conversationId;
+    const fromUrl = normalizeConversationId(searchParams.get("c"));
+    setActiveConversationId((current) =>
+      conversationIdsMatch(current, fromUrl) ? current : fromUrl
+    );
+    if (fromUrl) {
       setSidebarActiveId((prev) =>
-        prev && conversationIdsMatch(prev, conversationId) ? prev : normalized
+        prev && conversationIdsMatch(prev, fromUrl) ? prev : fromUrl
       );
     }
-  }, [conversationId]);
+  }, [searchParams]);
 
+  const applyConversationData = useCallback(
+    (id: string, data: Awaited<ReturnType<typeof getConversation>>) => {
+      if (!conversationIdsMatch(activeConversationIdRef.current, id)) return;
+      setMessages(mapServerMessages(data.messages ?? []));
+      if (data.metadata) {
+        setChatSettings(parseConversationSettings(data.metadata));
+      }
+      userSelectedConversationRef.current = null;
+    },
+    []
+  );
+
+  const loadConversation = useCallback(
+    async (id: string) => {
+      const normalized = normalizeConversationId(id) ?? id;
+      try {
+        const data = await qc.fetchQuery({
+          queryKey: ["conversation", normalized],
+          queryFn: () => getConversation(normalized),
+          staleTime: 0,
+        });
+        applyConversationData(normalized, data);
+      } catch (e) {
+        if (!conversationIdsMatch(activeConversationIdRef.current, normalized)) return;
+        toastRef.current.show(e instanceof Error ? e.message : "Sohbet yüklenemedi", "error");
+      }
+    },
+    [applyConversationData, qc]
+  );
+
+  // Populate from query cache (initial load, back/forward).
   useEffect(() => {
-    if (!conversationId) {
-      if (!holdLocalMessagesRef.current) setMessages([]);
-      setLoadingConversation(false);
-      loadedConversationRef.current = null;
-      return;
-    }
-
-    if (holdLocalMessagesRef.current) return;
-
-    if (loadedConversationRef.current !== normalizedConversationId) {
-      setMessages([]);
-      loadedConversationRef.current = normalizedConversationId;
-    }
-
-    setLoadingConversation(
-      conversationQuery.isPending || (conversationQuery.isFetching && !conversationQuery.data)
-    );
-  }, [
-    conversationId,
-    normalizedConversationId,
-    conversationQuery.isPending,
-    conversationQuery.isFetching,
-    conversationQuery.data,
-  ]);
-
-  useEffect(() => {
-    if (!conversationId || holdLocalMessagesRef.current || streaming) return;
-
-    if (conversationQuery.isError) {
-      setLoadingConversation(false);
-      return;
-    }
-
+    if (!activeConversationId || holdLocalMessagesRef.current || streaming) return;
     const data = conversationQuery.data;
-    if (!data || !conversationIdsMatch(data.id, conversationId)) return;
-
-    setMessages(mapServerMessages(data.messages ?? []));
-    if (data.metadata) {
-      setChatSettings(parseConversationSettings(data.metadata));
-    }
-    setLoadingConversation(false);
-    userSelectedConversationRef.current = null;
-  }, [conversationId, conversationQuery.data, conversationQuery.isError, streaming]);
+    if (!data || !conversationIdsMatch(data.id, activeConversationId)) return;
+    applyConversationData(activeConversationId, data);
+  }, [activeConversationId, applyConversationData, conversationQuery.data, streaming]);
 
   useEffect(() => {
-    if (!conversationId) {
+    if (!activeConversationId) {
       setChatSettings({ ...DEFAULT_CONVERSATION_SETTINGS });
     }
-  }, [conversationId]);
+  }, [activeConversationId]);
 
   useEffect(() => {
-    if (!conversationQuery.isError || !conversationId) return;
+    if (!conversationQuery.isError || !activeConversationId) return;
     const err = conversationQuery.error;
     toastRef.current.show(err instanceof Error ? err.message : "Sohbet yüklenemedi", "error");
-  }, [conversationQuery.isError, conversationQuery.error, conversationId]);
+  }, [conversationQuery.isError, conversationQuery.error, activeConversationId]);
 
   useEffect(() => {
     if (streaming) return;
@@ -283,32 +283,46 @@ export function ChatPage() {
       setStreamingMessageId(null);
       setActiveRunId(null);
       activeRunIdRef.current = null;
+      setMessages([]);
 
       if (id) {
         const normalized = normalizeConversationId(id) ?? id;
+        setActiveConversationId(normalized);
         setSidebarActiveId(normalized);
-        loadedConversationRef.current = null;
-        setMessages([]);
-        setLoadingConversation(true);
-        setSearchParams({ c: normalized }, { replace: true });
-        void qc.invalidateQueries({ queryKey: ["conversation", normalized] });
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("c", normalized);
+            next.delete("run");
+            return next;
+          },
+          { replace: true }
+        );
+        void loadConversation(normalized);
       } else {
-        setLoadingConversation(false);
+        setActiveConversationId(null);
         setSidebarActiveId(null);
-        loadedConversationRef.current = null;
-        setSearchParams({}, { replace: true });
-        setMessages([]);
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete("c");
+            next.delete("run");
+            return next;
+          },
+          { replace: true }
+        );
       }
       setSidebarOpen(false);
       requestAnimationFrame(() => composerRef.current?.focus());
     },
-    [setSearchParams, qc]
+    [loadConversation, setSearchParams]
   );
 
   const applyPendingUrl = useCallback(() => {
     const pending = pendingUrlRef.current;
     if (!pending?.c) return;
     const normalized = normalizeConversationId(pending.c) ?? pending.c;
+    setActiveConversationId(normalized);
     setSidebarActiveId(normalized);
     const params: Record<string, string> = { c: normalized };
     if (pending.run) params.run = pending.run;
@@ -319,14 +333,12 @@ export function ChatPage() {
   const handleSaveSettings = useCallback(
     async (settings: ConversationSettings) => {
       setChatSettings(settings);
-      if (conversationId && modelsData?.persistenceEnabled !== false) {
-        await updateConversation(conversationId, { metadata: settings });
-        if (normalizedConversationId) {
-          qc.invalidateQueries({ queryKey: ["conversation", normalizedConversationId] });
-        }
+      if (activeConversationId && modelsData?.persistenceEnabled !== false) {
+        await updateConversation(activeConversationId, { metadata: settings });
+        qc.invalidateQueries({ queryKey: ["conversation", activeConversationId] });
       }
     },
-    [conversationId, normalizedConversationId, modelsData?.persistenceEnabled, qc]
+    [activeConversationId, modelsData?.persistenceEnabled, qc]
   );
 
   const effectiveModel =
@@ -381,7 +393,7 @@ export function ChatPage() {
     ]);
 
     let assistantText = "";
-    let resolvedConversationId = conversationId;
+    let resolvedConversationId = activeConversationId;
 
     streamAbortRef.current?.abort();
     const abortController = new AbortController();
@@ -398,9 +410,12 @@ export function ChatPage() {
           if (!mountedRef.current) return;
           if (data.conversationId && typeof data.conversationId === "string") {
             resolvedConversationId = data.conversationId;
-            setSidebarActiveId(normalizeConversationId(data.conversationId) ?? data.conversationId);
+            const normalized =
+              normalizeConversationId(data.conversationId) ?? data.conversationId;
+            setActiveConversationId(normalized);
+            setSidebarActiveId(normalized);
           }
-          const c = conversationId || resolvedConversationId || pendingUrlRef.current?.c;
+          const c = activeConversationId || resolvedConversationId || pendingUrlRef.current?.c;
           if (c) {
             pendingUrlRef.current = {
               c,
@@ -499,8 +514,8 @@ export function ChatPage() {
           );
         },
       }, {
-        conversationId: conversationId || undefined,
-        autoCreate: !conversationId,
+        conversationId: activeConversationId || undefined,
+        autoCreate: !activeConversationId,
         systemPrompt: buildSystemPromptFromSettings(chatSettings),
         includeBrainContext: chatSettings.includeBrainContext !== false,
         responseStyle: chatSettings.responseStyle,
@@ -584,11 +599,17 @@ export function ChatPage() {
     "default";
 
   const conversationTitle =
-    conversationIdsMatch(conversationQuery.data?.id, conversationId)
+    conversationIdsMatch(conversationQuery.data?.id, activeConversationId)
       ? conversationQuery.data?.title
       : undefined;
 
-  const sidebarHighlightId = sidebarActiveId ?? normalizedConversationId ?? conversationId;
+  const sidebarHighlightId = sidebarActiveId ?? activeConversationId;
+
+  const loadingConversation =
+    !!activeConversationId &&
+    !streaming &&
+    messages.length === 0 &&
+    (conversationQuery.isLoading || conversationQuery.isFetching);
 
   const sidebarProps = {
     activeId: sidebarHighlightId,
@@ -658,6 +679,7 @@ export function ChatPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              <ProjectSwitcher className="hidden sm:flex" />
               <Button
                 variant="ghost"
                 size="icon"
@@ -721,11 +743,12 @@ export function ChatPage() {
 
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <ChatMessageList
+              key={activeConversationId ?? "new-chat"}
               messages={messages}
               streaming={streaming}
               streamingMessageId={streamingMessageId}
               loading={loadingConversation}
-              hasConversation={!!conversationId}
+              hasConversation={!!activeConversationId}
               onExample={send}
               scrollRef={scrollRef}
             />

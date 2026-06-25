@@ -37,7 +37,7 @@ function resolveAggregateStatus({ delegateToSidecar, devices }) {
 export async function getSidecarStatusPayload() {
   const localFsOnServer = isLocalFsOnServer();
   const delegateToSidecar = !localFsOnServer;
-  const raw = listSidecarDevices();
+  const raw = await listSidecarDevices();
   const devices = await Promise.all(
     raw.map(async (d) => {
       const probe = await probeDeviceHealth(d);
@@ -85,7 +85,7 @@ export function registerSidecarRoutes(app) {
     res.json({ ok: true, data });
   });
 
-  app.post("/sidecar/pair", requireScope("write"), (req, res) => {
+  app.post("/sidecar/pair", requireScope("write"), async (req, res) => {
     const { code, deviceName, baseUrl, capabilities } = req.body ?? {};
     if (!code || !baseUrl) {
       return res.status(400).json({
@@ -93,7 +93,7 @@ export function registerSidecarRoutes(app) {
         error: { code: "invalid_request", message: "code and baseUrl required" },
       });
     }
-    const result = consumePairingCode(String(code), {
+    const result = await consumePairingCode(String(code), {
       deviceName,
       baseUrl: String(baseUrl),
       capabilities,
@@ -110,8 +110,8 @@ export function registerSidecarRoutes(app) {
     });
   });
 
-  app.delete("/sidecar/devices/:id", requireScope("admin"), (req, res) => {
-    const removed = removeSidecarDevice(req.params.id);
+  app.delete("/sidecar/devices/:id", requireScope("admin"), async (req, res) => {
+    const removed = await removeSidecarDevice(req.params.id);
     if (!removed) {
       return res.status(404).json({ ok: false, error: { code: "not_found" } });
     }

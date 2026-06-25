@@ -30,6 +30,7 @@ import {
   applySettingsTemplate,
   exportSettingsBundle,
   fetchSettings,
+  fetchSettingsAudit,
   fetchSettingsDiff,
   fetchSettingsTemplates,
   importSettingsBundle,
@@ -493,6 +494,38 @@ const PANELS: Record<AdvancedFeatureId, () => ReactNode> = {
   validate: ValidatePanel,
 };
 
+function SettingsAuditPanel() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["settings-audit"],
+    queryFn: () => fetchSettingsAudit(30),
+    retry: false,
+  });
+  const entries = data?.entries ?? [];
+
+  return (
+    <SettingsSectionCard
+      icon={ShieldCheck}
+      title="Secret değişiklik günlüğü"
+      description="Anahtar güncellemeleri — değerler asla kaydedilmez."
+    >
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Yükleniyor…</p>
+      ) : entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Henüz kayıt yok veya depolama kapalı.</p>
+      ) : (
+        <ul className="space-y-2 text-xs">
+          {entries.map((e) => (
+            <li key={e.id} className="rounded-lg border border-border/50 px-3 py-2">
+              <span className="font-mono text-primary">{e.keyName}</span> — {e.action}
+              <span className="ml-2 text-muted-foreground">{e.actorId || "system"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SettingsSectionCard>
+  );
+}
+
 export function AdvancedSettingsPanel() {
   const [active, setActive] = useState<AdvancedFeatureId>("rotation");
   const feature = FEATURES.find((f) => f.id === active)!;
@@ -546,6 +579,8 @@ export function AdvancedSettingsPanel() {
           <Panel />
         </SettingsSectionCard>
       </div>
+
+      <SettingsAuditPanel />
     </div>
   );
 }

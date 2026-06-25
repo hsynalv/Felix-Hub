@@ -1,6 +1,7 @@
 # 08 — Secrets ve Env Yönetimini Ürünleştir
 
-> **Status:** faz_a_b_done (Faz 3 exit)  
+> **Status:** mvp_done (v3.6) — settings_audit done; rotation cron → v3.7  
+> **Last reviewed:** 2026-06-25  
 > **Öncelik:** P1 (Faz 2–3)  
 > **Bağımlılık:** [05-connector-marketplace.md](./05-connector-marketplace.md)
 

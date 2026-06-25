@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { NavLink, useLocation, useNavigate, useOutlet } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   BarChart3,
@@ -19,7 +19,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +42,7 @@ const nav = [
   { to: "/", label: "Panel", icon: Home },
   { to: "/chat", label: "Sohbet", icon: Bot },
   { to: "/runs", label: "Runs", icon: GitBranch },
+  { to: "/approvals", label: "Onaylar", icon: ShieldCheck },
   { to: "/usage", label: "Kullanım", icon: BarChart3 },
   { to: "/brain", label: "Brain", icon: Brain },
   { to: "/tools", label: "Araçlar", icon: Wrench },
@@ -56,6 +57,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/": "Kontrol Paneli",
   "/chat": "Sohbet",
   "/runs": "Agent Runs",
+  "/approvals": "Onay Merkezi",
   "/usage": "Kullanım",
   "/brain": "Brain",
   "/tools": "Araçlar",
@@ -68,6 +70,40 @@ const ROUTE_TITLES: Record<string, string> = {
 
 const mobilePrimary = nav.slice(0, 4);
 const mobileMore = nav.slice(4);
+
+function PageLoader() {
+  return (
+    <div className="flex h-40 items-center justify-center text-muted-foreground">
+      Yükleniyor…
+    </div>
+  );
+}
+
+/**
+ * useOutlet + key — motion.div içinde <Outlet /> route değişiminde takılabiliyor.
+ * Key olarak location.pathname kullanıyoruz: route'lar arası geçişte (ör. /chat →
+ * /runs) sayfa animasyonla değişir, ama aynı route içinde arama parametresi
+ * değişince (?c=A → ?c=B) sayfa remount OLMAZ — bileşen kendi içinde günceller.
+ */
+function RoutedPage({ fullBleed }: { fullBleed: boolean }) {
+  const location = useLocation();
+  const outlet = useOutlet();
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.12 }}
+        className={cn("flex min-h-0 flex-1 flex-col", fullBleed ? "h-full overflow-hidden" : "")}
+      >
+        <Suspense fallback={<PageLoader />}>{outlet}</Suspense>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -220,18 +256,7 @@ export function AppShell() {
             )}
           >
             <ErrorBoundary key={location.pathname}>
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.12 }}
-                className={cn(
-                  "flex min-h-0 flex-1 flex-col",
-                  isFullBleed ? "h-full overflow-hidden" : ""
-                )}
-              >
-                <Outlet />
-              </motion.div>
+              <RoutedPage fullBleed={isFullBleed} />
             </ErrorBoundary>
           </main>
 

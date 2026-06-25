@@ -7,6 +7,7 @@ import {
   getRun,
   updateRunStatus,
   createCheckpoint,
+  updateRunCurrentStep,
   RunStatus,
 } from "./agent-runs.service.js";
 import { recordToolStep, completeRun } from "./run-orchestrator.js";
@@ -130,6 +131,7 @@ export async function executeWorkflowRun({
         type: "workflow",
         payload: { stepIndex: i, name: phase.name || `step-${i}` },
       });
+      await updateRunCurrentStep(runId, i);
       await updateRunStatus(runId, RunStatus.PAUSED);
       await log(`Checkpoint: ${phase.name || i} — run paused for resume`);
       emitRunEvent(runId, { type: "status", status: RunStatus.PAUSED, checkpoint: i });

@@ -1,6 +1,7 @@
 # 00 — Vizyon ve Ürün İlkeleri
 
-> **Status:** not_started  
+> **Status:** reference (implementasyon değil)  
+> **Last reviewed:** 2026-06-25  
 > **Bağımlılık:** —
 
 ---

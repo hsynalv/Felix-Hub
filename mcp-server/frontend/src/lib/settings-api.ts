@@ -29,6 +29,19 @@ export async function fetchSettings() {
   return apiGet<SettingsMeta>("/settings");
 }
 
+export interface SettingsAuditEntry {
+  id: string;
+  actorId?: string | null;
+  action: string;
+  keyName: string;
+  pluginName?: string | null;
+  createdAt: string;
+}
+
+export async function fetchSettingsAudit(limit = 50) {
+  return apiGet<{ entries: SettingsAuditEntry[]; count: number }>(`/settings/audit?limit=${limit}`);
+}
+
 export async function upsertSetting(key: string, value: string) {
   return apiPut<{
     keyName: string;

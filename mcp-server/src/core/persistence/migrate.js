@@ -17,6 +17,8 @@ const MIGRATION_FILES = [
   { version: 5, file: "005_usage_context.sql" },
   { version: 6, file: "006_plugin_state.sql" },
   { version: 7, file: "007_workspace_preferences.sql" },
+  { version: 8, file: "008_settings_audit.sql" },
+  { version: 9, file: "009_sidecar_devices.sql" },
 ];
 
 /**

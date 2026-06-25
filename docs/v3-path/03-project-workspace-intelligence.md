@@ -1,6 +1,7 @@
 # 03 — Project Workspace Intelligence
 
-> **Status:** faz_a_done (Faz 2 exit); Faz D intelligence = Faz 5  
+> **Status:** mvp_done (v3.6) — RAG re-index + ADR suggest → v3.7  
+> **Last reviewed:** 2026-06-25  
 > **Öncelik:** P1 (Faz 2)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md), brain/RAG stabilitesi
 

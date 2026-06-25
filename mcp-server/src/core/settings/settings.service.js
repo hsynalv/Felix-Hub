@@ -106,7 +106,52 @@ export async function upsertSetting(keyName, value, { namespace = DEFAULT_NS, up
       updatedBy,
     }
   );
+  await writeSettingsAudit({
+    action: "upsert",
+    keyName,
+    actor: updatedBy,
+  });
   return { keyName, namespace, maskedValue: maskSecret(value), updatedBy };
+}
+
+export async function writeSettingsAudit({ action, keyName, actor = null, pluginName = null }) {
+  if (!isPersistenceHealthy()) return;
+  try {
+    await persistenceQuery(
+      `INSERT INTO settings_audit (id, actor_id, action, key_name, plugin_name)
+       VALUES (@id, @actor, @action, @keyName, @pluginName)`,
+      {
+        id: randomUUID(),
+        actor: actor || "system",
+        action,
+        keyName,
+        pluginName,
+      }
+    );
+  } catch (err) {
+    console.warn("[settings] audit write failed:", err.message);
+  }
+}
+
+export async function listSettingsAudit({ limit = 50 } = {}) {
+  if (!isPersistenceHealthy()) return [];
+  try {
+    const result = await persistenceQuery(
+      `SELECT TOP (@limit) id, actor_id, action, key_name, plugin_name, created_at
+       FROM settings_audit ORDER BY created_at DESC`,
+      { limit: Math.min(limit, 200) }
+    );
+    return (result?.recordset ?? []).map((r) => ({
+      id: r.id,
+      actorId: r.actor_id,
+      action: r.action,
+      keyName: r.key_name,
+      pluginName: r.plugin_name,
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function deleteSetting(keyName, namespace = DEFAULT_NS) {
@@ -115,6 +160,7 @@ export async function deleteSetting(keyName, namespace = DEFAULT_NS) {
     `DELETE FROM settings_encrypted WHERE key_name = @keyName AND namespace = @namespace`,
     { keyName, namespace }
   );
+  await writeSettingsAudit({ action: "delete", keyName, actor: "admin" });
   return true;
 }
 

@@ -36,6 +36,10 @@ async function buildCatalogEntry(plugin) {
     },
     maturity: meta.status || plugin.status || "beta",
     riskLevel: meta.security?.riskLevel || null,
+    security: {
+      riskLevel: meta.security?.riskLevel || null,
+      dangerousCombinations: meta.security?.dangerousCombinations || [],
+    },
     envVars: meta.envVars || [],
     missingEnv: env.missing,
   };

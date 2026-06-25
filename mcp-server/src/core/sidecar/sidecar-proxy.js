@@ -23,7 +23,7 @@ export function sidecarRequiredError() {
 async function fetchSidecar(path, { method = "GET", body = null, op = "sidecar" } = {}) {
   if (isLocalFsOnServer()) return null;
 
-  const device = getDefaultSidecarDevice();
+  const device = await getDefaultSidecarDevice();
   if (!device) return sidecarRequiredError();
 
   const start = Date.now();
@@ -40,7 +40,7 @@ async function fetchSidecar(path, { method = "GET", body = null, op = "sidecar" 
       signal: AbortSignal.timeout(60_000),
     });
     const json = await res.json().catch(() => ({}));
-    touchDevice(device.id);
+    await touchDevice(device.id);
 
     void auditLog({
       plugin: "local-sidecar",

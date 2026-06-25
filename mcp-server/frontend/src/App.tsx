@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 
@@ -14,107 +14,23 @@ const UsagePage = lazy(() => import("@/pages/UsagePage").then((m) => ({ default:
 const RunsPage = lazy(() => import("@/pages/RunsPage").then((m) => ({ default: m.RunsPage })));
 const BrainPage = lazy(() => import("@/pages/BrainPage").then((m) => ({ default: m.BrainPage })));
 
-function PageLoader() {
-  return (
-    <div className="flex h-40 items-center justify-center text-muted-foreground">
-      Yükleniyor…
-    </div>
-  );
-}
-
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
-          <Route
-            index
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <HomePage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="chat"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <ChatPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="tools"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <ToolsPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="plugins"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <PluginsPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="audit"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <AuditPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="admin"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <AdminPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="observability"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <ObservabilityPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="usage"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <UsagePage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="runs"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <RunsPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="brain"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <BrainPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="settings"
-            element={
-              <Suspense fallback={<PageLoader />}>
-                <SettingsPage />
-              </Suspense>
-            }
-          />
+          <Route index element={<HomePage />} />
+          <Route path="chat" element={<ChatPage />} />
+          <Route path="tools" element={<ToolsPage />} />
+          <Route path="plugins" element={<PluginsPage />} />
+          <Route path="audit" element={<AuditPage />} />
+          <Route path="admin" element={<AdminPage />} />
+          <Route path="approvals" element={<AdminPage defaultTab="approvals" />} />
+          <Route path="observability" element={<ObservabilityPage />} />
+          <Route path="usage" element={<UsagePage />} />
+          <Route path="runs" element={<RunsPage />} />
+          <Route path="brain" element={<BrainPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="ui" element={<Navigate to="/chat" replace />} />
         <Route path="ui/*" element={<Navigate to="/chat" replace />} />

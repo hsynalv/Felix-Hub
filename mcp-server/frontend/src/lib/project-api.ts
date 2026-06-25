@@ -34,6 +34,29 @@ export interface ProjectContext {
   lastChangeSummary?: string;
 }
 
+export interface ProjectSummary {
+  key: string;
+  name: string;
+}
+
+export async function fetchProjectsList() {
+  return apiGet<{ projects: ProjectSummary[]; count: number }>("/projects");
+}
+
+export async function askProject(projectKey: string, q: string, limit = 8) {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  return apiGet<{ projectId: string; goal: string; snippets: unknown[] }>(
+    `/projects/${encodeURIComponent(projectKey)}/ask?${params}`
+  );
+}
+
+export async function fetchProjectImpact(projectKey: string, path: string) {
+  const params = new URLSearchParams({ path });
+  return apiGet<{ projectId: string; path: string; events: unknown[]; edges: unknown[] }>(
+    `/projects/${encodeURIComponent(projectKey)}/impact?${params}`
+  );
+}
+
 export async function fetchProjectContext(projectKey: string) {
   return apiGet<ProjectContext>(`/projects/${encodeURIComponent(projectKey)}/context`);
 }

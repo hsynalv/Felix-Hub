@@ -1,6 +1,7 @@
 # 09 — Local Sidecar / Desktop Agent
 
-> **Status:** faz_a_e_mvp_done  
+> **Status:** partial (v3.6) — device persist done; mTLS/browser/installer → V4  
+> **Last reviewed:** 2026-06-25  
 > **Öncelik:** P3 (Faz 4)  
 > **Bağımlılık:** [02-policy-approval-center.md](./02-policy-approval-center.md), [10-production-hardening.md](./10-production-hardening.md)
 

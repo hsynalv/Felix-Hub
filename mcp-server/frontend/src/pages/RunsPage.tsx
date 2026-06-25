@@ -26,6 +26,7 @@ import {
   OpsStatGrid,
 } from "@/components/ops/OpsPrimitives";
 import { WorkflowTemplateDialog } from "@/components/runs/WorkflowTemplateDialog";
+import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import {
   getRun,
   getRunSteps,
@@ -43,6 +44,8 @@ import {
 } from "@/lib/runs-api";
 import { useRunEvents } from "@/lib/use-run-events";
 import { formatCostUsd } from "@/lib/usage-api";
+import { getProjectId } from "@/lib/project-context";
+import { subscribeWorkspaceContext } from "@/lib/workspace-context-store";
 import { useToast } from "@/providers/ToastProvider";
 import { cn, formatDuration, formatTime } from "@/lib/utils";
 
@@ -95,7 +98,15 @@ function RunRow({
   );
 }
 
-function StepRow({ step, index }: { step: RunStep; index: number }) {
+function StepRow({
+  step,
+  index,
+  usage,
+}: {
+  step: RunStep;
+  index: number;
+  usage?: { totalTokens?: number; estimatedCostUsd?: number } | null;
+}) {
   const [open, setOpen] = useState(false);
   const ok = step.status === "ok" || step.status === "pending";
 
@@ -124,6 +135,11 @@ function StepRow({ step, index }: { step: RunStep; index: number }) {
         {step.durationMs != null && (
           <span className="shrink-0 font-mono text-xs text-muted-foreground">{formatDuration(step.durationMs)}</span>
         )}
+        {usage?.estimatedCostUsd != null && (
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">
+            {formatCostUsd(usage.estimatedCostUsd)}
+          </span>
+        )}
       </button>
       {open && (
         <div className="border-t border-border/40 p-3 text-xs">
@@ -138,16 +154,22 @@ function StepRow({ step, index }: { step: RunStep; index: number }) {
 
 export function RunsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [projectId, setProjectId] = useState(() => getProjectId());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templateDialog, setTemplateDialog] = useState<WorkflowTemplate | null>(null);
   const qc = useQueryClient();
   const toast = useToast();
 
+  useEffect(() => {
+    return subscribeWorkspaceContext(() => setProjectId(getProjectId()));
+  }, []);
+
   const { data: runsData, isLoading } = useQuery({
-    queryKey: ["runs", statusFilter],
+    queryKey: ["runs", statusFilter, projectId],
     queryFn: () =>
       listRuns({
         status: statusFilter === "all" ? undefined : statusFilter,
+        projectId: projectId || undefined,
         limit: 50,
       }),
     refetchInterval: (query) => {
@@ -264,6 +286,13 @@ export function RunsPage() {
   });
 
   const steps = stepsData?.steps ?? [];
+  const stepUsageByIndex = useMemo(() => {
+    const map = new Map<number, { totalTokens?: number; estimatedCostUsd?: number }>();
+    for (const row of detail?.stepUsage ?? []) {
+      if (row.usage) map.set(row.stepIndex, row.usage);
+    }
+    return map;
+  }, [detail?.stepUsage]);
   const pendingApproval = steps.find(
     (s) => s.type === "approval" && s.status === "pending" && s.metadata?.approvalId
   );
@@ -306,7 +335,9 @@ export function RunsPage() {
         title="Agent Runs"
         description="Çok adımlı agent çalışmaları — tool trace, onay noktaları ve durum timeline."
         actions={
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <div className="flex flex-wrap items-center gap-2">
+            <ProjectSwitcher />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Durum" />
             </SelectTrigger>
@@ -318,6 +349,7 @@ export function RunsPage() {
               <SelectItem value="failed">Hata</SelectItem>
             </SelectContent>
           </Select>
+          </div>
         }
       />
 
@@ -504,7 +536,7 @@ export function RunsPage() {
               </div>
               <div className="space-y-2">
                 {steps.map((step, i) => (
-                  <StepRow key={step.id} step={step} index={i} />
+                  <StepRow key={step.id} step={step} index={i} usage={stepUsageByIndex.get(step.stepIndex)} />
                 ))}
               </div>
             </div>

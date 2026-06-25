@@ -31,7 +31,7 @@ function unwrap<T>(json: unknown): T {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: authHeaders() });
+  const res = await fetch(path, { headers: authHeaders(), cache: "no-store" });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(

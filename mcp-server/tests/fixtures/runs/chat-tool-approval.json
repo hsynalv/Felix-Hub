@@ -1,0 +1,12 @@
+{
+  "id": "golden-chat-tool-approval",
+  "templateId": "incident-triage",
+  "goal": "Approval-aware triage (first tools only)",
+  "parameters": { "repo": "octocat/Hello-World" },
+  "expectedSteps": [
+    { "type": "tool", "toolName": "repo_summary" },
+    { "type": "tool", "toolName": "repo_recent_commits" }
+  ],
+  "extraSteps": 1,
+  "orderStrict": true
+}

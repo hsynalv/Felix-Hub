@@ -1,0 +1,269 @@
+{
+  "generatedAt": "2026-06-25",
+  "count": 35,
+  "plugins": [
+    {
+      "name": "brain",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "code-review",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "database",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "docker",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "email",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "file-storage",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "file-watcher",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "git",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "github",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "shell",
+        "docker"
+      ]
+    },
+    {
+      "name": "github-pattern-analyzer",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "http",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "image-gen",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "llm-router",
+      "version": "1.1.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "local-sidecar",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "marketplace",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "n8n",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "n8n-credentials",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "n8n-workflows",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "notifications",
+      "version": "1.1.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "notion",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "shell"
+      ]
+    },
+    {
+      "name": "observability",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "openapi",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "policy",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "project-orchestrator",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "projects",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "prompt-registry",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "rag",
+      "version": "1.1.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "repo-intelligence",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "secrets",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "shell",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "slack",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "tech-detector",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "tests",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "video-gen",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
+      "name": "workspace",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    }
+  ]
+}

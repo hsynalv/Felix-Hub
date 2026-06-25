@@ -8,6 +8,55 @@ import { listRecentVaultActivity } from "./vault-reader.js";
 import { pullVaultToBrain } from "./obsidian-bridge.js";
 import { getEnvValue } from "../settings/effective-config.js";
 
+async function fetchNotionActivity(databaseId, { sinceDays = 14 } = {}) {
+  const token = getEnvValue("NOTION_TOKEN");
+  if (!token || !databaseId) return [];
+
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const events = [];
+
+  try {
+    const res = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        page_size: 10,
+        filter: {
+          timestamp: "last_edited_time",
+          last_edited_time: { on_or_after: since },
+        },
+        sorts: [{ timestamp: "last_edited_time", direction: "descending" }],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return events;
+    const data = await res.json();
+    for (const page of data.results || []) {
+      const title =
+        page.properties?.Name?.title?.[0]?.plain_text ||
+        page.properties?.title?.title?.[0]?.plain_text ||
+        page.id?.slice(0, 8);
+      events.push({
+        type: "notion_page",
+        summary: `Notion: ${title}`,
+        refs: { pageId: page.id, databaseId, url: page.url },
+      });
+    }
+  } catch (err) {
+    events.push({
+      type: "notion_sync_error",
+      summary: `Notion sync failed: ${err.message}`,
+      refs: { databaseId },
+    });
+  }
+
+  return events;
+}
+
 async function fetchGithubActivity(repo, { sinceDays = 14 } = {}) {
   const token = getEnvValue("GITHUB_TOKEN");
   if (!token || !repo?.includes("/")) return [];
@@ -87,6 +136,12 @@ export async function syncProjectIndex(projectKey, { sinceDays = 14 } = {}) {
     if (ev) recorded.push(ev);
   }
 
+  const notionEvents = await fetchNotionActivity(links.notionProjectId, { sinceDays });
+  for (const e of notionEvents) {
+    const ev = await recordContextEvent(projectKey, e);
+    if (ev) recorded.push(ev);
+  }
+
   const vaultPath = links.obsidianVaultPath || getEnvValue("OBSIDIAN_VAULT_PATH");
   if (vaultPath) {
     const vault = await listRecentVaultActivity(vaultPath, { sinceDays, limit: 15 });
@@ -123,6 +178,7 @@ export async function syncProjectIndex(projectKey, { sinceDays = 14 } = {}) {
     synced: recorded.length,
     sources: {
       github: links.githubRepo || null,
+      notion: links.notionProjectId || null,
       vault: vaultPath || null,
     },
     brainSync,

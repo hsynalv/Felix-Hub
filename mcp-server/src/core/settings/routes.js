@@ -13,6 +13,7 @@ import {
   listConnectionProfiles,
   upsertConnectionProfile,
   writeConfigAudit,
+  listSettingsAudit,
 } from "./settings.service.js";
 import {
   getEffectiveConfigMasked,
@@ -80,6 +81,16 @@ export function registerSettingsRoutes(app) {
 
   router.get("/effective", requireScope("admin"), (_req, res) => {
     res.json({ ok: true, data: getEffectiveConfigMasked() });
+  });
+
+  router.get("/audit", requireScope("admin"), async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+      const entries = await listSettingsAudit({ limit });
+      res.json({ ok: true, data: { entries, count: entries.length } });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "audit_list_failed", message: err.message } });
+    }
   });
 
   router.get("/connections", requireScope("admin"), async (_req, res) => {

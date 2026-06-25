@@ -1,0 +1,18 @@
+{
+  "id": "golden-workflow-checkpoint-pause",
+  "templateId": "repo-ship-feature",
+  "goal": "Steps before checkpoint pause",
+  "parameters": {
+    "repo": "octocat/Hello-World",
+    "branch": "feature/checkpoint",
+    "goal": "Checkpoint test",
+    "baseBranch": "main",
+    "skipIssues": "false"
+  },
+  "expectedSteps": [
+    { "type": "tool", "toolName": "repo_analyze" },
+    { "type": "tool", "toolName": "repo_open_issues" }
+  ],
+  "extraSteps": 4,
+  "orderStrict": true
+}

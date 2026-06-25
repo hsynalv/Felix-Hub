@@ -102,6 +102,33 @@ export async function searchContextForGoal(projectKey, goal, { limit = 8 } = {})
   };
 }
 
+/** Path/repo impact — matching context events + graph edges. */
+export async function getProjectImpact(projectKey, path, { limit = 20 } = {}) {
+  const normalized = String(path || "").replace(/\\/g, "/").toLowerCase();
+  const ctx = await getProjectContext(projectKey);
+  const events = (ctx.recentEvents || []).filter((ev) => {
+    const refPath = ev.refs?.path || ev.refs?.repo || "";
+    const text = `${ev.summary || ""} ${refPath}`.toLowerCase();
+    return normalized ? text.includes(normalized) || refPath.toLowerCase().includes(normalized) : true;
+  });
+
+  const edges = (ctx.graph?.edges || []).filter((e) => {
+    if (!normalized) return true;
+    return (
+      String(e.from).toLowerCase().includes(normalized) ||
+      String(e.to).toLowerCase().includes(normalized)
+    );
+  });
+
+  return {
+    projectId: projectKey,
+    path,
+    events: events.slice(0, limit),
+    edges: edges.slice(0, limit),
+    graph: ctx.graph,
+  };
+}
+
 export { updateProjectLinks };
 
 export async function recordContextEvent(projectId, { type, summary, refs = null }) {

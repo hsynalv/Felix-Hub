@@ -7,6 +7,10 @@ export interface MarketplacePlugin {
   enabled?: boolean;
   maturity?: string;
   riskLevel?: string | null;
+  security?: {
+    riskLevel?: string | null;
+    dangerousCombinations?: string[];
+  };
   tools?: Array<{ name: string; description?: string }>;
   state?: {
     enabled: boolean;

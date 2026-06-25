@@ -1,6 +1,7 @@
 # 06 — Usage, Cost ve Quota
 
-> **Status:** faz_a_b_done (Faz 2 exit)  
+> **Status:** mvp_done (v3.6) — workflow quota + step cost done; waterfall → v3.7  
+> **Last reviewed:** 2026-06-25  
 > **Öncelik:** P1 (Faz 2)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md) (`run_id` join)
 

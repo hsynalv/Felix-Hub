@@ -182,6 +182,7 @@ function SetupWizardDialog({
 export function PluginsPage() {
   const [search, setSearch] = useState("");
   const [setupPlugin, setSetupPlugin] = useState<MarketplacePlugin | null>(null);
+  const [dangerousPlugin, setDangerousPlugin] = useState<MarketplacePlugin | null>(null);
   const [togglingName, setTogglingName] = useState<string | null>(null);
   const toast = useToast();
   const qc = useQueryClient();
@@ -219,6 +220,21 @@ export function PluginsPage() {
     );
   }, [plugins, search]);
 
+  const handleToggle = (plugin: MarketplacePlugin, enabled: boolean) => {
+    const combos = plugin.security?.dangerousCombinations ?? [];
+    if (enabled && combos.length > 0) {
+      setDangerousPlugin(plugin);
+      return;
+    }
+    toggleMutation.mutate({ name: plugin.name, enabled });
+  };
+
+  const confirmDangerousEnable = () => {
+    if (!dangerousPlugin) return;
+    toggleMutation.mutate({ name: dangerousPlugin.name, enabled: true });
+    setDangerousPlugin(null);
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <PageHeader
@@ -253,7 +269,7 @@ export function PluginsPage() {
                 plugin={p}
                 toggling={togglingName === p.name}
                 onSetup={() => setSetupPlugin(p)}
-                onToggle={(enabled) => toggleMutation.mutate({ name: p.name, enabled })}
+                onToggle={(enabled) => handleToggle(p, enabled)}
               />
             </motion.div>
           ))}
@@ -265,6 +281,31 @@ export function PluginsPage() {
         open={!!setupPlugin}
         onOpenChange={(open) => !open && setSetupPlugin(null)}
       />
+
+      <Dialog open={!!dangerousPlugin} onOpenChange={(open) => !open && setDangerousPlugin(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Güvenlik uyarısı</DialogTitle>
+            <DialogDescription>
+              <strong>{dangerousPlugin?.name}</strong> etkinleştirildiğinde riskli araç kombinasyonları
+              kullanılabilir hale gelir.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {(dangerousPlugin?.security?.dangerousCombinations ?? []).map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDangerousPlugin(null)}>
+              İptal
+            </Button>
+            <Button onClick={confirmDangerousEnable} disabled={toggleMutation.isPending}>
+              Yine de etkinleştir
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

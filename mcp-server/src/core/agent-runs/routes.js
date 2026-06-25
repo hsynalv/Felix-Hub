@@ -9,6 +9,7 @@ import {
   listRuns,
   listRunSteps,
   updateRunStatus,
+  getLatestCheckpoint,
   RunStatus,
 } from "./agent-runs.service.js";
 import { cancelRunJob, linkRunToJob } from "./agent-run-job.js";
@@ -20,15 +21,30 @@ import { WORKFLOW_RUN_JOB_TYPE } from "./workflow-run-job.js";
 import { listWorkflowTemplates } from "./workflow-templates.js";
 import { createRunFromTemplate, replayRun } from "./run-orchestrator.js";
 import { queryRunUsage } from "../usage/usage-ledger.service.js";
+import { assertRunQuota } from "../usage/run-quota.js";
+
+function quotaErrorResponse(res, err) {
+  return res.status(429).json({
+    ok: false,
+    error: { code: "quota_exceeded", message: err.message, quota: err.quota },
+  });
+}
 
 export function registerAgentRunRoutes(app) {
   app.post("/runs", requireScope("write"), async (req, res) => {
     try {
       const { goal, projectId, conversationId, metadata, plan, async: runAsync, message, history, model, systemPrompt } =
         req.body ?? {};
+      const resolvedProjectId = projectId || req.projectId || null;
+      try {
+        await assertRunQuota(resolvedProjectId);
+      } catch (e) {
+        if (e.code === "quota_exceeded") return quotaErrorResponse(res, e);
+        throw e;
+      }
       const run = await createRun({
         goal: goal || "Manual run",
-        projectId: projectId || req.projectId || null,
+        projectId: resolvedProjectId,
         conversationId: conversationId || null,
         createdBy: req.actor?.type || "api",
         metadata,
@@ -88,13 +104,27 @@ export function registerAgentRunRoutes(app) {
         return res.status(404).json({ ok: false, error: { code: "not_found", message: "Run not found" } });
       }
       let usage = null;
+      let stepUsage = null;
       try {
         const ledger = await queryRunUsage(req.params.id);
         usage = ledger.totals;
       } catch {
         /* ignore */
       }
-      res.json({ ok: true, data: { ...run, usage } });
+      try {
+        const steps = await listRunSteps(req.params.id, { limit: 200 });
+        stepUsage = steps.map((s) => ({
+          stepIndex: s.stepIndex,
+          type: s.type,
+          toolName: s.toolName,
+          status: s.status,
+          durationMs: s.durationMs,
+          usage: s.usage,
+        }));
+      } catch {
+        /* ignore */
+      }
+      res.json({ ok: true, data: { ...run, usage, stepUsage } });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "get_failed", message: err.message } });
     }
@@ -220,7 +250,15 @@ export function registerAgentRunRoutes(app) {
 
       const templateId = run.metadata?.templateId;
       if (templateId && run.status === RunStatus.PAUSED) {
-        const startFromStep = Number(req.body?.startFromStep ?? run.currentStep ?? 0);
+        let startFromStep = Number(req.body?.startFromStep);
+        if (!Number.isFinite(startFromStep)) {
+          const cp = await getLatestCheckpoint(run.id, { type: "workflow" });
+          if (cp?.payload?.stepIndex != null) {
+            startFromStep = Number(cp.payload.stepIndex) + 1;
+          } else {
+            startFromStep = Number(run.currentStep ?? 0);
+          }
+        }
         const job = submitJob(
           WORKFLOW_RUN_JOB_TYPE,
           {
@@ -259,8 +297,15 @@ export function registerAgentRunRoutes(app) {
     try {
       const { templateId } = req.params;
       const { parameters = {}, dryRun = false, async: runAsync = true } = req.body ?? {};
+      const resolvedProjectId = req.projectId || parameters.projectId || null;
+      try {
+        await assertRunQuota(resolvedProjectId);
+      } catch (e) {
+        if (e.code === "quota_exceeded") return quotaErrorResponse(res, e);
+        throw e;
+      }
       const run = await createRunFromTemplate(templateId, parameters, {
-        projectId: req.projectId || parameters.projectId || null,
+        projectId: resolvedProjectId,
         createdBy: req.actor?.type || "api",
         dryRun,
       });

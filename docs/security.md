@@ -124,3 +124,17 @@ Bind                                           → 127.0.0.1 veya reverse proxy 
 CORS                                           → bilinen UI origin'leri
 Rate limiting                                  → rateLimitMiddleware mount et
 ```
+
+---
+
+## Legacy tool registry (v3.6)
+
+`mcp-server/src/core/tools/tool.registry.js` — **deprecated**. Runtime tek kaynak: `core/tool-registry.js`.
+
+**Kaldırma planı (v3.7):**
+1. `tools/index.js` discovery export'larını test-only modüle taşı
+2. `observability/tools.metrics.js` ve kalan import'ları canonical registry'ye yönlendir
+3. `tool.registry.js` dosyasını sil; CI'da import guard ekle
+
+Detay: [v3-path/REMAINING-WORK.md](./v3-path/REMAINING-WORK.md)
+
