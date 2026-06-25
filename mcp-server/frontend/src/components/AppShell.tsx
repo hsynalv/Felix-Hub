@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { apiGet, type HealthData, type WhoamiData } from "@/lib/api-client";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/providers/AuthProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const nav = [
   { to: "/", label: "Panel", icon: Home },
@@ -170,6 +171,7 @@ export function AppShell() {
         </AnimatePresence>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {!isFullBleed && (
           <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur">
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu className="h-5 w-5" />
@@ -209,6 +211,7 @@ export function AppShell() {
               </Button>
             </div>
           </header>
+          )}
 
           <main
             className={cn(
@@ -216,13 +219,12 @@ export function AppShell() {
               isFullBleed ? "p-0" : "overflow-auto p-4 md:p-6"
             )}
           >
-            <AnimatePresence mode="wait">
+            <ErrorBoundary key={location.pathname}>
               <motion.div
                 key={location.pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.12 }}
                 className={cn(
                   "flex min-h-0 flex-1 flex-col",
                   isFullBleed ? "h-full overflow-hidden" : ""
@@ -230,7 +232,7 @@ export function AppShell() {
               >
                 <Outlet />
               </motion.div>
-            </AnimatePresence>
+            </ErrorBoundary>
           </main>
 
           <nav className="flex border-t border-border bg-card/80 backdrop-blur md:hidden">

@@ -3,7 +3,7 @@
  */
 
 import { registerTool, ToolTags } from "../tool-registry.js";
-import { getProjectContext, getProjectChanges, getProjectLinks, recordContextEvent } from "./project-context.service.js";
+import { getProjectContext, getProjectChanges, getProjectLinks, recordContextEvent, searchContextForGoal } from "./project-context.service.js";
 import { searchVaultNotes, readVaultNote } from "./vault-reader.js";
 import { syncProjectIndex } from "./project-indexer.js";
 
@@ -22,6 +22,28 @@ export function registerProjectContextTools() {
     },
     handler: async (args) => {
       const data = await getProjectContext(args.projectId);
+      return { ok: true, data };
+    },
+  });
+
+  registerTool({
+    name: "project_context_for_goal",
+    description: "Ranked context snippets for a goal (events, runs, vault)",
+    plugin: "core",
+    tags: [ToolTags.READ],
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        goal: { type: "string", description: "What you are trying to accomplish" },
+        limit: { type: "number", default: 8 },
+      },
+      required: ["projectId", "goal"],
+    },
+    handler: async (args) => {
+      const data = await searchContextForGoal(args.projectId, args.goal, {
+        limit: Math.min(args.limit || 8, 20),
+      });
       return { ok: true, data };
     },
   });

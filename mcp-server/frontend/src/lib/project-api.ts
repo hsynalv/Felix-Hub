@@ -30,7 +30,8 @@ export interface ProjectContext {
     startedAt?: string | null;
     finishedAt?: string | null;
   }>;
-  graph: { nodes: ProjectContextNode[] };
+  graph: { nodes: ProjectContextNode[]; edges?: Array<{ from: string; to: string; type: string }> };
+  lastChangeSummary?: string;
 }
 
 export async function fetchProjectContext(projectKey: string) {

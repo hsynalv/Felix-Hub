@@ -23,12 +23,18 @@ const MIGRATION_FILES = [
  * @param {import("mssql").ConnectionPool} pool
  */
 export async function runMigrations(pool) {
-  for (const migration of MIGRATION_FILES) {
+  const currentVersion = (await getSchemaVersion(pool)) ?? 0;
+  const pending = MIGRATION_FILES.filter((m) => m.version > currentVersion);
+  if (pending.length === 0) {
+    return currentVersion;
+  }
+  for (const migration of pending) {
     const sqlPath = join(MIGRATIONS_DIR, migration.file);
     const sqlText = readFileSync(sqlPath, "utf8");
     await pool.request().batch(sqlText);
     console.log(`[persistence] Applied migration v${migration.version} (${migration.file})`);
   }
+  return (await getSchemaVersion(pool)) ?? currentVersion;
 }
 
 /**

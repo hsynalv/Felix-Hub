@@ -6,26 +6,14 @@
  */
 
 import { randomBytes } from "crypto";
+import { generateCorrelationId as auditGenerateCorrelationId } from "../audit/audit.standard.js";
 
 /**
- * Trace context structure
- * @typedef {Object} TraceContext
- * @property {string} correlationId - Unique correlation ID
- * @property {string} [traceId] - Trace ID for distributed tracing
- * @property {string} [spanId] - Current span ID
- * @property {string} [parentSpanId] - Parent span ID
- * @property {Object} [ baggage] - Additional context data
- */
-
-/**
- * Generate a unique correlation ID
- * Format: corr_<timestamp>_<random>
+ * Generate a unique correlation ID (delegates to audit standard).
  * @returns {string}
  */
 export function generateCorrelationId() {
-  const timestamp = Date.now().toString(36);
-  const random = randomBytes(8).toString("hex").substring(0, 8);
-  return `corr_${timestamp}_${random}`;
+  return auditGenerateCorrelationId();
 }
 
 /**

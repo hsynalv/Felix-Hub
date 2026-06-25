@@ -92,11 +92,12 @@ describe("Audit Standard", () => {
         operation: "test-op",
         actor: "user@example.com",
         workspaceId: "ws-1",
-        allowed: "yes", // should be boolean
+        correlationId: generateCorrelationId(),
+        allowed: "yes",
         durationMs: 100,
         success: true,
       };
-      expect(validateAuditEvent(event)).toBe("Field 'allowed' must be a boolean");
+      expect(validateAuditEvent(event)).toBe("allowed must be a boolean");
     });
   });
 

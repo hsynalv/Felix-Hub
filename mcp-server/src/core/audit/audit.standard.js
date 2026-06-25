@@ -209,3 +209,19 @@ export function validateAuditEvent(event) {
 export function generateCorrelationId() {
   return `audit-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`;
 }
+
+const CORRELATION_ID_MAX_LEN = 128;
+
+/**
+ * Normalize inbound correlation ID (header or caller-provided).
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function normalizeCorrelationId(value) {
+  if (value == null) return generateCorrelationId();
+  const trimmed = String(value).trim();
+  if (!trimmed || trimmed.length > CORRELATION_ID_MAX_LEN) {
+    return generateCorrelationId();
+  }
+  return trimmed;
+}

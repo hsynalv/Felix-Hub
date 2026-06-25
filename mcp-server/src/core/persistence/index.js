@@ -54,6 +54,10 @@ export async function initPersistence() {
     return getPersistenceStatus();
   }
 
+  if (pool !== null && status.status === "healthy") {
+    return getPersistenceStatus();
+  }
+
   if (!resolveMssqlUrl()) {
     status = {
       enabled: true,

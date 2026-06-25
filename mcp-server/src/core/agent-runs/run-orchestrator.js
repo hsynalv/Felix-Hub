@@ -61,7 +61,7 @@ export async function recordLlmStep(runId, { model, provider, usage, durationMs,
   });
 }
 
-export async function recordToolStep(runId, { toolName, input, output, durationMs, phase }) {
+export async function recordToolStep(runId, { toolName, input, output, durationMs, phase, retryCount = 0 }) {
   if (!runId) return null;
   const failed = output && typeof output === "object" && output.ok === false;
   return appendRunStep(runId, {
@@ -71,7 +71,8 @@ export async function recordToolStep(runId, { toolName, input, output, durationM
     output,
     status: failed ? "error" : "ok",
     durationMs,
-    metadata: { phase },
+    metadata: { phase, retryCount },
+    retryCount,
   });
 }
 

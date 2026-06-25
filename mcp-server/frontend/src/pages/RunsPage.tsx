@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -11,6 +11,7 @@ import {
   Coins,
   Loader2,
   MessageSquare,
+  Radio,
   XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,23 @@ import {
   OpsStatCard,
   OpsStatGrid,
 } from "@/components/ops/OpsPrimitives";
-import { getRun, getRunSteps, listRuns, cancelRun, replayRun, listWorkflowTemplates, startWorkflowTemplate, type AgentRun, type RunStep } from "@/lib/runs-api";
+import { WorkflowTemplateDialog } from "@/components/runs/WorkflowTemplateDialog";
+import {
+  getRun,
+  getRunSteps,
+  listRuns,
+  cancelRun,
+  replayRun,
+  listWorkflowTemplates,
+  startWorkflowTemplate,
+  approveRun,
+  resumeRun,
+  retryRun,
+  type AgentRun,
+  type RunStep,
+  type WorkflowTemplate,
+} from "@/lib/runs-api";
+import { useRunEvents } from "@/lib/use-run-events";
 import { formatCostUsd } from "@/lib/usage-api";
 import { useToast } from "@/providers/ToastProvider";
 import { cn, formatDuration, formatTime } from "@/lib/utils";
@@ -122,6 +139,7 @@ function StepRow({ step, index }: { step: RunStep; index: number }) {
 export function RunsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [templateDialog, setTemplateDialog] = useState<WorkflowTemplate | null>(null);
   const qc = useQueryClient();
   const toast = useToast();
 
@@ -135,7 +153,7 @@ export function RunsPage() {
     refetchInterval: (query) => {
       const runs = query.state.data?.runs ?? [];
       const hasActive = runs.some((r) => r.status === "running" || r.status === "waiting_approval");
-      return hasActive ? 3000 : false;
+      return hasActive ? 5000 : false;
     },
   });
 
@@ -147,12 +165,34 @@ export function RunsPage() {
     enabled: !!selectedId,
   });
 
-  const { data: stepsData, isLoading: stepsLoading } = useQuery({
+  const { data: stepsData, isLoading: stepsLoading, refetch: refetchSteps } = useQuery({
     queryKey: ["run-steps", selectedId],
     queryFn: () => getRunSteps(selectedId!),
     enabled: !!selectedId,
-    refetchInterval: detail?.status === "running" || detail?.status === "waiting_approval" ? 2000 : false,
+    refetchInterval: detail?.status === "running" || detail?.status === "waiting_approval" ? 4000 : false,
   });
+
+  const isLive =
+    detail?.status === "running" ||
+    detail?.status === "waiting_approval" ||
+    detail?.status === "paused";
+  const { lastEvent, connected: sseConnected } = useRunEvents(selectedId, isLive);
+  const sseInvalidateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!lastEvent) return;
+    if (lastEvent._event === "step" || lastEvent._event === "status") {
+      if (sseInvalidateRef.current) clearTimeout(sseInvalidateRef.current);
+      sseInvalidateRef.current = setTimeout(() => {
+        void refetchSteps();
+        void qc.invalidateQueries({ queryKey: ["run", selectedId] });
+        void qc.invalidateQueries({ queryKey: ["runs"] });
+      }, 400);
+    }
+    return () => {
+      if (sseInvalidateRef.current) clearTimeout(sseInvalidateRef.current);
+    };
+  }, [lastEvent, qc, refetchSteps, selectedId]);
 
   const cancelMutation = useMutation({
     mutationFn: (runId: string) => cancelRun(runId, "user_cancelled"),
@@ -174,12 +214,60 @@ export function RunsPage() {
     onError: (e: Error) => toast.show(e.message, "error"),
   });
 
+  const templateMutation = useMutation({
+    mutationFn: ({ id, params, dryRun }: { id: string; params: Record<string, string>; dryRun: boolean }) =>
+      startWorkflowTemplate(id, params, dryRun),
+    onSuccess: (run) => {
+      toast.show(`Workflow başlatıldı: ${run.id.slice(0, 8)}…`, "info");
+      setTemplateDialog(null);
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      setSelectedId(run.id);
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: ({ runId, approvalId, approved }: { runId: string; approvalId: string; approved: boolean }) =>
+      approveRun(runId, approvalId, approved),
+    onSuccess: () => {
+      toast.show("Onay işlendi", "info");
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["run", selectedId] });
+      qc.invalidateQueries({ queryKey: ["run-steps", selectedId] });
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: (runId: string) => resumeRun(runId),
+    onSuccess: () => {
+      toast.show("Run devam ediyor", "info");
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["run", selectedId] });
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (runId: string) => retryRun(runId, false),
+    onSuccess: (run) => {
+      toast.show(`Yeniden deneme: ${run.id.slice(0, 8)}…`, "info");
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      setSelectedId(run.id);
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
   const { data: templatesData } = useQuery({
     queryKey: ["workflow-templates"],
     queryFn: listWorkflowTemplates,
   });
 
   const steps = stepsData?.steps ?? [];
+  const pendingApproval = steps.find(
+    (s) => s.type === "approval" && s.status === "pending" && s.metadata?.approvalId
+  );
+  const approvalId = pendingApproval?.metadata?.approvalId as string | undefined;
 
   const runAnalytics = useMemo(() => {
     const toolSteps = steps.filter((s) => s.type === "tool");
@@ -248,20 +336,7 @@ export function RunsPage() {
                 key={t.id}
                 variant="outline"
                 size="sm"
-                onClick={async () => {
-                  try {
-                    const repo = prompt("Repo (owner/name)", "octocat/Hello-World");
-                    if (!repo) return;
-                    const branch = prompt("Branch", "feature/agent-run");
-                    if (!branch) return;
-                    const run = await startWorkflowTemplate(t.id, { repo, branch, goal: t.name }, true);
-                    toast.show(`Workflow başlatıldı: ${run.id.slice(0, 8)}…`, "info");
-                    qc.invalidateQueries({ queryKey: ["runs"] });
-                    setSelectedId(run.id);
-                  } catch (e) {
-                    toast.show(e instanceof Error ? e.message : "Hata", "error");
-                  }
-                }}
+                onClick={() => setTemplateDialog(t)}
               >
                 {t.name} ({t.stepCount} adım)
               </Button>
@@ -269,6 +344,17 @@ export function RunsPage() {
           </div>
         </OpsPanel>
       )}
+
+      <WorkflowTemplateDialog
+        template={templateDialog}
+        open={!!templateDialog}
+        onOpenChange={(o) => !o && setTemplateDialog(null)}
+        submitting={templateMutation.isPending}
+        onSubmit={(params, dryRun) => {
+          if (!templateDialog) return;
+          templateMutation.mutate({ id: templateDialog.id, params, dryRun });
+        }}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <OpsPanel title="Run listesi" className="min-h-[320px]">
@@ -317,7 +403,49 @@ export function RunsPage() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <Badge className={cn("font-mono", statusTone(detail?.status))}>{detail?.status}</Badge>
+                {isLive && (
+                  <Badge variant={sseConnected ? "success" : "warning"} className="gap-1 font-normal">
+                    <Radio className="h-3 w-3" />
+                    {sseConnected ? "Canlı" : "Bağlanıyor…"}
+                  </Badge>
+                )}
                 {detail?.startedAt && <span>Başlangıç: {formatTime(detail.startedAt)}</span>}
+                {detail?.status === "waiting_approval" && approvalId && selectedId && (
+                  <>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={approveMutation.isPending}
+                      onClick={() =>
+                        approveMutation.mutate({ runId: selectedId, approvalId, approved: true })
+                      }
+                    >
+                      Onayla
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={approveMutation.isPending}
+                      onClick={() =>
+                        approveMutation.mutate({ runId: selectedId, approvalId, approved: false })
+                      }
+                    >
+                      Reddet
+                    </Button>
+                  </>
+                )}
+                {detail?.status === "paused" && selectedId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={resumeMutation.isPending}
+                    onClick={() => resumeMutation.mutate(selectedId)}
+                  >
+                    Devam et
+                  </Button>
+                )}
                 {(detail?.status === "running" || detail?.status === "waiting_approval") && selectedId && (
                   <Button
                     variant="outline"
@@ -327,6 +455,17 @@ export function RunsPage() {
                     onClick={() => cancelMutation.mutate(selectedId)}
                   >
                     İptal
+                  </Button>
+                )}
+                {detail?.status === "failed" && selectedId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={retryMutation.isPending}
+                    onClick={() => retryMutation.mutate(selectedId)}
+                  >
+                    Yeniden dene
                   </Button>
                 )}
                 {detail?.status === "completed" && selectedId && (

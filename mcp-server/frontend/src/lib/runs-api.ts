@@ -71,6 +71,16 @@ export async function cancelRun(runId: string, reason?: string) {
   return apiPost<AgentRun>(`/runs/${runId}/cancel`, { reason });
 }
 
+export async function resumeRun(runId: string, startFromStep?: number) {
+  return apiPost<AgentRun & { jobId?: string; resumed?: boolean }>(`/runs/${runId}/resume`, {
+    startFromStep,
+  });
+}
+
+export async function retryRun(runId: string, dryRun = false) {
+  return replayRun(runId, dryRun);
+}
+
 export async function approveRun(runId: string, approvalId: string, approved = true) {
   return apiPost<{ status: string; via?: string }>(`/runs/${runId}/approve`, {
     approval_id: approvalId,

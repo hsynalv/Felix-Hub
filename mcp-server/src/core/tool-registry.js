@@ -35,6 +35,8 @@ const tools = new Map();
 export const ToolTags = {
   // Primary policy tags
   READ_ONLY: "read_only",
+  /** @deprecated alias — use READ_ONLY */
+  READ: "read_only",
   WRITE: "write",
   DESTRUCTIVE: "destructive",
   NEEDS_APPROVAL: "needs_approval",
@@ -44,6 +46,7 @@ export const ToolTags = {
   LOCAL_FS: "LOCAL_FS",
   GIT: "GIT",
   EXTERNAL_API: "EXTERNAL_API",
+  DATABASE: "DATABASE",
 };
 
 /** All valid tags */
@@ -111,8 +114,9 @@ export function validateTags(tags) {
     return { tags: [], unknown: [] };
   }
 
-  const unknown = tags.filter((tag) => !VALID_TAGS.includes(tag));
-  const valid = tags.filter((tag) => VALID_TAGS.includes(tag));
+  const filtered = tags.filter((tag) => typeof tag === "string" && tag.length > 0);
+  const unknown = filtered.filter((tag) => !VALID_TAGS.includes(tag));
+  const valid = filtered.filter((tag) => VALID_TAGS.includes(tag));
 
   if (unknown.length > 0) {
     const message = `Unknown tool tags ignored: ${unknown.join(", ")} (valid: ${VALID_TAGS.join(", ")})`;

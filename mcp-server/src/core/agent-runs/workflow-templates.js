@@ -2,6 +2,8 @@
  * Workflow templates — predefined multi-step agent runs.
  */
 
+import { expandWorkflowSteps } from "./workflow-expr.js";
+
 export const WORKFLOW_TEMPLATES = {
   "repo-ship-feature": {
     id: "repo-ship-feature",
@@ -13,13 +15,20 @@ export const WORKFLOW_TEMPLATES = {
       { name: "branch", type: "string", required: true, description: "Feature branch adı" },
       { name: "goal", type: "string", required: false, description: "Özellik hedefi özeti" },
       { name: "baseBranch", type: "string", required: false, default: "main" },
+      { name: "skipIssues", type: "boolean", required: false, default: "false", description: "Issue adımını atla" },
     ],
     steps: [
-      { type: "tool", toolName: "repo_analyze", args: { repo: "{{repo}}" } },
-      { type: "tool", toolName: "repo_open_issues", args: { repo: "{{repo}}", limit: 5 } },
+      { type: "tool", toolName: "repo_analyze", args: { repo: "{{repo}}" }, maxRetries: 1 },
+      { type: "tool", toolName: "repo_open_issues", args: { repo: "{{repo}}", limit: 5 }, when: "{{skipIssues}} !== true" },
+      { type: "checkpoint", name: "pre-branch" },
       { type: "tool", toolName: "git_branch_create", args: { name: "{{branch}}" } },
       { type: "tool", toolName: "git_status", args: {} },
-      { type: "tool", toolName: "github_branch_create", args: { repo: "{{repo}}", branch: "{{branch}}", from: "{{baseBranch}}" } },
+      {
+        type: "tool",
+        toolName: "github_branch_create",
+        args: { repo: "{{repo}}", branch: "{{branch}}", from: "{{baseBranch}}" },
+        compensate: { toolName: "git_status", args: {} },
+      },
       { type: "tool", toolName: "github_pr_create", args: { repo: "{{repo}}", title: "{{goal}}", head: "{{branch}}", base: "{{baseBranch}}" } },
     ],
   },
@@ -71,14 +80,19 @@ export function resolveTemplateArgs(templateValue, params) {
 }
 
 export function buildPlanFromTemplate(template, params) {
+  const expanded = expandWorkflowSteps(template.steps, params);
   return {
     templateId: template.id,
     parameters: params,
-    phases: template.steps.map((step, index) => ({
+    phases: expanded.map((step, index) => ({
       index,
       type: step.type,
       toolName: step.toolName,
-      args: resolveTemplateArgs(step.args || {}, params),
+      args: step.args || {},
+      when: step.when,
+      maxRetries: step.maxRetries,
+      compensate: step.compensate,
+      name: step.name,
     })),
   };
 }

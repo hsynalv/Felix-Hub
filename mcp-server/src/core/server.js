@@ -18,6 +18,7 @@ import { getApprovalStore } from "./policy-hooks.js";
 import { callTool } from "./tool-registry.js";
 import { createMcpHttpMiddleware } from "../mcp/http-transport.js";
 import { issueUiToken, issueUiTokenWithNotification } from "./ui-tokens.js";
+import { normalizeCorrelationId } from "./audit/audit.standard.js";
 import { registerUiChatRoutes } from "./ui-chat.js";
 import { registerAgentRunRoutes } from "./agent-runs/routes.js";
 import { registerAgentRunJobRunner } from "./agent-runs/agent-run-job.js";
@@ -29,6 +30,7 @@ import { registerSidecarTools } from "./sidecar/sidecar-tools.js";
 import { resolvePendingApproval } from "./agent-runs/approval-bridge.js";
 import { registerUsageRoutes } from "./usage/routes.js";
 import { registerInternalMarketplaceRoutes } from "./marketplace/internal-routes.js";
+import { registerSidecarRoutes } from "./sidecar/sidecar-routes.js";
 import { registerWorkspacePreferencesRoutes } from "./workspace-preferences.routes.js";
 import { purgeOlderThan } from "./usage/usage-ledger.service.js";
 import { initPersistence, getPersistenceStatus, isPersistenceHealthy } from "./persistence/index.js";
@@ -136,13 +138,9 @@ function responseEnvelopeMiddleware(req, res, next) {
  * Generates or extracts correlation ID for request tracing
  */
 function correlationIdMiddleware(req, res, next) {
-  // Use provided correlation ID or generate new one
-  req.correlationId = req.headers["x-correlation-id"] || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  req.requestId = req.correlationId; // Compatibility with existing code
-  
-  // Expose correlation ID in response
+  req.correlationId = normalizeCorrelationId(req.headers["x-correlation-id"]);
+  req.requestId = req.correlationId;
   res.setHeader("x-correlation-id", req.correlationId);
-  
   next();
 }
 

@@ -25,6 +25,7 @@ export {
   sanitizeAuditEvent,
   validateAuditEvent,
   generateCorrelationId,
+  normalizeCorrelationId,
 } from "./audit.standard.js";
 
 // Sink interface

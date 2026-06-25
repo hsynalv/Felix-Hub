@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SettingsInfoBox, SettingsSectionCard } from "@/components/settings/shared";
+import { ProjectContextGraph } from "@/components/settings/ProjectContextGraph";
 import { fetchProjectContext, updateProjectLinks, syncProjectIndex } from "@/lib/project-api";
 import { getProjectEnv, getProjectId, saveProjectContext } from "@/lib/project-context";
 import { subscribeWorkspaceContext } from "@/lib/workspace-context-store";
@@ -87,6 +88,7 @@ export function ProjectSettingsPanel() {
   });
 
   const graphNodes = contextQuery.data?.graph?.nodes?.length ?? 0;
+  const graphEdges = contextQuery.data?.graph?.edges ?? [];
 
   return (
     <div className="space-y-6">
@@ -128,7 +130,8 @@ export function ProjectSettingsPanel() {
 
           {graphNodes > 0 && (
             <p className="text-xs text-muted-foreground">
-              Context graph: {graphNodes} düğüm · {contextQuery.data?.recentRuns?.length ?? 0} son run
+              Context graph: {graphNodes} düğüm · {graphEdges.length} bağlantı ·{" "}
+              {contextQuery.data?.recentRuns?.length ?? 0} son run
             </p>
           )}
 
@@ -181,6 +184,16 @@ export function ProjectSettingsPanel() {
           </Button>
         </div>
       </SettingsSectionCard>
+
+      {contextQuery.data?.graph && (
+        <SettingsSectionCard title="Context graph" description="Proje ilişkileri ve son değişiklik özeti">
+          <ProjectContextGraph
+            nodes={contextQuery.data.graph.nodes}
+            edges={contextQuery.data.graph.edges ?? []}
+            lastChangeSummary={contextQuery.data.lastChangeSummary}
+          />
+        </SettingsSectionCard>
+      )}
     </div>
   );
 }

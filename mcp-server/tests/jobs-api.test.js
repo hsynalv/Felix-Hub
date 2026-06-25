@@ -8,8 +8,7 @@
  * - Failed jobs expose error state
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import express from "express";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import supertest from "supertest";
 
 vi.mock("../src/core/config.js", async (importOriginal) => {
@@ -18,6 +17,10 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
     ...mod,
     config: {
       ...mod.config,
+      persistence: {
+        ...mod.config.persistence,
+        enabled: false,
+      },
       redis: {
         ...mod.config.redis,
         enabled: false,
@@ -27,22 +30,19 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
   };
 });
 
-// Import jobs module to register runners
 import {
   registerJobRunner,
   resetJobsForTests,
 } from "../src/core/jobs.js";
-
-// Import tool-hooks to clear between tests
 import { clearHooks as clearToolHooks } from "../src/core/tool-hooks.js";
-
-// Import server factory
-import { createServer } from "../src/core/server.js";
+import { getIntegrationServer } from "./framework/test-server.js";
 
 const WRITE_KEY = "jobs-api-integration-write-key-32";
 const READ_KEY = "jobs-api-integration-read-key--32";
 
 let projectId = "test-project";
+let app;
+let request;
 
 function withWriteAuth(req) {
   return req
@@ -62,56 +62,57 @@ function jobsForProject(body, id = projectId) {
   return (body.data?.jobs ?? []).filter((job) => job.context?.projectId === id);
 }
 
+function registerTestJobRunners() {
+  registerJobRunner("test.job", async (job, updateProgress, log) => {
+    await log("Starting test job");
+    await updateProgress(50);
+
+    if (job.payload.shouldFail) {
+      throw new Error("Job failed as requested");
+    }
+
+    await updateProgress(100);
+    await log("Test job completed");
+    return { processed: true, input: job.payload };
+  });
+
+  registerJobRunner("slow.job", async (job, updateProgress, log) => {
+    await log("Starting slow job");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await updateProgress(100);
+    return { completed: true };
+  });
+}
+
 describe("Jobs API Integration", () => {
-  let app;
-  let request;
   const envBackup = {};
 
-  beforeEach(async () => {
-    projectId = `jobs-api-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  beforeAll(async () => {
     envBackup.NODE_ENV = process.env.NODE_ENV;
     envBackup.HUB_WRITE_KEY = process.env.HUB_WRITE_KEY;
     envBackup.HUB_READ_KEY = process.env.HUB_READ_KEY;
     envBackup.REDIS_URL = process.env.REDIS_URL;
+    envBackup.HUB_PERSISTENCE_ENABLED = process.env.HUB_PERSISTENCE_ENABLED;
     process.env.NODE_ENV = "test";
     process.env.HUB_WRITE_KEY = WRITE_KEY;
     process.env.HUB_READ_KEY = READ_KEY;
+    process.env.HUB_PERSISTENCE_ENABLED = "false";
     delete process.env.REDIS_URL;
+    delete process.env.HUB_MSSQL_URL;
 
-    // Clear any previously registered hooks/runners
-    resetJobsForTests();
-    clearToolHooks();
-
-    // Create fresh server instance
-    app = await createServer();
+    app = await getIntegrationServer();
     request = supertest(app);
-
-    // Register a test job runner for "test.job" type
-    registerJobRunner("test.job", async (job, updateProgress, log) => {
-      await log("Starting test job");
-      await updateProgress(50);
-
-      if (job.payload.shouldFail) {
-        throw new Error("Job failed as requested");
-      }
-
-      await updateProgress(100);
-      await log("Test job completed");
-      return { processed: true, input: job.payload };
-    });
-
-    // Register a slow job for state testing
-    registerJobRunner("slow.job", async (job, updateProgress, log) => {
-      await log("Starting slow job");
-      // Simulate long-running work without actually blocking
-      await new Promise(resolve => setTimeout(resolve, 50));
-      await updateProgress(100);
-      return { completed: true };
-    });
+    registerTestJobRunners();
   });
 
-  afterEach(() => {
-    // Cleanup
+  beforeEach(() => {
+    projectId = `jobs-api-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    resetJobsForTests();
+    clearToolHooks();
+    registerTestJobRunners();
+  });
+
+  afterAll(() => {
     resetJobsForTests();
     clearToolHooks();
     if (envBackup.NODE_ENV === undefined) delete process.env.NODE_ENV;
@@ -122,6 +123,8 @@ describe("Jobs API Integration", () => {
     else process.env.HUB_READ_KEY = envBackup.HUB_READ_KEY;
     if (envBackup.REDIS_URL === undefined) delete process.env.REDIS_URL;
     else process.env.REDIS_URL = envBackup.REDIS_URL;
+    if (envBackup.HUB_PERSISTENCE_ENABLED === undefined) delete process.env.HUB_PERSISTENCE_ENABLED;
+    else process.env.HUB_PERSISTENCE_ENABLED = envBackup.HUB_PERSISTENCE_ENABLED;
   });
 
   describe("POST /jobs", () => {
@@ -220,7 +223,6 @@ describe("Jobs API Integration", () => {
 
   describe("GET /jobs/:id", () => {
     it("should return correct job by id", async () => {
-      // Submit a job
       const submitResponse = await withWriteAuth(request.post("/jobs")).send({
         type: "test.job",
         payload: { foo: "bar" },
@@ -228,7 +230,6 @@ describe("Jobs API Integration", () => {
 
       const jobId = submitResponse.body.data.job.id;
 
-      // Get job by ID
       const response = await withReadAuth(request.get(`/jobs/${jobId}`));
 
       expect(response.status).toBe(200);
@@ -257,7 +258,6 @@ describe("Jobs API Integration", () => {
 
   describe("Failed job state", () => {
     it("should expose error state for failed jobs", async () => {
-      // Submit a job that will fail
       const submitResponse = await withWriteAuth(request.post("/jobs")).send({
         type: "test.job",
         payload: { shouldFail: true },
@@ -265,10 +265,8 @@ describe("Jobs API Integration", () => {
 
       const jobId = submitResponse.body.data.job.id;
 
-      // Wait for job to complete (fail)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Get job state
       const response = await withReadAuth(request.get(`/jobs/${jobId}`));
 
       expect(response.status).toBe(200);

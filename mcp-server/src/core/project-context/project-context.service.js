@@ -9,6 +9,7 @@ import {
 } from "../persistence/index.js";
 import { getProject, listProjects, updateProjectLinks } from "../../plugins/projects/projects.store.js";
 import { listRuns } from "../agent-runs/agent-runs.service.js";
+import { searchVaultNotes } from "./vault-reader.js";
 
 /** @type {Map<string, object[]>} */
 const memoryEvents = new Map();
@@ -21,6 +22,83 @@ export function getProjectLinks(projectKey) {
     notionProjectId: project.links?.notionProjectId || project.envs?.development?.notionProjectsDb || null,
     obsidianVaultPath: project.links?.obsidianVaultPath || null,
     defaultBranch: project.links?.defaultBranch || "main",
+  };
+}
+
+function buildGraphEdges(projectKey, links, runs, events) {
+  const edges = [];
+  if (links?.githubRepo) {
+    edges.push({ from: projectKey, to: links.githubRepo, type: "github_repo" });
+  }
+  if (links?.notionProjectId) {
+    edges.push({ from: projectKey, to: links.notionProjectId, type: "notion_db" });
+  }
+  if (links?.obsidianVaultPath) {
+    edges.push({ from: projectKey, to: links.obsidianVaultPath, type: "obsidian_vault" });
+  }
+  for (const run of runs.slice(0, 5)) {
+    edges.push({ from: projectKey, to: run.id, type: "has_run" });
+  }
+  for (const ev of events.slice(0, 10)) {
+    if (ev.refs?.repo) edges.push({ from: ev.id, to: ev.refs.repo, type: "mentions_repo" });
+    if (ev.refs?.path) edges.push({ from: ev.id, to: ev.refs.path, type: "mentions_file" });
+  }
+  return edges;
+}
+
+function buildLastChangeSummary(events, runs) {
+  const lines = [];
+  for (const ev of events.slice(0, 5)) {
+    if (ev.summary) lines.push(`• ${ev.eventType}: ${ev.summary}`);
+  }
+  for (const run of runs.slice(0, 3)) {
+    if (run.goal) lines.push(`• run ${run.status}: ${run.goal}`);
+  }
+  return lines.length ? lines.join("\n") : "Henüz kayıtlı aktivite yok.";
+}
+
+/**
+ * Rank context snippets for a goal string (keyword heuristic).
+ */
+export async function searchContextForGoal(projectKey, goal, { limit = 8 } = {}) {
+  const ctx = await getProjectContext(projectKey);
+  const terms = String(goal || "")
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((t) => t.length > 2);
+  const snippets = [];
+
+  for (const ev of ctx.recentEvents || []) {
+    const text = `${ev.eventType} ${ev.summary || ""}`.toLowerCase();
+    const score = terms.reduce((n, t) => (text.includes(t) ? n + 1 : n), 0);
+    if (score > 0) snippets.push({ type: "event", score, text: ev.summary, id: ev.id, eventType: ev.eventType });
+  }
+
+  for (const run of ctx.recentRuns || []) {
+    const text = `${run.goal || ""} ${run.status}`.toLowerCase();
+    const score = terms.reduce((n, t) => (text.includes(t) ? n + 1 : n), 0);
+    if (score > 0) snippets.push({ type: "run", score, text: run.goal, id: run.id, status: run.status });
+  }
+
+  if (ctx.links?.obsidianVaultPath && terms.length) {
+    const vault = await searchVaultNotes(ctx.links.obsidianVaultPath, terms[0], { limit: 5 });
+    for (const hit of vault.data?.results || []) {
+      snippets.push({
+        type: "vault",
+        score: 2,
+        text: hit.title || hit.path,
+        id: hit.path,
+      });
+    }
+  }
+
+  snippets.sort((a, b) => b.score - a.score);
+  return {
+    projectId: projectKey,
+    goal,
+    snippets: snippets.slice(0, limit),
+    graph: ctx.graph,
+    lastChangeSummary: ctx.lastChangeSummary,
   };
 }
 
@@ -97,6 +175,16 @@ export async function getProjectContext(projectKey) {
   const events = await listContextEvents(projectKey, { limit: 20 });
   const runs = await listRuns({ projectId: projectKey, limit: 10 });
 
+  const nodes = [
+    { id: projectKey, type: "project", label: project?.name || projectKey },
+    ...(links?.githubRepo ? [{ id: links.githubRepo, type: "github_repo", label: links.githubRepo }] : []),
+    ...(links?.notionProjectId ? [{ id: links.notionProjectId, type: "notion", label: "Notion" }] : []),
+    ...(links?.obsidianVaultPath ? [{ id: links.obsidianVaultPath, type: "obsidian", label: "Vault" }] : []),
+    ...runs.slice(0, 5).map((r) => ({ id: r.id, type: "run", label: r.goal || r.id.slice(0, 8) })),
+    ...events.slice(0, 5).map((e) => ({ id: e.id, type: "event", label: e.summary || e.eventType })),
+  ];
+  const edges = buildGraphEdges(projectKey, links, runs, events);
+
   return {
     project: project
       ? { key: projectKey, name: project.name, envs: Object.keys(project.envs || {}) }
@@ -111,15 +199,8 @@ export async function getProjectContext(projectKey) {
       startedAt: r.startedAt,
       finishedAt: r.finishedAt,
     })),
-    graph: {
-      nodes: [
-        { id: projectKey, type: "project", label: project?.name || projectKey },
-        ...(links?.githubRepo ? [{ id: links.githubRepo, type: "github_repo", label: links.githubRepo }] : []),
-        ...(links?.notionProjectId ? [{ id: links.notionProjectId, type: "notion", label: "Notion" }] : []),
-        ...(links?.obsidianVaultPath ? [{ id: links.obsidianVaultPath, type: "obsidian", label: "Vault" }] : []),
-        ...runs.slice(0, 5).map((r) => ({ id: r.id, type: "run", label: r.goal || r.id.slice(0, 8) })),
-      ],
-    },
+    lastChangeSummary: buildLastChangeSummary(events, runs),
+    graph: { nodes, edges },
   };
 }
 

@@ -4,6 +4,7 @@ import { Bot, Sparkles, Wrench, Zap } from "lucide-react";
 import { ChatAssistantTurn } from "./ChatAssistantTurn";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { groupChatMessages } from "./chat-message-groups";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ChatMessage } from "@/lib/chat-stream";
 import { cn } from "@/lib/utils";
 
@@ -18,14 +19,42 @@ type ChatMessageListProps = {
   messages: Array<ChatMessage & { id: string; createdAt?: string }>;
   streaming: boolean;
   streamingMessageId?: string | null;
+  loading?: boolean;
+  hasConversation?: boolean;
   onExample: (text: string) => void;
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 };
+
+function ChatLoadingSkeleton() {
+  return (
+    <div className="space-y-5 py-2" aria-busy="true" aria-label="Sohbet yükleniyor">
+      <div className="flex justify-end">
+        <Skeleton className="h-10 w-[min(70%,16rem)] rounded-2xl rounded-tr-md" />
+      </div>
+      <div className="flex gap-3">
+        <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <Skeleton className="h-20 w-full max-w-md rounded-2xl rounded-tl-md" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Skeleton className="h-10 w-[min(55%,12rem)] rounded-2xl rounded-tr-md" />
+      </div>
+      <div className="flex gap-3">
+        <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+        <Skeleton className="h-28 w-full max-w-lg rounded-2xl rounded-tl-md" />
+      </div>
+    </div>
+  );
+}
 
 export function ChatMessageList({
   messages,
   streaming,
   streamingMessageId,
+  loading = false,
+  hasConversation = false,
   onExample,
   scrollRef,
 }: ChatMessageListProps) {
@@ -33,6 +62,7 @@ export function ChatMessageList({
   const scrollContainerRef = scrollRef ?? innerScrollRef;
   const renderItems = useMemo(() => groupChatMessages(messages), [messages]);
   const stickToBottomRef = useRef(true);
+  const wasLoadingRef = useRef(false);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -49,9 +79,31 @@ export function ChatMessageList({
 
   useEffect(() => {
     const el = scrollContainerRef.current;
-    if (!el || !stickToBottomRef.current) return;
+    if (!el) return;
+
+    if (loading && hasConversation) {
+      stickToBottomRef.current = true;
+      el.scrollTop = 0;
+      wasLoadingRef.current = true;
+      return;
+    }
+
+    if (!loading && wasLoadingRef.current) {
+      wasLoadingRef.current = false;
+      requestAnimationFrame(() => {
+        if (!scrollContainerRef.current) return;
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      });
+      return;
+    }
+
+    if (!stickToBottomRef.current) return;
     el.scrollTo({ top: el.scrollHeight, behavior: streaming ? "auto" : "smooth" });
-  }, [messages, streaming, scrollContainerRef]);
+  }, [messages, streaming, loading, hasConversation, scrollContainerRef]);
+
+  const showWelcome = messages.length === 0 && !loading && !hasConversation;
+  const showLoading = loading && hasConversation;
+  const showEmptyThread = messages.length === 0 && !loading && hasConversation;
 
   return (
     <div
@@ -62,8 +114,18 @@ export function ChatMessageList({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_100%_100%,oklch(0.5_0.12_300/0.08),transparent)]" />
 
       <div className="relative mx-auto max-w-3xl px-4 pb-4 pt-6 md:px-6">
-        <AnimatePresence initial={false}>
-          {messages.length === 0 ? (
+        <AnimatePresence initial={false} mode="wait">
+          {showLoading ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <ChatLoadingSkeleton />
+            </motion.div>
+          ) : showWelcome ? (
             <motion.div
               key="empty"
               initial={{ opacity: 0, y: 16 }}
@@ -130,6 +192,17 @@ export function ChatMessageList({
                   </motion.button>
                 ))}
               </motion.div>
+            </motion.div>
+          ) : showEmptyThread ? (
+            <motion.div
+              key="empty-thread"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center py-16 text-center"
+            >
+              <p className="text-sm text-muted-foreground">Bu sohbette henüz mesaj yok.</p>
+              <p className="mt-1 text-xs text-muted-foreground/80">Aşağıdan bir mesaj yazarak başla.</p>
             </motion.div>
           ) : (
             <motion.div

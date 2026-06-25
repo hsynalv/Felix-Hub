@@ -36,7 +36,9 @@
 
 ---
 
-## Faz 1 — Çekirdek ürün (agent execution) — **done** ✅
+## Faz 1 — Çekirdek ürün (agent execution) — **v1 done** ✅
+
+> **Not:** Run entity, step trace, dry replay ve linear workflow template MVP tamamlandı. Conditional steps, durable resume, rollback ve formal state machine **Faz 5 / v2** kapsamındadır.
 
 **Hedef:** "Bu agent ne yaptı?" sorusuna ürün seviyesinde cevap.
 
@@ -107,6 +109,28 @@
 
 ---
 
+## Faz 5 — Ürünleştirme + Runtime v2 (v3.4) — **done** ✅
+
+**Hedef:** MVP'leri günlük kullanım ve gerçek workflow engine seviyesine taşımak. Faz 1 agent runtime = **v1 done**; bu faz **v2** kapsar.
+
+| Sıra | Pillar / Sprint | Durum |
+|------|-----------------|-------|
+| 5.1 | Runs UI ürünleştirme (template form, SSE, approval/resume) | done |
+| 5.2 | [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md) v2 (conditional, checkpoint resume, rollback) | done |
+| 5.3 | [03-project-workspace-intelligence.md](./03-project-workspace-intelligence.md) Faz D (graph edges, goal retrieval) | done |
+| 5.4 | Platform hijyeni (test bootstrap, tool tags strict, audit correlationId) | done |
+
+**Exit gate:**
+- [x] Workflow template dialog (validation, dry-run, repo preset)
+- [x] Live SSE run view + approval/resume/retry UI
+- [x] Runtime v2: conditional step + durable checkpoint resume + compensate hook
+- [x] Context graph edges + `project_context_for_goal`
+- [x] `jobs-api.test.js` < 10s; tool tag warnings sıfır
+
+> **Milestone:** `v3.4-beta` = Sprint A exit; `v3.5` = Runtime v2 exit
+
+---
+
 ## Paralel çalışma kuralları
 
 | Yapılabilir paralel | Yapılmamalı paralel |
@@ -126,6 +150,8 @@
 | `v3.1` | Faz 2 (project memory + cost) |
 | `v3.2` | Faz 3 (marketplace + eval) |
 | `v3.3` | Faz 4 (sidecar) |
+| `v3.4-beta` | Faz 5 Sprint A (Runs UI product) |
+| `v3.5` | Faz 5 Sprint B (Runtime v2 engine) |
 
 ---
 
@@ -140,3 +166,15 @@ Last reviewed: YYYY-MM-DD
 ```
 
 Sprint planlarken `docs/priorities.md` ile çakışan maddeleri **önce Pillar 10** altında kapat, sonra V3 özelliklerine geç.
+
+---
+
+## V4 — Sonraki yol
+
+V3 Faz 5 (v3.4) tamamlandıktan sonra ürün yönü [V4 path](../v4-path/README.md) ile devam eder:
+
+- **Kısa vade:** Platform core → Runtime v2 → Run Designer → Approval Pro
+- **Orta vade:** Project Command Center → Desktop Control → Self-Healing Dev
+- **Uzun vade:** Eval Studio → Cost guardrails → Team packs
+
+Detay: [v4-path/EXECUTION-ORDER.md](../v4-path/EXECUTION-ORDER.md)

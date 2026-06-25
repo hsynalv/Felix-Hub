@@ -67,9 +67,14 @@ function authEnabled() {
 }
 
 export function extractAuthKey(req) {
-  const auth = req.headers["authorization"] ?? "";
+  const auth = req.headers?.["authorization"] ?? "";
   if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
-  return req.headers["x-hub-api-key"]?.trim() ?? req.headers["x-api-key"]?.trim() ?? null;
+  const headerKey =
+    req.headers?.["x-hub-api-key"]?.trim() ?? req.headers?.["x-api-key"]?.trim() ?? null;
+  if (headerKey) return headerKey;
+  const queryToken = req.query?.access_token || req.query?.token;
+  if (typeof queryToken === "string" && queryToken.trim()) return queryToken.trim();
+  return null;
 }
 
 function extractKey(req) {

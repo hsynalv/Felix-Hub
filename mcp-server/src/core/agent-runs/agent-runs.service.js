@@ -298,6 +298,7 @@ export async function appendRunStep(runId, {
   durationMs = null,
   usage = null,
   metadata = null,
+  retryCount = 0,
 }) {
   const stepIndex = await nextStepIndex(runId);
   const id = randomUUID();
@@ -311,7 +312,7 @@ export async function appendRunStep(runId, {
     input: maskJson(input),
     output: maskJson(output),
     durationMs,
-    retryCount: 0,
+    retryCount: retryCount ?? 0,
     usage,
     metadata,
     createdAt: new Date().toISOString(),
@@ -331,8 +332,8 @@ export async function appendRunStep(runId, {
   }
 
   await persistenceQuery(
-    `INSERT INTO agent_run_steps (id, run_id, step_index, step_type, tool_name, status, input_json, output_json, duration_ms, usage_json, metadata_json)
-     VALUES (@id, @runId, @stepIndex, @type, @toolName, @status, @inputJson, @outputJson, @durationMs, @usageJson, @metadataJson);
+    `INSERT INTO agent_run_steps (id, run_id, step_index, step_type, tool_name, status, input_json, output_json, duration_ms, retry_count, usage_json, metadata_json)
+     VALUES (@id, @runId, @stepIndex, @type, @toolName, @status, @inputJson, @outputJson, @durationMs, @retryCount, @usageJson, @metadataJson);
      UPDATE agent_runs SET current_step = @stepIndex + 1, updated_at = SYSUTCDATETIME() WHERE id = @runId`,
     {
       id,
@@ -344,6 +345,7 @@ export async function appendRunStep(runId, {
       inputJson: stringifyJson(maskJson(input)),
       outputJson: stringifyJson(maskJson(output)),
       durationMs,
+      retryCount,
       usageJson: stringifyJson(usage),
       metadataJson: stringifyJson(metadata),
     }

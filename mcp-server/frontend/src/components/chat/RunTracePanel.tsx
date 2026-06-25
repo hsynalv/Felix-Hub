@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, Bot, CheckCircle2, Clock, Loader2, MessageSquare, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { RunStep } from "@/lib/runs-api";
 import { cn, formatDuration } from "@/lib/utils";
 
@@ -47,21 +46,22 @@ export function RunTracePanel({
   className?: string;
 }) {
   const [liveSteps, setLiveSteps] = useState<LiveRunStep[]>([]);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastScrolledCountRef = useRef(0);
 
   useEffect(() => {
     setLiveSteps(initialSteps.map((s, i) => toLiveStep({ step: s }, i)));
+    lastScrolledCountRef.current = 0;
   }, [initialSteps, runId]);
 
-  useEffect(() => {
-    if (!live) return;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [liveSteps, live]);
-
-  const appendLive = (entry: Partial<LiveRunStep>) => {
+  const appendLive = useCallback((entry: Partial<LiveRunStep>) => {
     setLiveSteps((prev) => {
       const idx = prev.findIndex(
-        (s) => s.type === entry.type && s.toolName === entry.toolName && s.phase === entry.phase && s.status === "pending"
+        (s) =>
+          s.type === entry.type &&
+          s.toolName === entry.toolName &&
+          s.phase === entry.phase &&
+          s.status === "pending"
       );
       if (idx >= 0 && entry.phase === "end") {
         const next = [...prev];
@@ -70,9 +70,19 @@ export function RunTracePanel({
       }
       return [...prev, toLiveStep({ ...entry, id: `live-${Date.now()}-${prev.length}` }, prev.length)];
     });
-  };
+  }, []);
 
-  // Expose append via custom event on window for ChatPage (minimal coupling)
+  useEffect(() => {
+    if (!live || liveSteps.length === 0) return;
+    if (liveSteps.length <= lastScrolledCountRef.current) return;
+    lastScrolledCountRef.current = liveSteps.length;
+    const el = scrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [liveSteps.length, live]);
+
   useEffect(() => {
     if (!runId || !live) return;
     const handler = (e: Event) => {
@@ -82,7 +92,7 @@ export function RunTracePanel({
     };
     window.addEventListener("mcp-run-step", handler);
     return () => window.removeEventListener("mcp-run-step", handler);
-  }, [runId, live]);
+  }, [runId, live, appendLive]);
 
   if (!runId) {
     return (
@@ -103,7 +113,7 @@ export function RunTracePanel({
           <Link to={`/runs`}>Tümü</Link>
         </Button>
       </div>
-      <ScrollArea className="flex-1 p-2">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2">
         <div className="space-y-1.5">
           {liveSteps.length === 0 ? (
             <p className="py-6 text-center text-xs text-muted-foreground">Adım bekleniyor…</p>
@@ -132,9 +142,8 @@ export function RunTracePanel({
               );
             })
           )}
-          <div ref={bottomRef} />
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

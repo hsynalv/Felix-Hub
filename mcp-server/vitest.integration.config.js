@@ -33,5 +33,6 @@ export default defineConfig({
     exclude: ["**/node_modules/**"],
     pool: "forks",
     testTimeout: 30_000,
+    setupFiles: ["tests/setup.js"],
   },
 });

@@ -217,6 +217,33 @@ export function registerAgentRunRoutes(app) {
           error: { code: "invalid_state", message: `Cannot resume run in status ${run.status}` },
         });
       }
+
+      const templateId = run.metadata?.templateId;
+      if (templateId && run.status === RunStatus.PAUSED) {
+        const startFromStep = Number(req.body?.startFromStep ?? run.currentStep ?? 0);
+        const job = submitJob(
+          WORKFLOW_RUN_JOB_TYPE,
+          {
+            runId: run.id,
+            templateId,
+            params: run.metadata?.parameters || {},
+            dryRun: run.metadata?.dryRun ?? false,
+            startFromStep,
+            context: {
+              projectId: run.projectId,
+              projectEnv: req.projectEnv,
+              scopes: req.authScopes,
+              user: req.actor?.type || "api",
+              requestId: req.requestId,
+            },
+          },
+          { projectId: run.projectId, user: req.actor?.type }
+        );
+        linkRunToJob(run.id, job.id);
+        const updated = await updateRunStatus(run.id, RunStatus.RUNNING);
+        return res.json({ ok: true, data: { ...updated, jobId: job.id, resumed: true } });
+      }
+
       const updated = await updateRunStatus(run.id, RunStatus.RUNNING);
       res.json({ ok: true, data: updated });
     } catch (err) {

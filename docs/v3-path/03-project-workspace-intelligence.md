@@ -1,6 +1,6 @@
 # 03 — Project Workspace Intelligence
 
-> **Status:** faz_a_done (Faz 2 exit)  
+> **Status:** faz_a_done (Faz 2 exit); Faz D intelligence = Faz 5  
 > **Öncelik:** P1 (Faz 2)  
 > **Bağımlılık:** [01-agent-runtime-workflow.md](./01-agent-runtime-workflow.md), brain/RAG stabilitesi
 
@@ -127,9 +127,14 @@ MCP tools: `project_context_search`, `project_recent_changes`.
 
 **Exit:** Örnek issue için modül listesi UI'da.
 
-### Faz D — Agent-native memory (sürekli)
+### Faz D — Agent-native memory + intelligence (Faz 5)
 
-- [ ] Run tamamlanınca özet `context_events`'e yaz
+- [x] Run tamamlanınca özet `context_events`'e yaz
+- [ ] Graph **edges** (project→repo, run→event, issue→pr)
+- [ ] `lastChangeSummary` + otomatik ilişki çıkarma (indexer)
+- [ ] `project_context_for_goal` — goal-aware ranked retrieval
+- [ ] Opsiyonel RAG bridge (project-scoped)
+- [ ] Mini graph UI (Settings / Runs)
 - [ ] Uzun hafıza: önemli kararları otomatik Notion/Obsidian'a öner
 
 ---

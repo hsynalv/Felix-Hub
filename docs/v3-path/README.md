@@ -80,3 +80,9 @@ flowchart TB
 4. Tamamlanan maddeleri dosya başındaki `Status:` satırında güncelle.
 
 İlgili mevcut dokümanlar: [architecture.md](../architecture.md), [technical-debt.md](../technical-debt.md), [priorities.md](../priorities.md), [roadmap.md](../roadmap.md).
+
+---
+
+## V4 — Sonraki aşama
+
+V3 tamamlandıktan sonra: [**v4-path/**](../v4-path/README.md) — MCP Hub + agent runtime + premium desktop agent platformu. Stratejik üçlü: Run Designer + Desktop Control + Eval Studio.

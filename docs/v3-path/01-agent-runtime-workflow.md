@@ -1,7 +1,7 @@
 # 01 — Agent Runtime / Workflow Katmanı
 
-> **Status:** done (2026-06-24)  
-> **Öncelik:** P0 (Faz 1)  
+> **Status:** v1 done (2026-06-24) — v2 backlog Faz 5  
+> **Öncelik:** P0 (Faz 1 tamamlandı); v2 = Faz 5  
 > **Bağımlılık:** [10-production-hardening.md](./10-production-hardening.md) (jobs + audit tek kaynak)
 
 ---
@@ -216,3 +216,17 @@ Mevcut `conversations` tablosu korunur; `agent_runs.conversation_id` optional FK
 | Trace boyutu | Step output truncate + blob storage (file-storage plugin) |
 
 **Sonraki:** [02-policy-approval-center.md](./02-policy-approval-center.md), [04-visual-run-dashboard.md](./04-visual-run-dashboard.md)
+
+---
+
+## v2 backlog (Faz 5)
+
+| Özellik | Durum | Not |
+|---------|--------|-----|
+| Formal state machine (transition guards) | planned | `RunStatus` geçiş tablosu |
+| Conditional / branch steps | planned | `when` expression, `branch` step tipi |
+| Durable checkpoint resume | planned | Workflow crash sonrası step cursor'dan devam |
+| Compensating rollback hook | planned | Step `compensate` opt-in |
+| Replay with re-execution | planned | Şu an dry trace clone |
+| Per-step retry policy UI | planned | `retry_count` persist + template `maxRetries` |
+| Runs UI: template form, SSE, approval | in_progress | `WorkflowTemplateDialog`, `useRunEvents` |

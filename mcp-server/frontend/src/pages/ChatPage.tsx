@@ -47,6 +47,7 @@ import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 import { useSpeechSynthesis } from "@/lib/use-speech-synthesis";
 import { parsePluginSlashMessage } from "@/lib/chat-plugin-slash";
 import type { SlashPluginOption } from "@/components/chat/ChatSlashMenu";
+import { conversationIdsMatch, normalizeConversationId } from "@/lib/conversation-ids";
 
 let messageIdSeq = 0;
 function nextMessageId() {
@@ -70,6 +71,7 @@ function mapServerMessages(
 export function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationId = searchParams.get("c");
+  const normalizedConversationId = normalizeConversationId(conversationId);
   const [messages, setMessages] = useState<Array<ChatMessage & { id: string; createdAt?: string }>>([]);
   const [input, setInput] = useState(() => searchParams.get("prompt") || "");
   const [streaming, setStreaming] = useState(false);
@@ -82,16 +84,76 @@ export function ChatPage() {
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(() => searchParams.get("run"));
   const [traceOpen, setTraceOpen] = useState(true);
+  const [isDesktopTrace, setIsDesktopTrace] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePlugin, setActivePlugin] = useState<string | null>(null);
+  const [loadingConversation, setLoadingConversation] = useState(false);
+  const [sidebarActiveId, setSidebarActiveId] = useState<string | null>(
+    () => normalizeConversationId(searchParams.get("c")) ?? searchParams.get("c")
+  );
   const approvalResolve = useRef<((v: boolean) => void) | null>(null);
   const assistantIdRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ChatComposerHandle>(null);
   const userSelectedConversationRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const tokenRafRef = useRef<number | null>(null);
+  const tokenBufferRef = useRef("");
+  const activeRunIdRef = useRef<string | null>(searchParams.get("run"));
+  const holdLocalMessagesRef = useRef(false);
+  const pendingUrlRef = useRef<{ c?: string; run?: string } | null>(null);
+  const loadedConversationRef = useRef<string | null>(null);
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const sendRef = useRef<(text?: string) => void>(() => {});
   const qc = useQueryClient();
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setIsDesktopTrace(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+      approvalResolve.current?.(false);
+      approvalResolve.current = null;
+      if (tokenRafRef.current != null) {
+        cancelAnimationFrame(tokenRafRef.current);
+        tokenRafRef.current = null;
+      }
+    };
+  }, []);
+
+  const flushTokenBuffer = useCallback(() => {
+    tokenRafRef.current = null;
+    const text = tokenBufferRef.current;
+    if (!text || !mountedRef.current) return;
+    const targetId = assistantIdRef.current;
+    if (!targetId) return;
+    setMessages((m) =>
+      m.map((row) => (row.id === targetId ? { ...row, content: text } : row))
+    );
+  }, []);
+
+  const scheduleTokenFlush = useCallback(
+    (fullText: string) => {
+      tokenBufferRef.current = fullText;
+      if (tokenRafRef.current != null) return;
+      tokenRafRef.current = requestAnimationFrame(flushTokenBuffer);
+    },
+    [flushTokenBuffer]
+  );
 
   const speech = useSpeechRecognition({
     onInterim: (t) => setInput(t),
@@ -108,10 +170,15 @@ export function ChatPage() {
   });
 
   const conversationQuery = useQuery({
-    queryKey: ["conversation", conversationId],
+    queryKey: ["conversation", normalizedConversationId],
     queryFn: () => getConversation(conversationId!),
-    enabled: !!conversationId && modelsData?.persistenceEnabled !== false,
+    enabled:
+      !!conversationId &&
+      !!normalizedConversationId &&
+      !streaming &&
+      modelsData?.persistenceEnabled !== false,
     retry: false,
+    staleTime: 0,
   });
 
   const { data: plugins = [] } = useQuery({
@@ -132,31 +199,70 @@ export function ChatPage() {
   );
 
   useEffect(() => {
-    if (streaming || !conversationId) return;
+    if (conversationId) {
+      const normalized = normalizeConversationId(conversationId) ?? conversationId;
+      setSidebarActiveId((prev) =>
+        prev && conversationIdsMatch(prev, conversationId) ? prev : normalized
+      );
+    }
+  }, [conversationId]);
 
-    if (conversationQuery.data?.id !== conversationId) return;
-
-    const serverMessages = mapServerMessages(conversationQuery.data.messages ?? []);
-
-    if (userSelectedConversationRef.current === conversationId) {
-      setMessages(serverMessages);
-      userSelectedConversationRef.current = null;
+  useEffect(() => {
+    if (!conversationId) {
+      if (!holdLocalMessagesRef.current) setMessages([]);
+      setLoadingConversation(false);
+      loadedConversationRef.current = null;
       return;
     }
 
-    setMessages((prev) => {
-      if (serverMessages.length >= prev.length) return serverMessages;
-      return prev;
-    });
-  }, [conversationQuery.data, conversationId, streaming]);
+    if (holdLocalMessagesRef.current) return;
+
+    if (loadedConversationRef.current !== normalizedConversationId) {
+      setMessages([]);
+      loadedConversationRef.current = normalizedConversationId;
+    }
+
+    setLoadingConversation(
+      conversationQuery.isPending || (conversationQuery.isFetching && !conversationQuery.data)
+    );
+  }, [
+    conversationId,
+    normalizedConversationId,
+    conversationQuery.isPending,
+    conversationQuery.isFetching,
+    conversationQuery.data,
+  ]);
 
   useEffect(() => {
-    if (conversationQuery.data?.metadata) {
-      setChatSettings(parseConversationSettings(conversationQuery.data.metadata));
-    } else if (!conversationId) {
+    if (!conversationId || holdLocalMessagesRef.current || streaming) return;
+
+    if (conversationQuery.isError) {
+      setLoadingConversation(false);
+      return;
+    }
+
+    const data = conversationQuery.data;
+    if (!data || !conversationIdsMatch(data.id, conversationId)) return;
+
+    setMessages(mapServerMessages(data.messages ?? []));
+    if (data.metadata) {
+      setChatSettings(parseConversationSettings(data.metadata));
+    }
+    setLoadingConversation(false);
+    userSelectedConversationRef.current = null;
+  }, [conversationId, conversationQuery.data, conversationQuery.isError, streaming]);
+
+  useEffect(() => {
+    if (!conversationId) {
       setChatSettings({ ...DEFAULT_CONVERSATION_SETTINGS });
     }
-  }, [conversationQuery.data?.metadata, conversationId]);
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationQuery.isError || !conversationId) return;
+    const err = conversationQuery.error;
+    toastRef.current.show(err instanceof Error ? err.message : "Sohbet yüklenemedi", "error");
+  }, [conversationQuery.isError, conversationQuery.error, conversationId]);
 
   useEffect(() => {
     if (streaming) return;
@@ -168,28 +274,59 @@ export function ChatPage() {
 
   const selectConversation = useCallback(
     (id: string | null) => {
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+      pendingUrlRef.current = null;
+      holdLocalMessagesRef.current = false;
       userSelectedConversationRef.current = id;
+      setStreaming(false);
+      setStreamingMessageId(null);
+      setActiveRunId(null);
+      activeRunIdRef.current = null;
+
       if (id) {
-        setSearchParams({ c: id });
+        const normalized = normalizeConversationId(id) ?? id;
+        setSidebarActiveId(normalized);
+        loadedConversationRef.current = null;
+        setMessages([]);
+        setLoadingConversation(true);
+        setSearchParams({ c: normalized }, { replace: true });
+        void qc.invalidateQueries({ queryKey: ["conversation", normalized] });
       } else {
-        setSearchParams({});
+        setLoadingConversation(false);
+        setSidebarActiveId(null);
+        loadedConversationRef.current = null;
+        setSearchParams({}, { replace: true });
         setMessages([]);
       }
       setSidebarOpen(false);
       requestAnimationFrame(() => composerRef.current?.focus());
     },
-    [setSearchParams]
+    [setSearchParams, qc]
   );
+
+  const applyPendingUrl = useCallback(() => {
+    const pending = pendingUrlRef.current;
+    if (!pending?.c) return;
+    const normalized = normalizeConversationId(pending.c) ?? pending.c;
+    setSidebarActiveId(normalized);
+    const params: Record<string, string> = { c: normalized };
+    if (pending.run) params.run = pending.run;
+    setSearchParams(params, { replace: true });
+    pendingUrlRef.current = null;
+  }, [setSearchParams]);
 
   const handleSaveSettings = useCallback(
     async (settings: ConversationSettings) => {
       setChatSettings(settings);
       if (conversationId && modelsData?.persistenceEnabled !== false) {
         await updateConversation(conversationId, { metadata: settings });
-        qc.invalidateQueries({ queryKey: ["conversation", conversationId] });
+        if (normalizedConversationId) {
+          qc.invalidateQueries({ queryKey: ["conversation", normalizedConversationId] });
+        }
       }
     },
-    [conversationId, modelsData?.persistenceEnabled, qc]
+    [conversationId, normalizedConversationId, modelsData?.persistenceEnabled, qc]
   );
 
   const effectiveModel =
@@ -227,6 +364,7 @@ export function ChatPage() {
 
     setInput("");
     setStreaming(true);
+    holdLocalMessagesRef.current = true;
     requestAnimationFrame(() => composerRef.current?.focus());
 
     const turnPlugin = pluginFilter;
@@ -245,6 +383,10 @@ export function ChatPage() {
     let assistantText = "";
     let resolvedConversationId = conversationId;
 
+    streamAbortRef.current?.abort();
+    const abortController = new AbortController();
+    streamAbortRef.current = abortController;
+
     const history = messages
       .filter((x) => x.role === "user" || x.role === "assistant")
       .filter((x) => x.content !== "…")
@@ -253,16 +395,26 @@ export function ChatPage() {
     try {
       await streamChat(msg, history, effectiveModel || undefined, {
         onMeta: (data) => {
+          if (!mountedRef.current) return;
           if (data.conversationId && typeof data.conversationId === "string") {
             resolvedConversationId = data.conversationId;
-            if (!conversationId) {
-              const params: Record<string, string> = { c: data.conversationId };
-              if (typeof data.runId === "string") params.run = data.runId;
-              setSearchParams(params, { replace: true });
-            }
+            setSidebarActiveId(normalizeConversationId(data.conversationId) ?? data.conversationId);
+          }
+          const c = conversationId || resolvedConversationId || pendingUrlRef.current?.c;
+          if (c) {
+            pendingUrlRef.current = {
+              c,
+              run: pendingUrlRef.current?.run,
+            };
           }
           if (typeof data.runId === "string") {
+            activeRunIdRef.current = data.runId;
             setActiveRunId(data.runId);
+            if (pendingUrlRef.current) {
+              pendingUrlRef.current.run = data.runId;
+            } else if (c) {
+              pendingUrlRef.current = { c, run: data.runId };
+            }
           }
         },
         onRunStep: (data) => {
@@ -278,12 +430,10 @@ export function ChatPage() {
         },
         onToken: (t) => {
           assistantText += t;
-          const targetId = assistantIdRef.current;
-          setMessages((m) =>
-            m.map((row) => (row.id === targetId ? { ...row, content: assistantText } : row))
-          );
+          scheduleTokenFlush(assistantText);
         },
         onTool: (data) => {
+          if (!mountedRef.current) return;
           const preview =
             data.phase === "start"
               ? `${JSON.stringify(data.arguments || {}, null, 2).slice(0, 500)}`
@@ -317,6 +467,7 @@ export function ChatPage() {
           ]);
         },
         onDone: (data) => {
+          if (!mountedRef.current) return;
           const targetId = assistantIdRef.current;
           const usage = data.usage as ChatMessage["usage"] | undefined;
           if (targetId && (usage || data.content)) {
@@ -334,10 +485,14 @@ export function ChatPage() {
           }
           if (resolvedConversationId) {
             qc.invalidateQueries({ queryKey: ["conversations"] });
-            qc.invalidateQueries({ queryKey: ["conversation", resolvedConversationId] });
+            const normalized = normalizeConversationId(resolvedConversationId);
+            if (normalized) {
+              qc.invalidateQueries({ queryKey: ["conversation", normalized] });
+            }
           }
         },
         onError: (err) => {
+          if (!mountedRef.current) return;
           const targetId = assistantIdRef.current;
           setMessages((m) =>
             m.map((row) => (row.id === targetId ? { ...row, content: `Hata: ${err}` } : row))
@@ -350,7 +505,10 @@ export function ChatPage() {
         includeBrainContext: chatSettings.includeBrainContext !== false,
         responseStyle: chatSettings.responseStyle,
         pluginFilter: turnPlugin,
+        signal: abortController.signal,
       });
+
+      if (abortController.signal.aborted) return;
 
       if (!assistantText) {
         const targetId = assistantIdRef.current;
@@ -361,6 +519,7 @@ export function ChatPage() {
         tts.speak(assistantText);
       }
     } catch (e) {
+      if (abortController.signal.aborted) return;
       toast.show(e instanceof Error ? e.message : "Chat hatası", "error");
       const targetId = assistantIdRef.current;
       setMessages((m) =>
@@ -371,6 +530,27 @@ export function ChatPage() {
         )
       );
     } finally {
+      if (streamAbortRef.current === abortController) {
+        streamAbortRef.current = null;
+      }
+      if (tokenRafRef.current != null) {
+        cancelAnimationFrame(tokenRafRef.current);
+        tokenRafRef.current = null;
+      }
+      tokenBufferRef.current = "";
+      if (!mountedRef.current) return;
+
+      if (abortController.signal.aborted) {
+        pendingUrlRef.current = null;
+      } else if (pendingUrlRef.current?.c) {
+        applyPendingUrl();
+        if (resolvedConversationId) {
+          qc.invalidateQueries({ queryKey: ["conversations"] });
+        }
+      }
+
+      holdLocalMessagesRef.current = false;
+
       setStreaming(false);
       setStreamingMessageId(null);
       assistantIdRef.current = null;
@@ -392,21 +572,36 @@ export function ChatPage() {
     if (modelsData?.defaultModel && !merged.includes(modelsData.defaultModel)) {
       merged.unshift(modelsData.defaultModel);
     }
-    return merged;
+    return merged.filter(Boolean);
   }, [modelsData, conversationQuery.data?.model]);
 
-  const sidebar = (
-    <ChatSidebar
-      activeId={conversationId}
-      onSelect={selectConversation}
-      persistenceEnabled={modelsData?.persistenceEnabled}
-    />
-  );
+  const selectedModel =
+    customModel.trim() ||
+    model ||
+    conversationQuery.data?.model ||
+    modelsData?.defaultModel ||
+    modelOptions[0] ||
+    "default";
+
+  const conversationTitle =
+    conversationIdsMatch(conversationQuery.data?.id, conversationId)
+      ? conversationQuery.data?.title
+      : undefined;
+
+  const sidebarHighlightId = sidebarActiveId ?? normalizedConversationId ?? conversationId;
+
+  const sidebarProps = {
+    activeId: sidebarHighlightId,
+    onSelect: selectConversation,
+    persistenceEnabled: modelsData?.persistenceEnabled,
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <div className="flex h-full min-h-0 flex-1 overflow-hidden">
-        <div className="hidden h-full min-h-0 shrink-0 md:flex">{sidebar}</div>
+        <div className="hidden h-full min-h-0 shrink-0 md:flex">
+          <ChatSidebar {...sidebarProps} />
+        </div>
 
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <motion.header
@@ -425,7 +620,7 @@ export function ChatPage() {
                   <SheetHeader className="sr-only">
                     <SheetTitle>Sohbetler</SheetTitle>
                   </SheetHeader>
-                  {sidebar}
+                  {sidebarProps && <ChatSidebar {...sidebarProps} />}
                 </SheetContent>
               </Sheet>
 
@@ -436,7 +631,7 @@ export function ChatPage() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="truncate text-sm font-semibold">
-                    {conversationQuery.data?.title || "Yeni sohbet"}
+                    {conversationTitle || "Yeni sohbet"}
                   </h1>
                   <AnimatePresence>
                     {streaming && (
@@ -479,7 +674,7 @@ export function ChatPage() {
                 disabled={modelsLoading}
               />
               <Select
-                value={model || conversationQuery.data?.model || modelsData?.defaultModel || ""}
+                value={selectedModel}
                 onValueChange={(v) => {
                   setCustomModel("");
                   setModel(v);
@@ -491,7 +686,7 @@ export function ChatPage() {
                 <SelectValue placeholder="Model seç" />
               </SelectTrigger>
               <SelectContent>
-                {(modelOptions.length ? modelOptions : [modelsData?.defaultModel || "default"]).map((n) => (
+                {(modelOptions.length ? modelOptions : [selectedModel]).map((n) => (
                   <SelectItem key={n} value={n}>
                     {n}
                   </SelectItem>
@@ -529,6 +724,8 @@ export function ChatPage() {
               messages={messages}
               streaming={streaming}
               streamingMessageId={streamingMessageId}
+              loading={loadingConversation}
+              hasConversation={!!conversationId}
               onExample={send}
               scrollRef={scrollRef}
             />
@@ -559,6 +756,15 @@ export function ChatPage() {
           </div>
         )}
       </div>
+
+      <Sheet open={traceOpen && !isDesktopTrace} onOpenChange={setTraceOpen}>
+        <SheetContent side="right" className="flex h-full w-[min(20rem,90vw)] flex-col border-border/60 p-0 lg:hidden">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Run trace</SheetTitle>
+          </SheetHeader>
+          <RunTracePanel runId={activeRunId} live={streaming} className="w-full" />
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={!!approval} onOpenChange={(open) => !open && handleApproval(false)}>
         <DialogContent className="max-w-md gap-0 overflow-hidden p-0">

@@ -48,5 +48,6 @@ export default defineConfig({
       },
     },
     pool: "forks",
+    setupFiles: ["tests/setup.js"],
   },
 });

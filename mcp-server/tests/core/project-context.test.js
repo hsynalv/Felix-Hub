@@ -37,6 +37,8 @@ describe("Project context", () => {
     const ctx = await getProjectContext(key);
     expect(ctx.links?.githubRepo).toBe("acme/app");
     expect(ctx.graph.nodes.some((n) => n.type === "github_repo")).toBe(true);
+    expect(Array.isArray(ctx.graph.edges)).toBe(true);
+    expect(ctx.lastChangeSummary).toBeDefined();
     expect(ctx.recentRuns.length).toBeGreaterThanOrEqual(1);
     expect(ctx.recentEvents.length).toBeGreaterThanOrEqual(1);
     expect(ctx.recentRuns[0].id).toBe(run.id);

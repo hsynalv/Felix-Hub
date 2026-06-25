@@ -1,13 +1,8 @@
 /**
  * Unified strict-mode flags for plugin loading and tool registration.
- *
- * Canonical env vars:
- *   STRICT_PLUGIN_LOADING — fail startup if any plugin fails to load
- *   STRICT_PLUGIN_META      — missing plugin.meta.json is an error
- *   STRICT_TOOL_SCHEMA      — write/destructive tools require explanation in inputSchema
- *
- * Deprecated alias: PLUGIN_STRICT_MODE → STRICT_PLUGIN_LOADING
  */
+
+import { config } from "./config.js";
 
 function envTrue(name) {
   return process.env[name] === "true";
@@ -15,6 +10,7 @@ function envTrue(name) {
 
 export function isStrictPluginLoading() {
   if (envTrue("STRICT_PLUGIN_LOADING")) return true;
+  if (config?.plugins?.strictLoading) return true;
   if (envTrue("PLUGIN_STRICT_MODE")) {
     console.warn(
       "[plugins] PLUGIN_STRICT_MODE is deprecated — use STRICT_PLUGIN_LOADING=true"
@@ -25,9 +21,11 @@ export function isStrictPluginLoading() {
 }
 
 export function isStrictPluginMeta() {
-  return envTrue("STRICT_PLUGIN_META");
+  if (envTrue("STRICT_PLUGIN_META")) return true;
+  return config?.plugins?.strictMeta === true;
 }
 
 export function isStrictToolSchema() {
-  return envTrue("STRICT_TOOL_SCHEMA");
+  if (envTrue("STRICT_TOOL_SCHEMA")) return true;
+  return config?.plugins?.strictToolSchema === true;
 }

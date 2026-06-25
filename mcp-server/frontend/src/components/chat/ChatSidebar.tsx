@@ -27,6 +27,7 @@ import {
   type ConversationSummary,
 } from "@/lib/conversations-api";
 import { ApiError } from "@/lib/api-client";
+import { conversationIdsMatch } from "@/lib/conversation-ids";
 import { useToast } from "@/providers/ToastProvider";
 
 type ChatSidebarProps = {
@@ -63,7 +64,7 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
     mutationFn: deleteConversation,
     onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ["conversations"] });
-      if (activeId === id) onSelect(null);
+      if (activeId && conversationIdsMatch(activeId, id)) onSelect(null);
     },
     onError: (e) => toast.show(e instanceof ApiError ? e.message : "Silinemedi", "error"),
   });
@@ -156,11 +157,10 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
 
           <AnimatePresence initial={false}>
             {filtered.map((conv, i) => {
-              const active = activeId === conv.id;
+              const active = conversationIdsMatch(activeId, conv.id);
               return (
                 <motion.div
                   key={conv.id}
-                  layout
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -8 }}
@@ -171,8 +171,7 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
                   )}
                 >
                   {active && (
-                    <motion.span
-                      layoutId="chat-active-indicator"
+                    <span
                       className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-primary"
                     />
                   )}

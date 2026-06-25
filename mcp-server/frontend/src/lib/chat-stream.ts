@@ -45,6 +45,7 @@ export async function streamChat(
     includeBrainContext?: boolean;
     responseStyle?: "concise" | "detailed";
     pluginFilter?: string | null;
+    signal?: AbortSignal;
   }
 ): Promise<void> {
   const key = getApiKey();
@@ -57,6 +58,7 @@ export async function streamChat(
       Authorization: `Bearer ${key}`,
       ...getProjectHeaders(),
     },
+    signal: options?.signal,
     body: JSON.stringify({
       message,
       history,
@@ -82,6 +84,11 @@ export async function streamChat(
   let buffer = "";
 
   while (true) {
+    if (options?.signal?.aborted) {
+      await reader.cancel().catch(() => {});
+      break;
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
@@ -97,34 +104,40 @@ export async function streamChat(
         if (line.startsWith("data:")) dataLine = line.slice(5).trim();
       }
       if (!dataLine) continue;
-      const payload = JSON.parse(dataLine);
+
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(dataLine) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
 
       switch (event) {
         case "meta":
           callbacks.onMeta?.(payload);
           break;
         case "token":
-          if (payload.text) callbacks.onToken?.(payload.text);
+          if (typeof payload.text === "string") callbacks.onToken?.(payload.text);
           break;
         case "tool":
-          callbacks.onTool?.(payload);
+          callbacks.onTool?.(payload as Parameters<NonNullable<ChatStreamCallbacks["onTool"]>>[0]);
           break;
         case "run_step":
           callbacks.onRunStep?.(payload);
           break;
         case "approval":
           await callbacks.onApproval?.({
-            approvalId: payload.approvalId,
-            tool: payload.tool,
-            arguments: payload.arguments || {},
-            message: payload.message,
+            approvalId: String(payload.approvalId ?? ""),
+            tool: String(payload.tool ?? ""),
+            arguments: (payload.arguments as Record<string, unknown>) || {},
+            message: typeof payload.message === "string" ? payload.message : undefined,
           });
           break;
         case "done":
           callbacks.onDone?.(payload);
           break;
         case "error":
-          callbacks.onError?.(payload.message || "Stream error");
+          callbacks.onError?.(typeof payload.message === "string" ? payload.message : "Stream error");
           break;
       }
     }
