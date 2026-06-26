@@ -2,7 +2,8 @@
 
 > **Son güncelleme:** 2026-06-26  
 > **Önkoşul:** [V5 EXECUTION-ORDER](../v5-path/EXECUTION-ORDER.md) tamamlandı  
-> **Kural:** Önce ekosistem omurgası → güven ve simülasyon → kullanıcı/kurum ürünleştirme
+> **Kural:** Önce ekosistem omurgası → güven ve simülasyon → kullanıcı/kurum ürünleştirme  
+> **MVP notları:** [MVP-NOTES.md](./MVP-NOTES.md)
 
 ---
 
@@ -49,18 +50,18 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 6.6 | Agent Inbox | [04-agent-inbox.md](./04-agent-inbox.md) | not_started |
-| 6.7 | Agent Observability Pro | [12-agent-observability-pro.md](./12-agent-observability-pro.md) | not_started |
+| 6.6 | Agent Inbox | [04-agent-inbox.md](./04-agent-inbox.md) | mvp_done |
+| 6.7 | Agent Observability Pro | [12-agent-observability-pro.md](./12-agent-observability-pro.md) | mvp_done |
 
 ### Faz C — Kurumsal ve kişiselleştirme (V6.8 – V6.12)
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 6.8 | Agent App Store | [08-agent-app-store.md](./08-agent-app-store.md) | not_started |
-| 6.9 | Enterprise Compliance Pack | [11-enterprise-compliance-pack.md](./11-enterprise-compliance-pack.md) | not_started |
-| 6.10 | Natural Language Admin | [09-natural-language-admin.md](./09-natural-language-admin.md) | not_started |
-| 6.11 | Knowledge Conflict Resolver | [05-knowledge-conflict-resolver.md](./05-knowledge-conflict-resolver.md) | not_started |
-| 6.12 | Personal Operating Model | [10-personal-operating-model.md](./10-personal-operating-model.md) | not_started |
+| 6.8 | Agent App Store | [08-agent-app-store.md](./08-agent-app-store.md) | mvp_done |
+| 6.9 | Enterprise Compliance Pack | [11-enterprise-compliance-pack.md](./11-enterprise-compliance-pack.md) | mvp_done |
+| 6.10 | Natural Language Admin | [09-natural-language-admin.md](./09-natural-language-admin.md) | mvp_done |
+| 6.11 | Knowledge Conflict Resolver | [05-knowledge-conflict-resolver.md](./05-knowledge-conflict-resolver.md) | mvp_done |
+| 6.12 | Personal Operating Model | [10-personal-operating-model.md](./10-personal-operating-model.md) | mvp_done |
 
 ---
 

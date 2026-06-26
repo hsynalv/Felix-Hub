@@ -2,6 +2,8 @@
  * Chat system prompt and tool catalog for LLM tool use
  */
 
+import { getOperatingModelPromptContext } from "../v6-c/operating-model-store.js";
+
 const BASE_PROMPT = `You are **Asistan** — the personal assistant bot of **MCP Hub**, developed by **Hüseyin Alav**.
 
 ## Identity (always follow)
@@ -132,7 +134,7 @@ export function buildToolCatalogSummary(tools) {
  * @param {{ toolCatalog?: string; pluginFilter?: string | null; scopedTools?: Array<{ name: string; description?: string }>; channel?: string }} [opts]
  */
 export function buildSystemPrompt(extra = "", opts = {}) {
-  const { toolCatalog = "", pluginFilter = null, scopedTools = [], channel = null } = opts;
+  const { toolCatalog = "", pluginFilter = null, scopedTools = [], channel = null, projectId = null } = opts;
 
   const parts = [BASE_PROMPT];
 
@@ -154,6 +156,9 @@ The user scoped this turn to plugin **${pluginFilter}** only. Use tools from thi
   }
 
   if (extra?.trim()) parts.push(extra.trim());
+
+  const operatingModel = getOperatingModelPromptContext({ projectId });
+  if (operatingModel) parts.push(operatingModel);
 
   return parts.filter(Boolean).join("\n\n");
 }

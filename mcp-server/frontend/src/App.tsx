@@ -33,6 +33,7 @@ const RunbooksPage = lazy(() =>
 const V6EcosystemPage = lazy(() =>
   import("@/pages/V6EcosystemPage").then((m) => ({ default: m.V6EcosystemPage }))
 );
+const InboxPage = lazy(() => import("@/pages/InboxPage").then((m) => ({ default: m.InboxPage })));
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
 
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="audit" element={<AuditPage />} />
             <Route path="admin" element={<AdminPage />} />
             <Route path="approvals" element={<ApprovalCenterPage />} />
+            <Route path="inbox" element={<InboxPage />} />
             <Route path="observability" element={<ObservabilityPage />} />
             <Route path="usage" element={<UsagePage />} />
             <Route path="eval" element={<EvalStudioPage />} />

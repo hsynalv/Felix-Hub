@@ -44,6 +44,9 @@ import { registerSlaRoutes } from "./sla/sla.routes.js";
 import { registerEnvRoutes } from "./env/env.routes.js";
 import { registerV6Routes } from "./v6/routes.js";
 import { initSandboxHook } from "./v6/sandbox-hook.js";
+import { registerInboxRoutes } from "./inbox/inbox.routes.js";
+import { registerObservabilityProRoutes } from "./observability-pro/observability-pro.routes.js";
+import { registerV6PhaseCRoutes } from "./v6-c/routes.js";
 import { startSlaRunner } from "./sla/sla-runner.js";
 import {
   canAccessProject,
@@ -737,6 +740,9 @@ export async function createServer() {
   registerEnvRoutes(app);
   initSandboxHook();
   registerV6Routes(app);
+  registerInboxRoutes(app);
+  registerObservabilityProRoutes(app);
+  registerV6PhaseCRoutes(app);
   startScheduleRunner();
   startSlaRunner();
   registerUsageRoutes(app);

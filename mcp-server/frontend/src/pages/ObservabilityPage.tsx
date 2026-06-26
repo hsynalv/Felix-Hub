@@ -26,6 +26,7 @@ import {
   OpsStatGrid,
 } from "@/components/ops/OpsPrimitives";
 import { apiGetRaw } from "@/lib/api-client";
+import { fetchObservabilityProDashboard } from "@/lib/inbox-api";
 import { cn, formatTime } from "@/lib/utils";
 
 const METRIC_ICONS: Record<string, typeof Activity> = {
@@ -80,6 +81,12 @@ export function ObservabilityPage() {
       return r;
     },
     refetchInterval: autoRefresh ? 15_000 : false,
+  });
+
+  const { data: obsPro, isLoading: obsProLoading } = useQuery({
+    queryKey: ["obs-pro-dashboard"],
+    queryFn: () => fetchObservabilityProDashboard(7),
+    refetchInterval: autoRefresh ? 30_000 : false,
   });
 
   const { data: errors, isLoading: errorsLoading } = useQuery({
@@ -205,6 +212,57 @@ export function ObservabilityPage() {
           </div>
         </OpsPanel>
       )}
+
+      <OpsPanel title="Agent Observability Pro" description="Son 7 gün — failure hotspot, onay darboğazı, maliyet">
+        {obsProLoading ? (
+          <Skeleton className="h-32 rounded-xl" />
+        ) : obsPro ? (
+          <div className="space-y-4">
+            <OpsStatGrid>
+              <OpsStatCard label="Run (7g)" value={obsPro.runs.total} icon={Activity} delay={0.05} />
+              <OpsStatCard
+                label="Başarısız"
+                value={obsPro.runs.failed}
+                icon={AlertTriangle}
+                tone={obsPro.runs.failed > 0 ? "danger" : "success"}
+                delay={0.1}
+              />
+              <OpsStatCard label="Bekleyen onay" value={obsPro.approvalQueue.pending} icon={Gauge} delay={0.15} />
+              <OpsStatCard label="Maliyet (USD)" value={obsPro.totalCostUsd.toFixed(4)} icon={Zap} delay={0.2} />
+            </OpsStatGrid>
+            {obsPro.failureHotspots.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Failure hotspots</p>
+                <ul className="space-y-1 font-mono text-sm">
+                  {obsPro.failureHotspots.slice(0, 5).map((h) => (
+                    <li key={h.tool} className="flex justify-between gap-2 border-b border-border/40 py-1">
+                      <span>{h.tool}</span>
+                      <span className="text-muted-foreground">
+                        {h.fails}/{h.calls} ({Math.round(h.failRate * 100)}%)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {obsPro.approvalBottlenecks.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Onay darboğazları</p>
+                <ul className="space-y-1 text-sm">
+                  {obsPro.approvalBottlenecks.map((b) => (
+                    <li key={b.tool} className="flex justify-between">
+                      <span>{b.tool}</span>
+                      <Badge variant="outline">{b.pendingCount} bekliyor</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Agent metrikleri yüklenemedi.</p>
+        )}
+      </OpsPanel>
 
       <OpsPanel title="Hata Akışı" description="En son yakalanan hatalar ve uyarılar">
         {errorsLoading ? (

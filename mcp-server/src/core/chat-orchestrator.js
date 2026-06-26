@@ -756,6 +756,7 @@ export async function runChatTurn({
         })
       ),
       channel: chatContext.channel,
+      projectId: chatContext.projectId,
     }
   );
 
