@@ -1,6 +1,6 @@
 # 02 — Daily Briefing Agent
 
-> **Status:** not_started  
+> **Status:** partial  
 > **Faz:** V7.2  
 > **Bağımlılık:** [01-personal-command-center.md](./01-personal-command-center.md), [07-personal-memory-profile.md](./07-personal-memory-profile.md)
 

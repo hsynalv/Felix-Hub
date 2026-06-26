@@ -87,7 +87,7 @@ function PanelLink({ to, children }: { to: string; children: ReactNode }) {
   );
 }
 
-export function HomePage() {
+export function SystemDashboardPage() {
   const {
     data: health,
     isLoading: healthLoading,
@@ -195,8 +195,8 @@ export function HomePage() {
   return (
     <div className="mx-auto min-w-0 max-w-7xl space-y-4 sm:space-y-6">
       <PageHeader
-        title="Kontrol Paneli"
-        description="Sistem durumu, aktivite ve entegrasyonlar — tek bakışta."
+        title="Sistem Paneli"
+        description="Mühendislik kontrol paneli — health, plugin, audit ve entegrasyonlar."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {whoami?.project && (

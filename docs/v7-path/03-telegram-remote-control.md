@@ -1,6 +1,6 @@
 # 03 — Telegram Remote Control
 
-> **Status:** partial (notifications plugin, telegram webhook — MVP: read-only `/ask` + outbound bildirim)  
+> **Status:** mvp_done (komutlar + inline onay); tam dosya push / photo screenshot → Faz 3 polish  
 > **Faz:** V7.3 (MVP) → **V7.3+ / V7.5 birleşimi** (tam kapsam)  
 > **Son ürün notu:** 2026-06-26  
 > **Bağımlılık:** [02-daily-briefing-agent.md](./02-daily-briefing-agent.md), [08-permission-autonomy-model.md](./08-permission-autonomy-model.md), [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md), [V4 Desktop Control](../v4-path/06-desktop-control-agent.md), [V3 Sidecar](../v3-path/09-local-sidecar-desktop-agent.md)

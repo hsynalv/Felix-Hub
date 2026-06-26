@@ -1,6 +1,6 @@
 # 00 — V7 Vizyon: Personal AI Operating System
 
-> **Status:** not_started  
+> **Status:** in_progress (Faz 1–2 mvp_done; Faz 3 bekliyor)  
 > **Önkoşul:** [V6 path](../v6-path/EXECUTION-ORDER.md) **kapatıldı** (`mvp_done`, 2026-06-26)  
 > **Bağımlılık:** —
 

@@ -19,6 +19,12 @@ import {
   getTelegramSession,
   appendTelegramHistory,
 } from "./telegram-session.js";
+import {
+  handleTelegramV7Command,
+  handleTelegramCallbackQuery,
+  buildTelegramHelpText,
+  isHubPaused,
+} from "../../core/v7/telegram-commands.js";
 
 const rateLimitBuckets = new Map();
 
@@ -118,18 +124,7 @@ export function scheduleTelegramWorkingAck({ onAck, delayMs = TELEGRAM_WORKING_A
 }
 
 function helpText() {
-  return [
-    `${BRAND.assistantName} — ${BRAND.hubName} kişisel yardımcı bot`,
-    `Geliştiren: ${BRAND.authorName}`,
-    BRAND.productionUrl,
-    "",
-    "/start — karşılama",
-    "/help — bu mesaj",
-    "/tools — kullanılabilir araç sayısı",
-    "/ask <soru> — hub agent'a sor",
-    "",
-    "Serbest metin: araştırma, Notion projeleri, web araması (Tavily).",
-  ].join("\n");
+  return buildTelegramHelpText();
 }
 
 async function handleCommand(chatId, text) {
@@ -166,10 +161,23 @@ async function handleCommand(chatId, text) {
     return { handled: true };
   }
 
+  const v7 = await handleTelegramV7Command(chatId, trimmed, {
+    reply: (msg) => replyToChat(chatId, msg),
+  });
+  if (v7.handled) return { handled: true };
+
   return { handled: false };
 }
 
 async function processAgentMessage(chatId, text) {
+  if (isHubPaused()) {
+    await replyToChat(
+      chatId,
+      "Hub pause aktif — agent mesajları duraklatıldı. /resume ile devam edin."
+    );
+    return;
+  }
+
   const rateLimit = getRateLimitPerMin();
   if (!checkRateLimit(chatId)) {
     await replyToChat(chatId, `Rate limit: dakikada en fazla ${rateLimit} kullanıcı mesajı.`);
@@ -245,6 +253,15 @@ async function processAgentMessage(chatId, text) {
 }
 
 export async function handleTelegramUpdate(update) {
+  if (update?.callback_query) {
+    const chatId = update.callback_query.message?.chat?.id;
+    if (chatId != null && !isChatAllowed(chatId)) {
+      return { ok: false, error: "chat_not_allowed" };
+    }
+    await handleTelegramCallbackQuery(update.callback_query);
+    return { ok: true };
+  }
+
   const message = update?.message;
   if (!message?.text) return { ok: true, skipped: "no_text" };
 

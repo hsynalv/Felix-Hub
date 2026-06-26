@@ -149,3 +149,40 @@ export async function sendTelegram({
     messageId: data.result?.message_id ?? null,
   };
 }
+
+/**
+ * @param {string} chatId
+ * @param {string} text
+ * @param {{ inline_keyboard?: unknown[] }} [replyMarkup]
+ */
+export async function sendTelegramWithMarkup(chatId, text, replyMarkup) {
+  const cfg = getTelegramConfig();
+  const botToken = cfg.token.trim();
+  if (!botToken || !chatId) throw new Error("Telegram not configured");
+
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: String(chatId),
+      text: String(text).slice(0, 4000),
+      reply_markup: replyMarkup,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.description || `Telegram API error (${res.status})`);
+  }
+  return { success: true, messageId: data.result?.message_id ?? null };
+}
+
+export async function answerCallbackQuery(callbackQueryId, text) {
+  const cfg = getTelegramConfig();
+  const botToken = cfg.token.trim();
+  if (!botToken) return;
+  await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text: text?.slice(0, 200) }),
+  }).catch(() => {});
+}

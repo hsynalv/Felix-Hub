@@ -1,6 +1,6 @@
 # 04 — Browser Desktop Assistant
 
-> **Status:** partial ([V4 Desktop Control](../v4-path/06-desktop-control-agent.md), sidecar)  
+> **Status:** mvp_done  
 > **Faz:** V7.5  
 > **Bağımlılık:** [08-permission-autonomy-model.md](./08-permission-autonomy-model.md), [10-personal-ops-hardening.md](./10-personal-ops-hardening.md)
 
@@ -74,17 +74,17 @@ browser_extract_page
 
 ## Kapsam
 
-- [ ] Sidecar desktop/browser tool implementasyonu (V4'ten genişletme)
-- [ ] Personal allowlist UI (apps, domains)
-- [ ] Password/payment screen detector
-- [ ] Screenshot preview → Telegram approval
-- [ ] Action rate limit per run
+- [x] Sidecar desktop/browser tool implementasyonu (V4'ten genişletme)
+- [x] Personal allowlist API (apps, domains)
+- [x] Password/payment screen detector (desktop-guard + ops)
+- [x] Screenshot preview API + Telegram `/desktop`
+- [x] Action rate limit per run/day
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Agent ekranı okuyabilir, sayfa analiz edebilir, onaylı şekilde basit browser/desktop aksiyonu yapabilir
+- [x] Agent ekranı okuyabilir, sayfa analiz edebilir, onaylı şekilde basit browser/desktop aksiyonu yapabilir
 
 ---
 

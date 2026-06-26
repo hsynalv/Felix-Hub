@@ -1,6 +1,6 @@
 # 08 — Permission Autonomy Model
 
-> **Status:** partial ([V5 Managed Autonomy](../v5-path/10-managed-autonomy-policies.md))  
+> **Status:** mvp_done  
 > **Faz:** V7.6  
 > **Bağımlılık:** [V4 Approval Center Pro](../v4-path/04-approval-center-pro.md)
 
@@ -56,17 +56,17 @@ credential
 
 ## Kapsam
 
-- [ ] Personal autonomy matrix UI (domain × risk × level)
-- [ ] V5 L0–L5 modeline L2 `draft_only` eklentisi
-- [ ] Risk category → required level mapping
-- [ ] Telegram / desktop / shopping policy presets
-- [ ] Runtime enforcement personal scope
+- [x] Personal autonomy preset UI (Bugün sayfası)
+- [x] V5 L0–L5 + personal risk mapping
+- [x] Risk category → required level mapping
+- [x] Telegram / desktop policy presets (cautious, balanced, helper)
+- [x] Runtime enforcement personal scope (desktop tools hook)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Her agent action, risk kategorisi ve autonomy level ile değerlendirilir
+- [x] Her agent action, risk kategorisi ve autonomy level ile değerlendirilir
 
 ---
 

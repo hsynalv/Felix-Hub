@@ -55,7 +55,7 @@ export default defineConfig({
       "/compliance": "http://localhost:8787",
       "/nl-admin": "http://localhost:8787",
       "/conflicts": "http://localhost:8787",
-      "/operating-model": "http://localhost:8787",
+      "/personal": "http://localhost:8787",
       "/eval": "http://localhost:8787",
       "/team": "http://localhost:8787",
       "/openapi.json": "http://localhost:8787",

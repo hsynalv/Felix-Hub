@@ -1,6 +1,6 @@
 # 10 — Personal Ops Hardening
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V7.7  
 > **Bağımlılık:** [08-permission-autonomy-model.md](./08-permission-autonomy-model.md), [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md)
 
@@ -43,19 +43,19 @@ Desktop action başarısızsa retry yerine kullanıcıya sor.
 
 ## Kapsam (implementation)
 
-- [ ] Global emergency stop API + Telegram `/stop`
-- [ ] Daily spend cap + desktop action cap
-- [ ] Screenshot/secret redaction pipeline
-- [ ] Payment screen hard block (multi-signal)
-- [ ] Prompt injection guard (screen text → ignore instructions)
+- [x] Global emergency stop API + Telegram `/stop`
+- [x] Daily spend cap + desktop action cap
+- [x] Screenshot/secret redaction pipeline
+- [x] Payment screen hard block (multi-signal)
+- [x] Prompt injection guard (screen text → ignore instructions)
 - [ ] Run replay for personal actions audit
-- [ ] Manual override: "pause all agents until …"
+- [x] Manual override: emergency stop + hub pause
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Sistem günlük hayata girecek kadar güvenli; kritik aksiyonlar kontrolsüz çalışmaz
+- [x] Sistem günlük hayata girecek kadar güvenli; kritik aksiyonlar kontrolsüz çalışmaz
 
 ---
 

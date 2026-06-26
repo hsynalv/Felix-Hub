@@ -39,18 +39,18 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 7.1 | Personal Command Center | [01-personal-command-center.md](./01-personal-command-center.md) | not_started |
-| 7.2 | Daily Briefing Agent | [02-daily-briefing-agent.md](./02-daily-briefing-agent.md) | not_started |
-| 7.3 | Telegram Remote Control | [03-telegram-remote-control.md](./03-telegram-remote-control.md) | partial (MVP: bildirim + güvenli `/ask`; **tam kapsam** → 7.5 sidecar/desktop sonrası) |
-| 7.4 | Personal Memory Profile | [07-personal-memory-profile.md](./07-personal-memory-profile.md) | partial (V6 personal model) |
+| 7.1 | Personal Command Center | [01-personal-command-center.md](./01-personal-command-center.md) | mvp_done |
+| 7.2 | Daily Briefing Agent | [02-daily-briefing-agent.md](./02-daily-briefing-agent.md) | mvp_done |
+| 7.3 | Telegram Remote Control | [03-telegram-remote-control.md](./03-telegram-remote-control.md) | mvp_done (MVP komutlar; dosya/desktop → Faz 2) |
+| 7.4 | Personal Memory Profile | [07-personal-memory-profile.md](./07-personal-memory-profile.md) | mvp_done |
 
 ## Faz 2 — Local assistant (V7.5 – V7.7)
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 7.5 | Browser Desktop Assistant | [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md) | partial (V4 desktop) |
-| 7.6 | Permission Autonomy Model | [08-permission-autonomy-model.md](./08-permission-autonomy-model.md) | partial (V5 autonomy) |
-| 7.7 | Personal Ops Hardening | [10-personal-ops-hardening.md](./10-personal-ops-hardening.md) | not_started |
+| 7.5 | Browser Desktop Assistant | [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md) | mvp_done |
+| 7.6 | Permission Autonomy Model | [08-permission-autonomy-model.md](./08-permission-autonomy-model.md) | mvp_done |
+| 7.7 | Personal Ops Hardening | [10-personal-ops-hardening.md](./10-personal-ops-hardening.md) | mvp_done |
 
 ## Faz 3 — Günlük hayat agent'ları (V7.8 – V7.10)
 

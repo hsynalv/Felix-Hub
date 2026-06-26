@@ -1,7 +1,8 @@
 # 01 — Personal Command Center
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V7.1  
+> **Son güncelleme:** 2026-06-26  
 > **Bağımlılık:** [V4 Project Command Center](../v4-path/05-project-command-center.md), [V6 Agent Inbox](../v6-path/04-agent-inbox.md)
 
 ---
@@ -45,11 +46,11 @@ Suggested Actions
 
 ## Kapsam
 
-- [ ] Personal Command Center sayfası (Home veya dedicated route)
-- [ ] Widget aggregation API (briefing, mail, runs, approvals)
-- [ ] "Suggested actions" engine (açık approval, stale run, briefing highlight)
-- [ ] Proje + kişisel scope toggle
-- [ ] Mobile-responsive layout
+- [x] Personal Command Center sayfası (Home → `/` Today, mühendislik `/system`)
+- [x] Widget aggregation API (`GET /personal/command-center`)
+- [x] "Suggested actions" engine (açık approval, stale run, briefing highlight)
+- [ ] Proje + kişisel scope toggle (API hazır; UI toggle V7.1+)
+- [x] Mobile-responsive layout
 
 ---
 

@@ -27,7 +27,7 @@ export type AppNavItem = {
 };
 
 export const APP_NAV: AppNavItem[] = [
-  { to: "/", label: "Panel", icon: Home },
+  { to: "/", label: "Bugün", icon: Home },
   { to: "/chat", label: "Sohbet", icon: Bot },
   { to: "/runs", label: "Runs", icon: GitBranch },
   { to: "/workflows/designer", label: "Workflow", icon: Wand2 },
@@ -49,7 +49,8 @@ export const APP_NAV: AppNavItem[] = [
 ];
 
 export const APP_ROUTE_TITLES: Record<string, string> = {
-  "/": "Kontrol Paneli",
+  "/": "Bugün",
+  "/system": "Sistem Paneli",
   "/chat": "Sohbet",
   "/runs": "Agent Runs",
   "/workflows/designer": "Workflow Designer",

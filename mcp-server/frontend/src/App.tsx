@@ -3,7 +3,10 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-const HomePage = lazy(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
+const TodayPage = lazy(() => import("@/pages/TodayPage").then((m) => ({ default: m.TodayPage })));
+const SystemDashboardPage = lazy(() =>
+  import("@/pages/SystemDashboardPage").then((m) => ({ default: m.SystemDashboardPage }))
+);
 const ChatPage = lazy(() => import("@/pages/ChatPage").then((m) => ({ default: m.ChatPage })));
 const ToolsPage = lazy(() => import("@/pages/ToolsPage").then((m) => ({ default: m.ToolsPage })));
 const PluginsPage = lazy(() => import("@/pages/PluginsPage").then((m) => ({ default: m.PluginsPage })));
@@ -45,7 +48,8 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
-            <Route index element={<HomePage />} />
+            <Route index element={<TodayPage />} />
+            <Route path="system" element={<SystemDashboardPage />} />
             <Route path="chat" element={<ChatPage />} />
             <Route path="tools" element={<ToolsPage />} />
             <Route path="plugins" element={<PluginsPage />} />
