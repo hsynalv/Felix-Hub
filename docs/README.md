@@ -21,6 +21,7 @@ Bu klasör, platform durumu, strateji yolları ve operasyonel rehberleri tek yer
 | [**v5-path/**](./v5-path/README.md) | **V5** — managed autonomous operations |
 | [**v6-path/**](./v6-path/README.md) | **V6** — agent ekosistemi (multi-agent, skill store, enterprise) |
 | [**v7-path/**](./v7-path/README.md) | **V7** — personal AI operating system |
+| [**v8-path/**](./v8-path/README.md) | **V8** — prompt intelligence & agent behavior layer |
 | [manual-test-pack.md](./manual-test-pack.md) | CI dışı integration testler — release checklist |
 
 ## Getting Started

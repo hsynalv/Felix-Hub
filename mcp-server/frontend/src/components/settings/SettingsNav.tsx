@@ -49,8 +49,8 @@ export const SETTINGS_SECTIONS: Array<{
   },
   {
     id: "sidecar",
-    label: "Yerel erişim",
-    description: "Sidecar ve bağlantı durumu",
+    label: "Felix Desktop",
+    description: "Yerel masaüstü ajanı ve eşleştirme",
     icon: Laptop,
   },
   {

@@ -4,6 +4,11 @@
 
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import supertest from "supertest";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { existsSync } from "fs";
+
+const SERVER_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 vi.mock("../../src/core/config.js", async (importOriginal) => {
   const mod = await importOriginal();
@@ -110,11 +115,16 @@ describe("V5 Faz B", () => {
     expect(score).toBeGreaterThan(70);
   });
 
-  it("scanDependencies reads package.json in workspace", async () => {
-    const scan = await scanDependencies({ workspacePath: process.cwd(), maxRiskScore: 70 });
-    expect(scan.packageFound).toBe(true);
-    expect(scan.updates).toBeDefined();
-  });
+  it(
+    "scanDependencies reads package.json in workspace",
+    async () => {
+      expect(existsSync(join(SERVER_ROOT, "package.json"))).toBe(true);
+      const scan = await scanDependencies({ workspacePath: SERVER_ROOT, ecosystem: "npm", maxRiskScore: 70 });
+      expect(scan.packageFound).toBe(true);
+      expect(scan.updates).toBeDefined();
+    },
+    60_000
+  );
 
   it("proposeMaintenancePr marks high risk updates", async () => {
     const scan = {

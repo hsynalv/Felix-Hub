@@ -1,6 +1,6 @@
 # 03 — Autonomous Watchers
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.3  
 > **Bağımlılık:** [V5 Scheduled Operations](../v5-path/02-scheduled-agent-operations.md), [V4 Runtime v2](../v4-path/02-agent-runtime-v2.md)
 

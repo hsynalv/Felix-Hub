@@ -8,7 +8,7 @@ import {
   updateRunStatus,
   resetAgentRunsForTests,
   RunStatus,
-} from "../../src/core/agent-runs/agent-runs.service.js";
+} from "../../../src/core/agent-runs/agent-runs.service.js";
 
 describe("run status", () => {
   beforeEach(() => {

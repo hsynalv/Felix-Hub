@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * MCP Hub CLI
+ * Felix Hub CLI (mcp-cli)
  *
  * Interactive terminal interface for managing the MCP server.
  * Provides commands for plugins, health checks, logs, and more.
@@ -12,6 +12,7 @@ import { spawn } from "child_process";
 import { readdir, readFile, stat } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { BRAND } from "../src/core/branding.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -134,7 +135,7 @@ async function showHelp(args) {
     return;
   }
 
-  log.header("MCP Hub CLI - Available Commands");
+  log.header(`${BRAND.hubName} CLI - Available Commands`);
   console.log("");
 
   const maxCmd = Math.max(...Object.keys(commands).map((c) => c.length));

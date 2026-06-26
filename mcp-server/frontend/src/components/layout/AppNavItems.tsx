@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/branding";
 import { APP_NAV } from "@/components/layout/app-navigation";
 
 type AppNavItemsProps = {
@@ -44,9 +45,9 @@ export function AppNavBrand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-bold text-white">
-        MCP
+        Fx
       </div>
-      {!compact && <span className="font-semibold">MCP Hub</span>}
+      {!compact && <span className="font-semibold">{BRAND.hubName}</span>}
     </div>
   );
 }

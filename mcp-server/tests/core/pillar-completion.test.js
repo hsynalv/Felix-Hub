@@ -24,7 +24,7 @@ describe("workflow templates", () => {
     const templates = listWorkflowTemplates();
     expect(templates.some((t) => t.id === "repo-ship-feature")).toBe(true);
     const t = getWorkflowTemplate("repo-ship-feature");
-    expect(t?.steps.length).toBe(6);
+    expect(t?.steps.length).toBe(7);
   });
 
   it("resolves template placeholders", () => {

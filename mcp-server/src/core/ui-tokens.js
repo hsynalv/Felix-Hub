@@ -1,6 +1,7 @@
 import { randomInt } from "crypto";
 import { exec } from "child_process";
 import { getEnvValue } from "./settings/effective-config.js";
+import { BRAND } from "./branding.js";
 
 const TOKENS = new Map();
 
@@ -80,7 +81,7 @@ export async function issueUiTokenWithNotification({ ttlMs } = {}) {
   const issued = issueUiToken({ ttlMs });
   const minutes = Math.max(1, Math.round(issued.ttlMs / 60000));
   await notify(
-    "MCP Hub UI Token",
+    `${BRAND.hubName} UI Token`,
     `Token (valid ~${minutes} min): ${issued.token}`
   );
   return issued;

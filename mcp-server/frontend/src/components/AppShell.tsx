@@ -32,6 +32,7 @@ import { APP_ROUTE_TITLES, IMMERSIVE_APP_PATHS } from "@/components/layout/app-n
 import { AppNavBrand, AppNavItems } from "@/components/layout/AppNavItems";
 import { AppShellNavContext } from "@/components/layout/AppShellNavContext";
 import { MainNavMenuButton } from "@/components/layout/MainNavMenuButton";
+import { BRAND } from "@/lib/branding";
 
 function PageLoader() {
   return (
@@ -91,7 +92,7 @@ export function AppShell() {
   const connecting = !authError && !authDisabled && (whoamiLoading || (!connected && !whoamiError));
 
   const refresh = () => qc.invalidateQueries();
-  const pageTitle = APP_ROUTE_TITLES[location.pathname] || "MCP Hub";
+  const pageTitle = APP_ROUTE_TITLES[location.pathname] || BRAND.hubName;
   const isImmersive = IMMERSIVE_APP_PATHS.has(location.pathname);
 
   const closeMainNav = useCallback(() => setMainNavOpen(false), []);

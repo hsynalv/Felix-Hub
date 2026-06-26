@@ -47,6 +47,7 @@ vi.mock("../../src/core/settings/validate.service.js", () => ({
 }));
 
 import { registerSettingsRoutes } from "../../src/core/settings/routes.js";
+import { withHubSecurityMiddleware } from "../helpers/route-auth.js";
 
 const ADMIN_KEY = "test-admin-key-phase2-xxxxxxxx";
 
@@ -62,6 +63,7 @@ describe("settings/routes", () => {
 
     app = express();
     app.use(express.json());
+    withHubSecurityMiddleware(app);
     registerSettingsRoutes(app);
   });
 
@@ -85,6 +87,7 @@ describe("settings/routes", () => {
   it("GET /settings/ succeeds with admin key", async () => {
     const res = await request(app)
       .get("/settings/")
+      .set("Accept", "application/json")
       .set("Authorization", `Bearer ${ADMIN_KEY}`);
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);

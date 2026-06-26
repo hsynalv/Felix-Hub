@@ -53,7 +53,10 @@ describe("tool-bridge", () => {
     const tools = listTools();
     expect(tools.some((t) => t.name === "mockmcp__echo")).toBe(true);
 
-    const call = await callTool("mockmcp__echo", { msg: "hi" }, { requestId: "test-req" });
+    const call = await callTool("mockmcp__echo", { msg: "hi" }, {
+      requestId: "test-req",
+      scopes: ["read", "write"],
+    });
     expect(call.ok).toBe(true);
     expect(call.data?.echoed ?? call.data?.content).toBeTruthy();
 

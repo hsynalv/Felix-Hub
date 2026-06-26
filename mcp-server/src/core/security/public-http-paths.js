@@ -13,10 +13,11 @@ export function isPublicSecurityPath(req) {
     return true;
   }
 
-  if (
-    req.method === "GET" &&
-    (p === "/ui" || p === "/ui/" || p.startsWith("/ui/"))
-  ) {
+  if (req.method === "GET" && (p === "/ui" || p === "/ui/")) {
+    return true;
+  }
+
+  if (req.method === "GET" && (p.startsWith("/ui/assets/") || p.startsWith("/assets/"))) {
     return true;
   }
 

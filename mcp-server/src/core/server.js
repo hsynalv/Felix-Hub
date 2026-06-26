@@ -82,6 +82,7 @@ import { registerSettingsRoutes } from "./settings/routes.js";
 import { registerReloadHooks } from "./settings/reload-registry.js";
 import { rateLimitMiddleware } from "./ratelimit.js";
 import { skipForHtmlNavigation } from "./http/html-navigation.js";
+import { BRAND } from "./branding.js";
 
 import { workspaceContextMiddleware } from "./workspace.js";
 import {
@@ -608,6 +609,10 @@ export async function createServer() {
         projectId: req.projectId,
         projectEnv: req.projectEnv,
         user: req.user || req.actor?.id,
+        correlationId: req.correlationId,
+        tenantId: req.headers["x-tenant-id"]?.toString().trim() || null,
+        invokeSource: "rest",
+        source: "rest",
       });
 
       res.status(202).json({
@@ -940,7 +945,7 @@ export async function createServer() {
     app.get("/", (_req, res) => {
       res.json({
         ok: true,
-        message: "mcp-hub API running — UI not built",
+        message: `${BRAND.hubName} API running — UI not built`,
         hint: "cd mcp-server && npm run ui:build",
         docs: "/openapi.json",
       });

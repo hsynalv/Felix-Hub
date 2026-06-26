@@ -10,6 +10,12 @@ vi.mock("../../src/core/tool-registry.js", () => ({
     { name: "github_list_repos", plugin: "github", tags: ["read_only"] },
     { name: "notion_search", plugin: "notion", tags: ["read_only", "NETWORK"] },
   ]),
+  getToolStats: vi.fn(() => ({
+    total: 2,
+    byPlugin: { github: 1, notion: 1 },
+    categories: ["NETWORK", "read_only"],
+    byCategory: { read_only: 2, NETWORK: 1 },
+  })),
 }));
 
 vi.mock("../../src/core/jobs.js", () => ({
@@ -24,7 +30,7 @@ vi.mock("../../src/core/jobs.js", () => ({
 }));
 
 import { getPlugins, getFailedPlugins } from "../../src/core/plugins.js";
-import { listTools } from "../../src/core/tool-registry.js";
+import { getToolStats as getRegistryToolStats } from "../../src/core/tool-registry.js";
 import { getJobStats } from "../../src/core/jobs.js";
 import {
   getPluginStats,
@@ -53,10 +59,10 @@ describe("runtime.stats - production wiring", () => {
     });
   });
 
-  it("reports tool stats from listTools", () => {
+  it("reports tool stats from tool registry", () => {
     const stats = getToolStats();
 
-    expect(listTools).toHaveBeenCalled();
+    expect(getRegistryToolStats).toHaveBeenCalled();
     expect(stats.total).toBe(2);
     expect(stats.byPlugin).toEqual({ github: 1, notion: 1 });
     expect(stats.categories).toEqual(expect.arrayContaining(["read_only", "NETWORK"]));

@@ -1,6 +1,6 @@
 # 02 — Agent Skill Store
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.2  
 > **Bağımlılık:** [01-multi-agent-collaboration.md](./01-multi-agent-collaboration.md), [V4 Run Designer](../v4-path/03-agent-run-designer.md)
 

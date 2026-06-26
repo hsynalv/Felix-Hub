@@ -1,6 +1,6 @@
 # 04 — Agent Inbox
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.6  
 > **Bağımlılık:** [V5 SLA & Escalation](../v5-path/07-sla-escalation.md), [V4 Approval Center Pro](../v4-path/04-approval-center-pro.md)
 

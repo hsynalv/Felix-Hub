@@ -48,6 +48,7 @@ vi.mock("../../src/core/chat/conversations.service.js", () => ({
 
 import { isPersistenceHealthy } from "../../src/core/persistence/index.js";
 import { registerUiChatRoutes } from "../../src/core/ui-chat.js";
+import { withHubSecurityMiddleware } from "../helpers/route-auth.js";
 
 vi.mock("../../src/core/persistence/index.js", () => ({
   isPersistenceHealthy: vi.fn(),
@@ -69,6 +70,7 @@ describe("ui-chat conversations routes", () => {
     isPersistenceHealthy.mockReturnValue(true);
     app = express();
     app.use(express.json());
+    withHubSecurityMiddleware(app);
     registerUiChatRoutes(app);
   });
 
@@ -131,6 +133,6 @@ describe("ui-chat conversations routes", () => {
       .delete("/ui/chat/conversations/c1")
       .set("Authorization", `Bearer ${WRITE_KEY}`);
     expect(res.status).toBe(200);
-    expect(mockArchive).toHaveBeenCalledWith("c1");
+    expect(mockArchive).toHaveBeenCalledWith("c1", expect.objectContaining({ namespace: expect.any(String) }));
   });
 });

@@ -27,6 +27,7 @@ vi.mock("../../src/core/config.js", () => ({
 
 vi.mock("../../src/core/tool-registry.js", () => ({
   registerTool: vi.fn(),
+  clearTools: vi.fn(),
 }));
 
 vi.mock("../../src/core/plugin-meta.js", () => ({

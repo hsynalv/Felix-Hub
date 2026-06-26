@@ -19,10 +19,11 @@ const ALLOWED_EXTENSIONS = process.env.WORKSPACE_ALLOWED_EXTENSIONS?.split(",") 
  * Extract context from request (for REST routes)
  */
 export function extractContext(req) {
+  const headers = req.headers ?? {};
   return {
     actor: req.user?.id || req.user?.email || "anonymous",
-    workspaceId: req.workspaceId ?? null,
-    projectId: req.projectId ?? null,
+    workspaceId: req.workspaceId ?? headers["x-workspace-id"]?.toString().trim() ?? null,
+    projectId: req.projectId ?? headers["x-project-id"]?.toString().trim() ?? null,
   };
 }
 

@@ -8,6 +8,13 @@
   "supportsJobs": false,
   "testLevel": "unit",
   "dependencies": ["rag", "rag-ingestion"],
+  "security": {
+    "scope": "read",
+    "dangerousCombinations": [],
+    "requiresApproval": [],
+    "riskLevel": "low",
+    "capabilities": ["read"]
+  },
   "envVars": [
     {
       "name": "RETRIEVAL_EVAL_OUTPUT_DIR",

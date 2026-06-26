@@ -2,6 +2,8 @@
  * Briefing export helpers — HTML (print/PDF) without external renderers.
  */
 
+import { BRAND } from "../branding.js";
+
 function escapeHtml(text) {
   return String(text)
     .replace(/&/g, "&amp;")
@@ -68,7 +70,7 @@ export function renderBriefingHtml(briefing) {
 </head>
 <body>
   <h1>${title}</h1>
-  <div class="meta">Generated: ${generated} · MCP Hub Briefing</div>
+  <div class="meta">Generated: ${generated} · ${BRAND.hubName} Briefing</div>
   ${body}
 </body>
 </html>`;

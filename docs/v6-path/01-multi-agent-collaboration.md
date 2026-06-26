@@ -1,6 +1,6 @@
 # 01 — Multi-Agent Collaboration
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.1  
 > **Bağımlılık:** [V4 Agent Runtime v2](../v4-path/02-agent-runtime-v2.md)
 

@@ -31,6 +31,7 @@ import {
   sidecarStatusTone,
   type SidecarDevice,
 } from "@/lib/sidecar-api";
+import { BRAND } from "@/lib/branding";
 import { useToast } from "@/providers/ToastProvider";
 import { formatTime } from "@/lib/utils";
 
@@ -189,7 +190,7 @@ export function SidecarSettingsPanel() {
                 NODE_ENV: {status.nodeEnv}
               </Badge>
               <Badge variant="default" className="font-normal">
-                {status.mode === "direct" ? "Doğrudan erişim" : "Sidecar delegation"}
+                {status.mode === "direct" ? "Doğrudan erişim" : `${BRAND.desktopAgentName} delegation`}
               </Badge>
               {status.ready ? (
                 <Badge variant="success">Hazır</Badge>
@@ -206,13 +207,13 @@ export function SidecarSettingsPanel() {
               {status.localFsOnServer && (
                 <p className="mt-2">
                   <code className="rounded bg-muted px-1.5 py-0.5 text-xs">LOCAL_FS_ON_SERVER</code>{" "}
-                  etkin veya varsayılan dev davranışı aktif — sidecar daemon çalıştırmanız gerekmez.
+                  etkin veya varsayılan dev davranışı aktif — {BRAND.desktopAgentName} çalıştırmanız gerekmez.
                 </p>
               )}
               {status.delegateToSidecar && (
                 <p className="mt-2">
                   <code className="rounded bg-muted px-1.5 py-0.5 text-xs">LOCAL_FS_ON_SERVER=false</code>{" "}
-                  — yerel işlemler eşleştirilmiş bir sidecar üzerinden yapılır.
+                  — yerel işlemler eşleştirilmiş {BRAND.desktopAgentName} üzerinden yapılır.
                 </p>
               )}
             </SettingsInfoBox>
@@ -253,14 +254,14 @@ export function SidecarSettingsPanel() {
             </Button>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Sidecar durumu alınamadı.</p>
+          <p className="text-sm text-muted-foreground">{BRAND.desktopAgentName} durumu alınamadı.</p>
         )}
       </SettingsSectionCard>
 
       <SettingsSectionCard
         icon={Wifi}
         title="Eşleşmiş cihazlar"
-        description="Hub'ın yerel dosya ve terminal işlemlerini yönlendirdiği sidecar daemon kayıtları."
+        description={`${BRAND.hubName}'ın yerel dosya ve terminal işlemlerini yönlendirdiği ${BRAND.desktopAgentName} kayıtları.`}
       >
         {loading ? (
           <div className="flex h-20 items-center justify-center text-muted-foreground">
@@ -272,11 +273,11 @@ export function SidecarSettingsPanel() {
             title={
               status?.sidecarRequired
                 ? "Henüz cihaz eşleştirilmedi"
-                : "Sidecar gerekmez"
+                : `${BRAND.desktopAgentName} gerekmez`
             }
             description={
               status?.sidecarRequired
-                ? "Aşağıdaki adımlarla sidecar daemon'u başlatın ve eşleştirin."
+                ? `Aşağıdaki adımlarla ${BRAND.desktopAgentName}'u başlatın ve eşleştirin.`
                 : "Geliştirme modunda hub bu makinede doğrudan çalışır; daemon kurulumu zorunlu değil."
             }
           />
@@ -298,7 +299,7 @@ export function SidecarSettingsPanel() {
       {status?.sidecarRequired && (
         <SettingsSectionCard
           title="Kurulum"
-          description="Production veya delegation modunda sidecar daemon gereklidir."
+          description={`Production veya delegation modunda ${BRAND.desktopAgentName} gereklidir.`}
         >
           <SettingsStepList
             steps={[
@@ -384,7 +385,7 @@ export function SidecarSettingsPanel() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="sidecar-url">Sidecar base URL</Label>
+              <Label htmlFor="sidecar-url">{BRAND.desktopAgentName} base URL</Label>
               <Input
                 id="sidecar-url"
                 value={baseUrl}

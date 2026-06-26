@@ -1,6 +1,6 @@
 # 05 — Knowledge Conflict Resolver
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.11  
 > **Bağımlılık:** [V4 Project Command Center](../v4-path/05-project-command-center.md), [02-agent-skill-store.md](./02-agent-skill-store.md)
 

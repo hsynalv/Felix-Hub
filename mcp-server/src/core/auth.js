@@ -57,14 +57,6 @@ function getKeyMap() {
   return map;
 }
 
-function hubKeysConfigured() {
-  return !!(
-    process.env.HUB_READ_KEY?.trim() ||
-    process.env.HUB_WRITE_KEY?.trim() ||
-    process.env.HUB_ADMIN_KEY?.trim()
-  );
-}
-
 export async function isUserAuthActive() {
   if (userAuthActiveCache !== null) return userAuthActiveCache;
   userAuthActiveCache = await hasAnyUsers();

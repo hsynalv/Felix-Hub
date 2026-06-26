@@ -31,8 +31,8 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
     description: "Harici servislere ait kayıtlı bağlantı profillerini görüntüleyin.",
   },
   sidecar: {
-    title: "Yerel erişim",
-    description: "Sidecar bağlantısı, production modu ve eşleştirilmiş cihazlar.",
+    title: "Felix Desktop",
+    description: "Yerel masaüstü ajanı, production modu ve eşleştirilmiş cihazlar.",
   },
   advanced: {
     title: "Gelişmiş",

@@ -3,10 +3,10 @@
  * as opposed to a JSON API fetch.
  */
 export function wantsHtmlNavigation(req) {
-  const accept = req.headers.accept || "";
+  const accept = (req.headers.accept || "").toLowerCase();
+  if (accept.includes("application/json")) return false;
   if (accept.includes("text/html")) return true;
-  if (accept.includes("application/json") && !accept.includes("*/*")) return false;
-  return accept.includes("*/*") || accept === "";
+  return false;
 }
 
 /**

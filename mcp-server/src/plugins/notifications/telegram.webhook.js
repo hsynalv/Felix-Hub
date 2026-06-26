@@ -7,6 +7,7 @@ import { getEnvValue } from "../../core/settings/effective-config.js";
 import { runChatTurn } from "../../core/chat-orchestrator.js";
 import { resolveTelegramChatProfile } from "../../core/chat/chat-profiles.js";
 import { auditLog } from "../../core/audit/index.js";
+import { BRAND } from "../../core/branding.js";
 import {
   sendTelegram,
   sendChatAction,
@@ -118,9 +119,9 @@ export function scheduleTelegramWorkingAck({ onAck, delayMs = TELEGRAM_WORKING_A
 
 function helpText() {
   return [
-    "Asistan — MCP Hub kişisel yardımcı bot",
-    "Geliştiren: Hüseyin Alav",
-    "https://asistan.huseyinalav.com",
+    `${BRAND.assistantName} — ${BRAND.hubName} kişisel yardımcı bot`,
+    `Geliştiren: ${BRAND.authorName}`,
+    BRAND.productionUrl,
     "",
     "/start — karşılama",
     "/help — bu mesaj",
@@ -138,7 +139,7 @@ async function handleCommand(chatId, text) {
   if (lower === "/start") {
     await replyToChat(
       chatId,
-      "Merhaba! Ben Asistan — Hüseyin Alav tarafından geliştirilen MCP Hub yardımcı botuyum.\n\n/help ile komutları gör."
+      `Merhaba! Ben ${BRAND.assistantName} — ${BRAND.authorName} tarafından geliştirilen ${BRAND.hubName} yardımcı botuyum.\n\n/help ile komutları gör.`
     );
     return { handled: true };
   }

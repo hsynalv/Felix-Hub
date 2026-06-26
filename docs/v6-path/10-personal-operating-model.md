@@ -1,6 +1,6 @@
 # 10 — Personal Operating Model
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.12  
 > **Bağımlılık:** [04-agent-inbox.md](./04-agent-inbox.md), [V4 workspace preferences](../v4-path/05-project-command-center.md)
 

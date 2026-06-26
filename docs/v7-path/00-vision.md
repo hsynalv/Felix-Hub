@@ -1,7 +1,7 @@
 # 00 — V7 Vizyon: Personal AI Operating System
 
 > **Status:** not_started  
-> **Önkoşul:** [V6 path](../v6-path/EXECUTION-ORDER.md) tamamlandı (veya V4/V5 çekirdek maddeleri)  
+> **Önkoşul:** [V6 path](../v6-path/EXECUTION-ORDER.md) **kapatıldı** (`mvp_done`, 2026-06-26)  
 > **Bağımlılık:** —
 
 ---

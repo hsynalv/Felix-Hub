@@ -157,15 +157,13 @@ export function submitJob(type, payload = {}, context = {}) {
   // Initialize store if needed
   initStore();
 
-  // Store in Redis or memory
+  // Store in Redis or memory (memory copy enables enqueue-failure fallback)
+  jobs.set(id, job);
+
   if (useRedis && store) {
     store.enqueue(job).catch((err) => {
       console.error("[jobs] Failed to enqueue job in Redis:", err);
-      // Fallback to memory
-      jobs.set(id, job);
     });
-  } else {
-    jobs.set(id, job);
   }
 
   const queueBackend = useRedis && store ? "redis" : "memory";
@@ -226,16 +224,23 @@ async function runJob(id) {
 
   // Update state to running
   const startedAt = new Date().toISOString();
-  if (useRedis && store) {
-    await store.set(id, { ...job, state: JobState.RUNNING, startedAt });
-    await store.redis.sadd(`${store.keyPrefix}jobs:running`, id);
-    await store.removeFromQueue(id);
+  const memRef = jobs.get(id);
+  if (memRef) {
+    memRef.state = JobState.RUNNING;
+    memRef.startedAt = startedAt;
   } else {
     job.state = JobState.RUNNING;
     job.startedAt = startedAt;
   }
+  if (useRedis && store) {
+    const runningPayload = { ...(memRef ?? job), state: JobState.RUNNING, startedAt };
+    await store.set(id, runningPayload);
+    await store.redis.sadd(`${store.keyPrefix}jobs:running`, id);
+    await store.removeFromQueue(id);
+  }
 
-  const runningJob = useRedis && store ? await store.get(id) : job;
+  const runningJob =
+    (useRedis && store ? await store.get(id).catch(() => null) : null) ?? memRef ?? job;
   if (runningJob) {
     await emitJobLifecycleHubEvent(runningJob, "started", { queueBackend });
   }
@@ -243,22 +248,23 @@ async function runJob(id) {
   // Helper functions for runner with Redis persistence
   const updateProgress = async (percent) => {
     const progress = Math.min(100, Math.max(0, Math.round(percent)));
+    const live = jobs.get(id) ?? job;
     if (useRedis && store) {
       await store.updateProgress(id, progress);
-    } else {
-      job.progress = progress;
     }
+    live.progress = progress;
   };
 
   const log = async (message) => {
     const timestamp = new Date().toISOString();
     const entry = `[${timestamp}] ${message}`;
+    const live = jobs.get(id) ?? job;
     if (useRedis && store) {
       await store.addLog(id, message);
-    } else {
-      job.logs.push(entry);
-      if (job.logs.length > 1000) job.logs.shift();
     }
+    if (!live.logs) live.logs = [];
+    live.logs.push(entry);
+    if (live.logs.length > 1000) live.logs.shift();
   };
 
   const ctx = { ...job.context, workspaceId: job.context.workspaceId ?? "global" };
@@ -273,26 +279,21 @@ async function runJob(id) {
       if (current && current.state === JobState.RUNNING) {
         await store.markCompleted(id, result ?? null);
       }
-      const doneJob = await store.get(id);
-      if (doneJob && (doneJob.state === JobState.COMPLETED || doneJob.state === JobState.DONE)) {
-        await emitJobLifecycleHubEvent(doneJob, "completed", {
-          queueBackend,
-          durationMs: jobDurationMs(doneJob),
-        });
-      }
-    } else {
-      if (job.state === JobState.RUNNING) {
-        job.state = JobState.COMPLETED;
-        job.result = result ?? null;
-        job.finishedAt = new Date().toISOString();
-        job.progress = 100;
-      }
-      if (job.state === JobState.COMPLETED || job.state === JobState.DONE) {
-        await emitJobLifecycleHubEvent(job, "completed", {
-          queueBackend,
-          durationMs: jobDurationMs(job),
-        });
-      }
+    }
+    const memJob = jobs.get(id);
+    if (memJob && memJob.state === JobState.RUNNING) {
+      memJob.state = JobState.COMPLETED;
+      memJob.result = result ?? null;
+      memJob.finishedAt = new Date().toISOString();
+      memJob.progress = 100;
+    }
+    const doneJob =
+      (useRedis && store ? await store.get(id).catch(() => null) : null) ?? jobs.get(id) ?? job;
+    if (doneJob && (doneJob.state === JobState.COMPLETED || doneJob.state === JobState.DONE)) {
+      await emitJobLifecycleHubEvent(doneJob, "completed", {
+        queueBackend,
+        durationMs: jobDurationMs(doneJob),
+      });
     }
 
     await log(`Job completed`);
@@ -347,8 +348,12 @@ export async function listJobs({ state, type, limit = 50 } = {}) {
 
 export async function getJob(id) {
   if (useRedis && store) {
-    const job = await store.get(id);
-    return job ? publicView(job) : null;
+    try {
+      const job = await store.get(id);
+      if (job) return publicView(job);
+    } catch {
+      // fall through to memory
+    }
   }
   const job = jobs.get(id);
   return job ? publicView(job) : null;
@@ -430,10 +435,11 @@ export async function getJobStats() {
 
 /** Strip internal methods before sending to client. */
 function publicView(job) {
+  const state = job.state === JobState.DONE ? JobState.COMPLETED : job.state;
   return {
     id: job.id,
     type: job.type,
-    state: job.state,
+    state,
     context: job.context,
     progress: job.progress || 0,
     logCount: job.logs?.length || 0,

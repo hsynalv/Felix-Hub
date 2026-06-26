@@ -48,10 +48,10 @@ describe("tool-planning", () => {
 
   it("warns on intent mismatch for write tools", () => {
     const result = guardToolCall(
-      "shell_execute",
-      { explanation: "run tests" },
+      "github_list_repos",
+      { explanation: "list repos" },
       { readToolsUsed: true, intent: "brain_recall" },
-      { tags: ["write"] }
+      { tags: ["read_only"] }
     );
     expect(result.blocked).toBe(false);
     expect(result.warn).toBe(true);

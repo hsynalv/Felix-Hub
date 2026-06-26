@@ -40,6 +40,7 @@ describe("Jobs API Integration", () => {
     delete process.env.HUB_READ_KEY;
     delete process.env.HUB_WRITE_KEY;
     delete process.env.HUB_ADMIN_KEY;
+    process.env.HUB_ALLOW_OPEN_HUB = "true";
     process.env.REDIS_URL = "";
     resetForTesting();
     clearHooks();

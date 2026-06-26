@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-06-25",
-  "count": 35,
+  "generatedAt": "2026-06-26",
+  "count": 38,
   "plugins": [
     {
       "name": "brain",
@@ -39,6 +39,12 @@
       "dangerousCombinations": [
         "write"
       ]
+    },
+    {
+      "name": "example-sdk",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
     },
     {
       "name": "file-storage",
@@ -208,7 +214,21 @@
       ]
     },
     {
+      "name": "rag-ingestion",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": [
+        "write"
+      ]
+    },
+    {
       "name": "repo-intelligence",
+      "version": "1.0.0",
+      "riskLevel": null,
+      "dangerousCombinations": []
+    },
+    {
+      "name": "retrieval-evals",
       "version": "1.0.0",
       "riskLevel": null,
       "dangerousCombinations": []

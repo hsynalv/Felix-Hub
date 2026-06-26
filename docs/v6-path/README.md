@@ -1,7 +1,9 @@
 # V6 Path — Agent Ekosistemi Ölçeklenir
 
+> **Durum:** kapatıldı (`mvp_done`, 2026-06-26)  
 > **Ürün yönü:** Agent ekosisteminin ölçeklenmesi, güvenilirleşmesi ve kişiselleşmesi  
-> **Değer önerisi:** Agent ekip gibi çalışır, olayla tetiklenir, güven skoru taşır ve kurum ölçeğinde yönetilir.
+> **Değer önerisi:** Agent ekip gibi çalışır, olayla tetiklenir, güven skoru taşır ve kurum ölçeğinde yönetilir.  
+> **Sonraki:** [V7 — Personal AI OS](../v7-path/README.md)
 
 Bu klasör, V6 büyüme adımlarının **tek tek takip edilebilir planlarıdır**. Önkoşul: [V5 path](../v5-path/README.md). Sıra için [EXECUTION-ORDER.md](./EXECUTION-ORDER.md) esas alınır.
 

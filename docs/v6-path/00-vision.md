@@ -1,8 +1,7 @@
 # 00 — V6 Vizyon: Agent Ekosistemi Ölçeklenir
 
-> **Status:** not_started  
-> **Önkoşul:** [V5 path](../v5-path/EXECUTION-ORDER.md) tamamlandı  
-> **Bağımlılık:** —
+> **Status:** mvp_done  
+> **Kapatıldı:** 2026-06-26
 
 ---
 

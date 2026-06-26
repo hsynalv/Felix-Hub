@@ -1,6 +1,6 @@
 # 12 — Agent Observability Pro
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.7  
 > **Bağımlılık:** [06-agent-trust-score.md](./06-agent-trust-score.md), [V4 Observability](../v3-path/04-visual-run-dashboard.md)
 

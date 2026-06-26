@@ -1,6 +1,6 @@
 # 09 — Natural Language Admin
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.10  
 > **Bağımlılık:** [V4 Team packs](../v4-path/10-team-marketplace-packs.md), [08-agent-app-store.md](./08-agent-app-store.md)
 

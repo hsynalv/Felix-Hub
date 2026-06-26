@@ -1,7 +1,7 @@
 {
   "name": "ai-hub",
   "version": "1.0.0",
-  "description": "Universal tool and service bridge for AI agents",
+  "description": "Felix Hub — universal tool and service bridge for AI agents",
   "type": "module",
   "main": "src/index.js",
   "bin": {

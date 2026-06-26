@@ -1,6 +1,6 @@
 # 11 — Enterprise Compliance Pack
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.9  
 > **Bağımlılık:** [V4 Team packs](../v4-path/10-team-marketplace-packs.md), [12-agent-observability-pro.md](./12-agent-observability-pro.md)
 

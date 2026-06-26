@@ -22,7 +22,7 @@
     },
     {
       "utterance": "otomasyon kur",
-      "intent": "automation"
+      "intent": "agent_workflow"
     },
     {
       "utterance": "otomasyon n8n kurulum",
@@ -30,7 +30,7 @@
     },
     {
       "utterance": "schedule automation",
-      "intent": "automation"
+      "intent": "agent_workflow"
     },
     {
       "utterance": "schedule n8n automation",
@@ -38,7 +38,7 @@
     },
     {
       "utterance": "workflow automation kur",
-      "intent": "automation"
+      "intent": "agent_workflow"
     },
     {
       "utterance": "bunu hatırlıyor musun",

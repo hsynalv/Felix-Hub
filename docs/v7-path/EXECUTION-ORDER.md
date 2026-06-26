@@ -1,7 +1,7 @@
 # V7 Execution Order
 
 > **Son güncelleme:** 2026-06-26  
-> **Önkoşul:** [V6 EXECUTION-ORDER](../v6-path/EXECUTION-ORDER.md) veya V4/V5 çekirdek exit  
+> **Önkoşul:** [V6 EXECUTION-ORDER](../v6-path/EXECUTION-ORDER.md) **kapatıldı** (`mvp_done`, 2026-06-26)  
 > **Kural:** Önce kişisel merkez + brifing → local assistant + güvenlik → günlük hayat agent'ları → olgunlaştırma
 
 ---

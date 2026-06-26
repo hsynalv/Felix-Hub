@@ -7,6 +7,7 @@ import { groupChatMessages } from "./chat-message-groups";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ChatMessage } from "@/lib/chat-stream";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/branding";
 
 const EXAMPLE_PROMPTS = [
   { text: "Merhaba, kendini tanıt", icon: Sparkles },
@@ -154,7 +155,7 @@ export function ChatMessageList({
                 transition={{ delay: 0.1 }}
                 className="text-xl font-semibold tracking-tight"
               >
-                MCP Hub ile sohbet et
+                {BRAND.hubName} ile sohbet et
               </motion.h2>
               <motion.p
                 initial={{ opacity: 0, y: 8 }}

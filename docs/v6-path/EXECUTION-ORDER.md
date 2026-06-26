@@ -1,9 +1,8 @@
 # V6 Execution Order
 
 > **Son güncelleme:** 2026-06-26  
-> **Önkoşul:** [V5 EXECUTION-ORDER](../v5-path/EXECUTION-ORDER.md) tamamlandı  
-> **Kural:** Önce ekosistem omurgası → güven ve simülasyon → kullanıcı/kurum ürünleştirme  
-> **MVP notları:** [MVP-NOTES.md](./MVP-NOTES.md)
+> **Durum:** **kapatıldı** (`mvp_done` — Faz A/B/C)  
+> **Sonraki:** [V7 path](../v7-path/README.md)
 
 ---
 
@@ -110,6 +109,8 @@ V6 tamamlandıktan sonra ürün yönü [V7 path](../v7-path/README.md) ile devam
 - **Faz 3:** Shopping → Life agents → Jarvis
 
 Detay: [v7-path/EXECUTION-ORDER.md](../v7-path/EXECUTION-ORDER.md)
+
+V7 sonrası: [V8 path](../v8-path/README.md) — prompt intelligence & agent behavior layer.
 
 ---
 

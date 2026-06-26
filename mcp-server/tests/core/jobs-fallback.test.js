@@ -14,6 +14,7 @@ vi.mock("../../src/core/jobs.redis.js", () => ({
     markFailed: vi.fn(),
     markCancelled: vi.fn(),
     recoverOrphanedJobs: vi.fn().mockResolvedValue(0),
+    removeFromQueue: vi.fn(),
     redis: { sadd: vi.fn() },
   })),
 }));
@@ -55,6 +56,7 @@ describe("jobs - Redis enqueue fallback", () => {
 
   it("normalizes legacy done state to completed in public view", async () => {
     const jobs = await import("../../src/core/jobs.js");
-    expect(jobs.JobState.DONE).toBe(jobs.JobState.COMPLETED);
+    expect(jobs.JobState.DONE).toBe("done");
+    expect(jobs.JobState.COMPLETED).toBe("completed");
   });
 });

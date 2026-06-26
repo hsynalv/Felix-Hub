@@ -1,6 +1,6 @@
 # 08 — Agent App Store
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.8  
 > **Bağımlılık:** [02-agent-skill-store.md](./02-agent-skill-store.md), [06-agent-trust-score.md](./06-agent-trust-score.md)
 

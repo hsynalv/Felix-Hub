@@ -1,6 +1,6 @@
 # 07 — Sandbox / Simulation Lab
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.4  
 > **Bağımlılık:** [V4 Eval Studio](../v4-path/08-eval-studio.md), [V4 Runtime v2 dry-run](../v4-path/02-agent-runtime-v2.md)
 

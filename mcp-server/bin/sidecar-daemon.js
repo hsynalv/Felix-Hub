@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MCP Hub local sidecar daemon — filesystem, terminal, desktop notify on localhost.
+ * Felix Desktop local agent daemon (legacy CLI: mcp-hub-sidecar) — filesystem, terminal, desktop notify on localhost.
  *
  * Usage:
  *   npm run sidecar:daemon

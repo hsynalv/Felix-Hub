@@ -15,8 +15,10 @@
   },
   "security": {
     "scope": "write",
-    "dangerousCombinations": [],
-    "requiresApproval": false
+    "dangerousCombinations": ["write"],
+    "requiresApproval": ["write"],
+    "riskLevel": "medium",
+    "capabilities": ["write", "read"]
   },
   "performance": {
     "avgResponseTimeMs": 2000,

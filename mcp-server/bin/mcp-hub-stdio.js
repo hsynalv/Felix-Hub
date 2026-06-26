@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MCP Hub STDIO Entrypoint
+ * Felix Hub STDIO Entrypoint (CLI: mcp-hub-stdio)
  *
  * CLI entrypoint for MCP STDIO transport.
  * Usage: npx mcp-hub-stdio [options]
@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
 import { randomUUID } from "crypto";
+import { BRAND } from "../src/core/branding.js";
 
 // Cursor/STDIO expects ONLY JSON-RPC frames on stdout.
 console.log = (...args) => process.stderr.write(args.join(" ") + "\n");
@@ -68,7 +69,7 @@ function parseArgs() {
       case "--help":
       case "-h":
         console.log(`
-MCP Hub STDIO Server
+${BRAND.hubName} STDIO Server (${BRAND.cliName})
 
 Usage: npx mcp-hub-stdio [options]
 
@@ -167,7 +168,7 @@ async function main() {
   const server = createMcpServer();
   const transport = new StdioServerTransport();
 
-  console.error("[mcp-hub-stdio] Starting MCP Hub STDIO server...");
+  console.error(`[mcp-hub-stdio] Starting ${BRAND.hubName} STDIO server...`);
   console.error(`[mcp-hub-stdio] Required scope: ${options.scope}`);
   if (options.workspaceId) console.error(`[mcp-hub-stdio] Workspace: ${options.workspaceId}`);
   if (options.projectId) console.error(`[mcp-hub-stdio] Project: ${options.projectId}`);

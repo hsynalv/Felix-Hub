@@ -1,12 +1,25 @@
 # V6 MVP Notları
 
-> **Son güncelleme:** 2026-06-26
+> **Son güncelleme:** 2026-06-26  
+> **Durum:** V6 **kapatıldı** (`mvp_done` — tüm fazlar). Sonraki yol: [V7 path](../v7-path/README.md).
 
-Bu dosya Faz A'da bilerek ertelenen maddeleri ve sonraki fazların kapsamını takip eder.
+Bu dosya Faz A–C'de bilerek ertelenen maddeleri ve post-MVP borçları takip eder.
 
 ---
 
-## Faz A — `mvp_done` ama tam ürün değil
+## Kapatma özeti
+
+| Faz | Pillars | Test | UI |
+|-----|---------|------|-----|
+| A (6.1–6.5) | Multi-agent, Skills, Watchers, Sandbox, Trust | `faz-v6-a.test.js` (7) | `/v6` |
+| B (6.6–6.7) | Inbox, Observability Pro | `faz-v6-b.test.js` (5) | `/inbox`, Observability |
+| C (6.8–6.12) | App Store, Compliance, NL Admin, Conflicts, Operating Model | `faz-v6-c.test.js` (7) | `/v6` sekmeleri |
+
+**Toplam V6 faz testleri:** 19/19
+
+---
+
+## Faz A — `mvp_done` (ertelenenler)
 
 | Pillar | Yapıldı (MVP) | Ertelendi |
 |--------|---------------|-----------|
@@ -16,62 +29,9 @@ Bu dosya Faz A'da bilerek ertelenen maddeleri ve sonraki fazların kapsamını t
 | **6.4 Sandbox** | Oturum CRUD, `context.sandboxId` mock hook | Fixture replay; partial mock matrix; sandbox UI'dan tool trace drill-down |
 | **6.5 Trust Score** | Run geçmişinden skor + cache, watcher `minTrustScore` gate | Per-role/per-user trust; decay window; otomatik recalculate cron |
 
-### Faz C — henüz başlanmadı
-
-| Pillar | Kısa açıklama |
-|--------|----------------|
-| **6.8 Agent App Store** | Skill/runbook paketleri, kurulum, rating |
-| **6.9 Enterprise Compliance Pack** | Audit export, retention policy, SOX-style checklist |
-| **6.10 Natural Language Admin** | Sohbetten hub yönetimi |
-| **6.11 Knowledge Conflict Resolver** | Brain/RAG çakışma tespiti ve merge |
-| **6.12 Personal Operating Model** | Kullanıcıya özel agent profili ve tercihler |
-
-### V5'ten devreden açık borçlar (V6 dışı)
-
-- JSON store → MSSQL migration (schedules, skills, watchers, sandbox, trust)
-- SLA trend grafikleri (zaman serisi UI)
-- Tam Notion ↔ Obsidian sync
-- Harici CI/CD deploy hook (promotion execute sonrası)
-
 ---
 
-## Faz B — hedef (`v6.1` milestone)
-
-| Pillar | MVP hedefi |
-|--------|------------|
-| **6.6 Agent Inbox** | Onay + failed run + SLA + watcher olaylarını tek feed'de; read/snooze; minimal UI |
-| **6.7 Observability Pro** | Agent-centric dashboard: failure hotspots, approval bottleneck, cost, reliability trend |
-
----
-
-## API özeti (Faz A)
-
-```
-GET  /multi-agent/roles
-POST /multi-agent/parents
-POST /multi-agent/parents/:id/spawn
-GET  /multi-agent/parents/:id/aggregate
-
-GET|POST|PUT|DELETE /skills
-POST /skills/:id/compile
-POST /skills/:id/run
-
-GET|POST|PUT|DELETE /watchers
-POST /watchers/:id/test-fire
-POST /watchers/dispatch
-
-GET|POST /sandbox/sessions
-POST /sandbox/sessions/:id/close
-
-GET  /trust/scores
-POST /trust/recalculate
-```
-
-UI: `http://localhost:5173/v6`
-
----
-
-## Faz B — `mvp_done` (2026-06-26)
+## Faz B — `mvp_done`
 
 | Pillar | Yapıldı | Ertelendi |
 |--------|---------|-----------|
@@ -90,11 +50,9 @@ GET  /inbox/stream          (SSE)
 GET  /observability-pro/dashboard?days=7
 ```
 
-UI: `http://localhost:5173/inbox` · Observability → Agent Pro paneli
-
 ---
 
-## Faz C — `mvp_done` (2026-06-26)
+## Faz C — `mvp_done`
 
 | Pillar | Yapıldı | Ertelendi |
 |--------|---------|-----------|
@@ -122,5 +80,38 @@ POST /conflicts/:id/resolve
 GET|POST|DELETE /operating-model/*
 ```
 
-UI: `http://localhost:5173/v6` (App Store, NL Admin, Compliance, Conflicts, Profil sekmeleri)
+---
 
+## V5'ten devreden açık borçlar (V6 dışı — V7+ veya infra)
+
+- JSON store → MSSQL migration (schedules, skills, watchers, sandbox, trust)
+- SLA trend grafikleri (zaman serisi UI)
+- Tam Notion ↔ Obsidian sync
+- Harici CI/CD deploy hook (promotion execute sonrası)
+
+---
+
+## API özeti (Faz A)
+
+```
+GET  /multi-agent/roles
+POST /multi-agent/parents
+POST /multi-agent/parents/:id/spawn
+GET  /multi-agent/parents/:id/aggregate
+
+GET|POST|PUT|DELETE /skills
+POST /skills/:id/compile
+POST /skills/:id/run
+
+GET|POST|PUT|DELETE /watchers
+POST /watchers/:id/test-fire
+POST /watchers/dispatch
+
+GET|POST /sandbox/sessions
+POST /sandbox/sessions/:id/close
+
+GET  /trust/scores
+POST /trust/recalculate
+```
+
+UI: `http://localhost:5173/v6` · `http://localhost:5173/inbox`

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Bot } from "lucide-react";
+import { BRAND, hubTagline } from "@/lib/branding";
 
 export function AuthLayout({ children, title, subtitle }: { children: ReactNode; title: string; subtitle?: string }) {
   return (
@@ -16,8 +17,8 @@ export function AuthLayout({ children, title, subtitle }: { children: ReactNode;
           <Bot className="h-7 w-7 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Asistan</h1>
-          <p className="text-sm text-muted-foreground">MCP Hub · Hüseyin Alav</p>
+          <h1 className="text-2xl font-bold tracking-tight">{BRAND.assistantName}</h1>
+          <p className="text-sm text-muted-foreground">{hubTagline()}</p>
         </div>
       </div>
       <div className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card/80 p-6 shadow-xl backdrop-blur sm:p-8">

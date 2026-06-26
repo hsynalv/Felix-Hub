@@ -34,6 +34,7 @@ import { apiGet, type ChatModelsData, type HealthData, type PluginInfo, type Who
 import { fetchDashboardBundle } from "@/lib/dashboard-api";
 import { fetchUsageStats, formatCostUsd, formatTokenCount } from "@/lib/usage-api";
 import { fetchSidecarStatus, sidecarStatusLabel, sidecarStatusTone } from "@/lib/sidecar-api";
+import { BRAND } from "@/lib/branding";
 import { listRuns } from "@/lib/runs-api";
 import { cn, formatDuration, formatTime } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -291,13 +292,13 @@ export function HomePage() {
                     ? "Doğrudan"
                     : sidecarStatus.deviceCount > 0
                       ? `${sidecarStatus.deviceCount} cihaz`
-                      : "Sidecar"
+                      : BRAND.desktopAgentName
                   : "—"
               }
               hint={
                 sidecarStatus
                   ? `${sidecarStatus.nodeEnv} · ${sidecarStatusLabel(sidecarStatus.aggregateStatus)}`
-                  : "Sidecar durumu yüklenemedi"
+                  : `${BRAND.desktopAgentName} durumu yüklenemedi`
               }
               icon={Laptop}
               status={

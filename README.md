@@ -1,6 +1,8 @@
-# mcp-hub
+# Felix Hub
 
-AI ajanları için plugin-tabanlı HTTP servisi. REST API ve MCP (Model Context Protocol) desteği ile Cursor, Claude Desktop, n8n ve özel LLM uygulamalarına entegrasyon sağlar.
+AI ajanları için plugin-tabanlı HTTP servisi (**Felix Hub**). REST API ve MCP (Model Context Protocol) desteği ile Cursor, Claude Desktop, n8n ve özel LLM uygulamalarına entegrasyon sağlar. Yerel masaüstü ajanı: **Felix Desktop**.
+
+> Repo klasör adı (`mcp-hub`) ve teknik CLI adları (`mcp-hub-stdio`) geriye dönük uyumluluk için korunur.
 
 ## Özellikler
 
@@ -79,7 +81,7 @@ Aynı Bearer token (read scope) ile erişilir.
 
 ## Configuration
 
-MCP Hub uses a validated configuration system with Zod schema validation.
+Felix Hub uses a validated configuration system with Zod schema validation.
 
 ### Required Environment Variables
 

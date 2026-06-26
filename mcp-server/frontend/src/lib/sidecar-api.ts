@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPost } from "./api-client";
+import { BRAND } from "./branding";
 
 export type SidecarAggregateStatus = "not_required" | "connected" | "offline" | "no_device";
 export type SidecarMode = "direct" | "delegated";
@@ -88,8 +89,9 @@ export function sidecarStatusTone(
 }
 
 export function sidecarModeDescription(mode: SidecarMode, nodeEnv: string): string {
+  const desktop = BRAND.desktopAgentName;
   if (mode === "direct") {
-    return `Geliştirme modu (${nodeEnv}): dosya ve terminal işlemleri hub bu makinede çalışır. Sidecar daemon gerekmez.`;
+    return `Geliştirme modu (${nodeEnv}): dosya ve terminal işlemleri hub bu makinede çalışır. ${desktop} gerekmez.`;
   }
-  return `Production / delegation modu: yerel dosya, terminal ve bildirimler eşleştirilmiş sidecar daemon üzerinden yapılır.`;
+  return `Production / delegation modu: yerel dosya, terminal ve bildirimler eşleştirilmiş ${desktop} üzerinden yapılır.`;
 }

@@ -1,6 +1,6 @@
 # 06 — Agent Trust Score
 
-> **Status:** not_started  
+> **Status:** mvp_done  
 > **Faz:** V6.5  
 > **Bağımlılık:** [V4 Eval Studio](../v4-path/08-eval-studio.md), [01-multi-agent-collaboration.md](./01-multi-agent-collaboration.md)
 
