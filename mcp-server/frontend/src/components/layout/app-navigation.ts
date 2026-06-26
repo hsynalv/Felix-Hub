@@ -18,6 +18,7 @@ import {
   Wand2,
   Wrench,
   Sparkles,
+  Flower2,
 } from "lucide-react";
 
 export type AppNavItem = {
@@ -28,6 +29,7 @@ export type AppNavItem = {
 
 export const APP_NAV: AppNavItem[] = [
   { to: "/", label: "Bugün", icon: Home },
+  { to: "/life", label: "Life", icon: Flower2 },
   { to: "/chat", label: "Sohbet", icon: Bot },
   { to: "/runs", label: "Runs", icon: GitBranch },
   { to: "/workflows/designer", label: "Workflow", icon: Wand2 },
@@ -50,6 +52,7 @@ export const APP_NAV: AppNavItem[] = [
 
 export const APP_ROUTE_TITLES: Record<string, string> = {
   "/": "Bugün",
+  "/life": "Life Agents",
   "/system": "Sistem Paneli",
   "/chat": "Sohbet",
   "/runs": "Agent Runs",

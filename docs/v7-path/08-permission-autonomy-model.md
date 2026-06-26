@@ -1,6 +1,7 @@
 # 08 — Permission Autonomy Model
 
-> **Status:** mvp_done  
+> **Status:** `mvp_done` — 3 preset, desktop hook, ~15 tool map  
+> **Production:** `pending` — full tool family registry → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#4-personal-autonomy-risk-map-76-prod)
 > **Faz:** V7.6  
 > **Bağımlılık:** [V4 Approval Center Pro](../v4-path/04-approval-center-pro.md)
 
@@ -56,17 +57,28 @@ credential
 
 ## Kapsam
 
-- [x] Personal autonomy preset UI (Bugün sayfası)
-- [x] V5 L0–L5 + personal risk mapping
-- [x] Risk category → required level mapping
-- [x] Telegram / desktop policy presets (cautious, balanced, helper)
-- [x] Runtime enforcement personal scope (desktop tools hook)
+### MVP (done)
+
+- [mvp] 3 preset: cautious / balanced / helper
+- [mvp] `TOOL_RISK_MAP` (~15 tool; desktop + shopping + memory)
+- [mvp] `evaluatePersonalAutonomy` + desktop hook
+- [mvp] UI: Bugün sayfası autonomy kartı
+
+### Production (pending)
+
+- [prod] Browser tool ailesi (click, type, navigate, upload)
+- [prod] Email/send ailesi
+- [prod] File upload / write ailesi
+- [prod] n8n workflow write
+- [prod] Per-tool override + audit trail
+- [prod] Telegram channel-specific policy matrix
 
 ---
 
 ## Başarı kriteri
 
-- [x] Her agent action, risk kategorisi ve autonomy level ile değerlendirilir
+- [mvp] Desktop + shopping + memory aksiyonları risk seviyesiyle değerlendirilir
+- [prod] Tüm write/destructive tool aileleri sınıflandırılmış ve enforce edilir
 
 ---
 

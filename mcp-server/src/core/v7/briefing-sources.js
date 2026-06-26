@@ -1,6 +1,8 @@
 /**
- * V7 briefing source registry (hub-native; external connectors V7.2+).
+ * V7 briefing source registry (hub-native + external connectors).
  */
+
+import { getExternalSourceHealth } from "./briefing-connectors.service.js";
 
 export const BRIEFING_SOURCES = {
   hub_inbox: {
@@ -44,5 +46,26 @@ export const BRIEFING_SOURCES = {
 };
 
 export function listBriefingSources() {
-  return Object.values(BRIEFING_SOURCES);
+  const health = getExternalSourceHealth();
+  return Object.values(BRIEFING_SOURCES).map((src) => {
+    if (src.id === "rss") {
+      return {
+        ...src,
+        status: health.rss.status,
+        configuredCount: health.rss.count,
+        hint: health.rss.status === "not_configured" ? "RSS feed URL ekle" : src.hint,
+        errors: health.rss.errors,
+      };
+    }
+    if (src.id === "imap") {
+      return {
+        ...src,
+        status: health.imap.status,
+        configuredCount: health.imap.count,
+        hint: health.imap.status === "not_configured" ? "IMAP hesabı ekle (şifre env'de)" : src.hint,
+        errors: health.imap.errors,
+      };
+    }
+    return { ...src };
+  });
 }

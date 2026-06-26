@@ -11,11 +11,22 @@ import {
 } from "./daily-briefing.service.js";
 import { listBriefingSources } from "./briefing-sources.js";
 import {
+  listRssFeeds,
+  listImapAccounts,
+  addRssFeed,
+  removeRssFeed,
+  addImapAccount,
+  removeImapAccount,
+  testBriefingSource,
+} from "./briefing-connectors.service.js";
+import {
   listPersonalMemory,
   rememberPersonal,
   forgetPersonal,
   pinPersonal,
   exportPersonalMemory,
+  explainPersonalMemory,
+  updatePersonalMemory,
 } from "./personal-memory.service.js";
 import { getHubPauseState } from "./telegram-pause.js";
 import {
@@ -38,6 +49,36 @@ import {
   clearEmergencyStop,
 } from "./personal-ops.service.js";
 import { registerPersonalOpsHook } from "./personal-ops-hook.js";
+import {
+  searchProducts,
+  selectShoppingOption,
+  requestCartAdd,
+  approveCartRequest,
+  listRecentShoppingSessions,
+} from "./shopping-research.service.js";
+import {
+  listLifeAgentPresets,
+  listUserLifeAgents,
+  getUserLifeAgent,
+  createUserLifeAgentFromPreset,
+  createUserLifeAgent,
+  patchUserLifeAgent,
+  removeUserLifeAgent,
+  testLifeAgent,
+  getUserLifeAgentHistory,
+  bindLifeAgentWatcher,
+} from "./life-agent.service.js";
+import {
+  getJarvisState,
+  setJarvisMode,
+  getJarvisLiveStatus,
+  listJarvisModes,
+  getJarvisOverlayStatus,
+} from "./jarvis-mode.service.js";
+import {
+  submitBriefingFeedback,
+  getBriefingFeedbackHistory,
+} from "./briefing-feedback.service.js";
 
 export function registerV7Routes(app) {
   registerPersonalOpsHook();
@@ -78,6 +119,59 @@ export function registerV7Routes(app) {
 
   app.get("/personal/briefing/sources", requireScope("read"), (_req, res) => {
     res.json({ ok: true, data: { sources: listBriefingSources() } });
+  });
+
+  app.get("/personal/briefing/feeds", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: { feeds: listRssFeeds() } });
+  });
+
+  app.post("/personal/briefing/feeds", requireScope("write"), (req, res) => {
+    try {
+      const { url, label, pollIntervalMinutes, enabled } = req.body || {};
+      const feed = addRssFeed({ url, label, pollIntervalMinutes, enabled });
+      res.status(201).json({ ok: true, data: feed });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: { code: "feed_add_failed", message: err.message } });
+    }
+  });
+
+  app.delete("/personal/briefing/feeds/:id", requireScope("write"), (req, res) => {
+    const removed = removeRssFeed(req.params.id);
+    if (!removed) {
+      return res.status(404).json({ ok: false, error: { code: "feed_not_found", message: "Feed not found" } });
+    }
+    res.json({ ok: true, data: { removed: true } });
+  });
+
+  app.get("/personal/briefing/imap", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: { accounts: listImapAccounts() } });
+  });
+
+  app.post("/personal/briefing/imap", requireScope("write"), (req, res) => {
+    try {
+      const account = addImapAccount(req.body || {});
+      res.status(201).json({ ok: true, data: account });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: { code: "imap_add_failed", message: err.message } });
+    }
+  });
+
+  app.delete("/personal/briefing/imap/:id", requireScope("write"), (req, res) => {
+    const removed = removeImapAccount(req.params.id);
+    if (!removed) {
+      return res.status(404).json({ ok: false, error: { code: "imap_not_found", message: "Account not found" } });
+    }
+    res.json({ ok: true, data: { removed: true } });
+  });
+
+  app.post("/personal/briefing/sources/test", requireScope("write"), async (req, res) => {
+    try {
+      const { type, id } = req.body || {};
+      const result = await testBriefingSource({ type, id });
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: { code: "source_test_failed", message: err.message } });
+    }
   });
 
   app.get("/personal/briefing/latest", requireScope("read"), (req, res) => {
@@ -150,6 +244,51 @@ export function registerV7Routes(app) {
 
   app.get("/personal/memory/export", requireScope("read"), (_req, res) => {
     res.json({ ok: true, data: exportPersonalMemory() });
+  });
+
+  app.get("/personal/memory/:id/explain", requireScope("read"), (req, res) => {
+    const result = explainPersonalMemory(req.params.id);
+    if (!result.ok) return res.status(404).json({ ok: false, error: result.error });
+    res.json({ ok: true, data: result.data });
+  });
+
+  app.put("/personal/memory/:id", requireScope("write"), (req, res) => {
+    try {
+      const data = updatePersonalMemory(req.params.id, {
+        key: req.body?.key,
+        value: req.body?.value != null ? String(req.body.value) : undefined,
+      });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(err.code === "not_found" ? 404 : 500).json({
+        ok: false,
+        error: { code: err.code || "update_failed", message: err.message },
+      });
+    }
+  });
+
+  app.post("/personal/briefing/feedback", requireScope("write"), (req, res) => {
+    try {
+      const { itemId, briefingId, feedback, comment } = req.body || {};
+      const entry = submitBriefingFeedback({
+        itemId,
+        briefingId,
+        feedback,
+        comment,
+        source: req.body?.source || "web",
+      });
+      res.status(201).json({ ok: true, data: entry });
+    } catch (err) {
+      res.status(err.code === "invalid" ? 400 : 500).json({
+        ok: false,
+        error: { code: err.code || "feedback_failed", message: err.message },
+      });
+    }
+  });
+
+  app.get("/personal/briefing/feedback", requireScope("read"), (req, res) => {
+    const itemId = req.query.itemId || null;
+    res.json({ ok: true, data: { feedback: getBriefingFeedbackHistory({ itemId }) } });
   });
 
   app.get("/personal/hub-pause", requireScope("read"), (_req, res) => {
@@ -249,5 +388,164 @@ export function registerV7Routes(app) {
   app.post("/personal/ops/emergency-resume", requireScope("write"), (_req, res) => {
     const data = clearEmergencyStop();
     res.json({ ok: true, data });
+  });
+
+  app.post("/personal/shopping/search", requireScope("write"), async (req, res) => {
+    try {
+      const query = req.body?.query;
+      const data = await searchProducts(query, { persist: true });
+      res.status(201).json({ ok: true, data });
+    } catch (err) {
+      res.status(err.code === "invalid" ? 400 : 500).json({
+        ok: false,
+        error: { code: err.code || "shopping_search_failed", message: err.message },
+      });
+    }
+  });
+
+  app.get("/personal/shopping/sessions", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: { sessions: listRecentShoppingSessions() } });
+  });
+
+  app.post("/personal/shopping/sessions/:id/select", requireScope("write"), (req, res) => {
+    const result = selectShoppingOption(req.params.id, req.body?.optionId);
+    if (!result.ok) return res.status(result.error?.code === "not_found" ? 404 : 400).json({ ok: false, error: result.error });
+    res.json({ ok: true, data: result.data });
+  });
+
+  app.post("/personal/shopping/sessions/:id/cart", requireScope("write"), (req, res) => {
+    const result = requestCartAdd(req.params.id, { optionId: req.body?.optionId });
+    if (!result.ok) return res.status(result.error?.code === "not_found" ? 404 : 400).json({ ok: false, error: result.error });
+    res.status(202).json({ ok: true, data: result.data });
+  });
+
+  app.post("/personal/shopping/sessions/:id/cart/approve", requireScope("write"), (req, res) => {
+    const result = approveCartRequest(req.params.id);
+    if (!result.ok) return res.status(404).json({ ok: false, error: result.error });
+    res.json({ ok: true, data: result.data });
+  });
+
+  app.get("/personal/life-agents/presets", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: { presets: listLifeAgentPresets() } });
+  });
+
+  app.get("/personal/life-agents", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: { agents: listUserLifeAgents() } });
+  });
+
+  app.get("/personal/life-agents/:id", requireScope("read"), (req, res) => {
+    const agent = getUserLifeAgent(req.params.id);
+    if (!agent) return res.status(404).json({ ok: false, error: { code: "not_found" } });
+    res.json({ ok: true, data: agent });
+  });
+
+  app.post("/personal/life-agents", requireScope("write"), (req, res) => {
+    try {
+      const data = req.body?.presetId
+        ? createUserLifeAgentFromPreset(req.body.presetId, req.body)
+        : createUserLifeAgent(req.body || {});
+      res.status(201).json({ ok: true, data });
+    } catch (err) {
+      res.status(err.code === "invalid" ? 400 : 500).json({
+        ok: false,
+        error: { code: err.code || "create_failed", message: err.message },
+      });
+    }
+  });
+
+  app.put("/personal/life-agents/:id", requireScope("write"), (req, res) => {
+    const data = patchUserLifeAgent(req.params.id, req.body || {});
+    if (!data) return res.status(404).json({ ok: false, error: { code: "not_found" } });
+    res.json({ ok: true, data });
+  });
+
+  app.delete("/personal/life-agents/:id", requireScope("write"), (req, res) => {
+    const ok = removeUserLifeAgent(req.params.id);
+    res.json({ ok: true, data: { deleted: ok } });
+  });
+
+  app.post("/personal/life-agents/:id/test", requireScope("write"), async (req, res) => {
+    const result = await testLifeAgent(req.params.id);
+    if (!result.ok) return res.status(404).json({ ok: false, error: result.error });
+    res.json({ ok: true, data: result.data });
+  });
+
+  app.post("/personal/life-agents/:id/bind-watcher", requireScope("write"), (req, res) => {
+    const data = bindLifeAgentWatcher(req.params.id);
+    if (!data) return res.status(404).json({ ok: false, error: { code: "not_found" } });
+    res.json({ ok: true, data });
+  });
+
+  app.get("/personal/life-agents/:id/history", requireScope("read"), (req, res) => {
+    res.json({
+      ok: true,
+      data: { history: getUserLifeAgentHistory({ agentId: req.params.id }) },
+    });
+  });
+
+  app.get("/personal/jarvis", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: getJarvisState() });
+  });
+
+  app.get("/personal/jarvis/modes", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: { modes: listJarvisModes() } });
+  });
+
+  app.put("/personal/jarvis/mode", requireScope("write"), (req, res) => {
+    try {
+      const modeId = req.body?.modeId;
+      if (!modeId) {
+        return res.status(400).json({ ok: false, error: { code: "invalid", message: "modeId required" } });
+      }
+      const data = setJarvisMode(modeId);
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(err.code === "invalid" ? 400 : 500).json({
+        ok: false,
+        error: { code: err.code || "mode_failed", message: err.message },
+      });
+    }
+  });
+
+  app.get("/personal/jarvis/live", requireScope("read"), async (_req, res) => {
+    try {
+      const data = await getJarvisLiveStatus();
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "jarvis_live_failed", message: err.message } });
+    }
+  });
+
+  app.get("/personal/jarvis/overlay", requireScope("read"), async (_req, res) => {
+    try {
+      const data = await getJarvisOverlayStatus();
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "jarvis_overlay_failed", message: err.message } });
+    }
+  });
+
+  app.get("/personal/jarvis/events", requireScope("read"), async (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const write = (event, data) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const push = async () => {
+      try {
+        const status = await getJarvisLiveStatus();
+        write("status", status);
+      } catch (err) {
+        write("error", { message: err.message });
+      }
+    };
+
+    await push();
+    const heartbeat = setInterval(push, 8000);
+    req.on("close", () => clearInterval(heartbeat));
   });
 }

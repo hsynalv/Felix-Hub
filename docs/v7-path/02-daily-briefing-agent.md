@@ -1,6 +1,7 @@
 # 02 — Daily Briefing Agent
 
-> **Status:** partial  
+> **Status:** `mvp_done` — hub-native briefing + feedback  
+> **Production:** `pending` — IMAP/RSS connectors, schedule, dedup → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#1-briefing-source-connectors-72-prod)
 > **Faz:** V7.2  
 > **Bağımlılık:** [01-personal-command-center.md](./01-personal-command-center.md), [07-personal-memory-profile.md](./07-personal-memory-profile.md)
 
@@ -59,18 +60,29 @@ Sadece aksiyon gerektirenleri Telegram'dan bildir.
 
 ## Kapsam
 
-- [ ] Briefing agent workflow / life agent profili
-- [ ] Source connector registry (RSS, IMAP, GitHub, …)
-- [ ] Importance scoring + dedup
-- [ ] Schedule entegrasyonu ([V5 schedule](../v5-path/02-scheduled-agent-operations.md))
-- [ ] Multi-channel delivery
-- [ ] Feedback → personal memory
+### MVP (done)
+
+- [mvp] Hub-native kaynaklar: inbox, runs, projects, pinned memory (`briefing-sources.js`)
+- [mvp] `generateDailyBriefing` + Command Center / `/brief`
+- [mvp] Importance scoring (hub sinyalleri)
+- [mvp] Feedback loop (`relevant` / `show_less` / `not_relevant`)
+- [mvp] Feedback → sonraki brifing sıralaması
+
+### Production (pending)
+
+- [prod] Source connector registry: RSS, IMAP/Gmail — **registry + poll MVP (Sprint 1)**
+- [prod] Connector health UI (`not_configured` → `active`)
+- [prod] Duplicate haber temizleme (cross-source)
+- [prod] Schedule: sabah 09:00 otomatik generate + Telegram push
+- [prod] Multi-channel delivery (email digest, Obsidian note)
+- [prod] Life agent profili: `news-briefing` → gerçek RSS poll
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Telegram'a her gün okunabilir, kısa ve aksiyon odaklı brifing gelir
+- [mvp] Web/Telegram'dan manuel brifing üretilebilir
+- [prod] Telegram'a her gün otomatik, kaynak bağlı, aksiyon odaklı brifing gelir
 
 ---
 

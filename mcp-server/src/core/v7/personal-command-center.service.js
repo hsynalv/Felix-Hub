@@ -14,6 +14,10 @@ import { getTodayBriefing } from "../project-context/command-center.service.js";
 import { getPersonalDesktopStatus } from "./personal-desktop.service.js";
 import { getPersonalAutonomyState } from "./personal-autonomy.service.js";
 import { getOpsDashboard } from "./personal-ops.service.js";
+import { getJarvisLiveStatus } from "./jarvis-mode.service.js";
+import { listUserLifeAgents } from "./life-agent.service.js";
+import { listRecentShoppingSessions } from "./shopping-research.service.js";
+import { getMailNewsPreview } from "./briefing-connectors.service.js";
 
 const STALE_RUN_MS = 60 * 60 * 1000;
 
@@ -100,7 +104,7 @@ export async function getPersonalCommandCenter({
 } = {}) {
   const effectiveProject = scope === "project" ? projectKey || projectId : null;
 
-  const [briefing, inboxFeed, inboxSummary, runs, usage, preferences, dailyBriefing, desktopStatus, autonomy, ops] =
+  const [briefing, inboxFeed, inboxSummary, runs, usage, preferences, dailyBriefing, desktopStatus, autonomy, ops, jarvisLive, lifeAgents, shoppingSessions, mailNews] =
     await Promise.all([
     buildPersonalBriefing({ projectId: effectiveProject, scope }),
     listInboxItems({
@@ -117,6 +121,10 @@ export async function getPersonalCommandCenter({
     getPersonalDesktopStatus().catch(() => ({ sidecar: { paired: false } })),
     Promise.resolve(getPersonalAutonomyState()),
     Promise.resolve(getOpsDashboard()),
+    getJarvisLiveStatus().catch(() => null),
+    Promise.resolve(listUserLifeAgents({ enabled: true })),
+    Promise.resolve(listRecentShoppingSessions({ limit: 3 })),
+    getMailNewsPreview({ limit: 6, skipImap: process.env.BRIEFING_SKIP_IMAP === "true" }),
   ]);
 
   const approvalStore = getApprovalStore();
@@ -202,8 +210,18 @@ export async function getPersonalCommandCenter({
         scope: p.scope,
       })),
     },
-    mail: { status: "not_configured", items: [], hint: "V7.2 — IMAP/Gmail bağlayın" },
-    news: { status: "not_configured", items: [], hint: "V7.2 — RSS/haber kaynakları" },
+    mail: {
+      status: mailNews.mail.status,
+      items: mailNews.mail.items,
+      hint: mailNews.mail.hint,
+      errors: mailNews.mail.errors,
+    },
+    news: {
+      status: mailNews.news.status,
+      items: mailNews.news.items,
+      hint: mailNews.news.hint,
+      errors: mailNews.news.errors,
+    },
     telegram: {
       status: "mvp_done",
       hint: "/brief, /runs, /desktop, /file, onay komutları aktif",
@@ -216,6 +234,9 @@ export async function getPersonalCommandCenter({
       maxDailySpendUsd: ops.maxDailySpendUsd,
       desktopActionsToday: ops.counters?.desktopActions ?? 0,
     },
+    jarvis: jarvisLive,
+    lifeAgents: lifeAgents.slice(0, 6),
+    shopping: { recentSessions: shoppingSessions },
     suggestedActions,
   };
 }

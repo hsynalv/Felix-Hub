@@ -1,6 +1,7 @@
 # 04 — Browser Desktop Assistant
 
-> **Status:** mvp_done  
+> **Status:** `mvp_done` — sidecar tools + allowlist API + Telegram text preview  
+> **Production:** `pending` — photo push, action approve flow, redaction tests → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#3-telegram-file--desktop-production-hardening-73--75-prod)
 > **Faz:** V7.5  
 > **Bağımlılık:** [08-permission-autonomy-model.md](./08-permission-autonomy-model.md), [10-personal-ops-hardening.md](./10-personal-ops-hardening.md)
 
@@ -74,17 +75,27 @@ browser_extract_page
 
 ## Kapsam
 
-- [x] Sidecar desktop/browser tool implementasyonu (V4'ten genişletme)
-- [x] Personal allowlist API (apps, domains)
-- [x] Password/payment screen detector (desktop-guard + ops)
-- [x] Screenshot preview API + Telegram `/desktop`
-- [x] Action rate limit per run/day
+### MVP (done)
+
+- [mvp] Sidecar desktop/browser tools (V4 genişletme)
+- [mvp] Personal allowlist API (apps, domains)
+- [mvp] Password/payment detector (desktop-guard + ops)
+- [mvp] Screenshot/window preview API + Telegram `/desktop` (text)
+- [mvp] Action rate limit per run/day
+
+### Production (pending)
+
+- [prod] Screenshot → Telegram `sendPhoto` + redaction integration tests
+- [prod] Desktop action: preview → inline onay → click/type
+- [prod] Browser assist scoped automation (domain allowlist enforce)
+- [prod] Sidecar offline detection + hub error surface
 
 ---
 
 ## Başarı kriteri
 
-- [x] Agent ekranı okuyabilir, sayfa analiz edebilir, onaylı şekilde basit browser/desktop aksiyonu yapabilir
+- [mvp] Agent ekranı okuyabilir; Telegram'dan text preview alınabilir
+- [prod] Onaylı desktop/browser aksiyonu uzaktan tamamlanır; hassas ekran redakte edilir
 
 ---
 

@@ -1,6 +1,7 @@
 # 05 — Shopping Research Assistant
 
-> **Status:** not_started  
+> **Status:** `mvp_done` — Tavily/stub search + cart approval gate  
+> **Production:** `pending` — site-specific extract, browser cart → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#6-shopping--gerçek-site-akışı-78-prod)
 > **Faz:** V7.8  
 > **Bağımlılık:** [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md), [03-telegram-remote-control.md](./03-telegram-remote-control.md)
 
@@ -48,19 +49,29 @@ E-ticaret sitelerinde ürün araştırması, fiyat karşılaştırması ve sepet
 
 ---
 
-## Kapsam (implementation)
+## Kapsam
 
-- [ ] Shopping research life agent profili
-- [ ] Browser extract + compare workflow
-- [ ] Telegram: `/shopping search <query>` + sonuç kartları
-- [ ] Sepet onay gate (L3 minimum)
-- [ ] Payment screen hard block
+### MVP (done)
+
+- [mvp] `shopping-research` life agent preset
+- [mvp] `searchProducts` — Tavily (`tavily__tavily_search`) veya stub fallback
+- [mvp] Telegram `/shopping`, web `/life` UI
+- [mvp] Sepet onay gate (`cart` → `approve`; ödeme kullanıcıda)
+- [mvp] Payment policy hook (ops layer)
+
+### Production (pending)
+
+- [prod] Site-specific extract (Hepsiburada, Trendyol, Amazon TR)
+- [prod] Structured parse: fiyat, satıcı puanı, yorum özeti, kargo
+- [prod] Browser automation: ürün sayfası okuma, sepet öncesi onaylı click
+- [prod] Tavily extract + browser hybrid pipeline
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Kullanıcı Telegram'dan ürün araştırması yaptırabilir; agent en iyi seçenekleri getirir ve sepet aşamasına kadar yardımcı olur
+- [mvp] Telegram/web'den arama + karşılaştırma özeti + sepet onay akışı (stub/Tavily)
+- [prod] Gerçek e-ticaret sitesinde ürün sayfası okuma ve sepete kadar yardım
 
 ---
 

@@ -28,6 +28,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { logout } from "@/lib/auth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { JarvisOverlay } from "@/components/jarvis/JarvisOverlay";
 import { APP_ROUTE_TITLES, IMMERSIVE_APP_PATHS } from "@/components/layout/app-navigation";
 import { AppNavBrand, AppNavItems } from "@/components/layout/AppNavItems";
 import { AppShellNavContext } from "@/components/layout/AppShellNavContext";
@@ -253,6 +254,9 @@ export function AppShell() {
               </ErrorBoundary>
             </main>
           </div>
+          {connected && location.pathname !== "/login" && location.pathname !== "/register" && (
+            <JarvisOverlay />
+          )}
         </div>
       </TooltipProvider>
     </AppShellNavContext.Provider>

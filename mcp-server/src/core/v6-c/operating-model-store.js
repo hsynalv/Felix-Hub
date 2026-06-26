@@ -9,10 +9,14 @@ import { randomUUID } from "crypto";
 import { config } from "../config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const STORE_PATH =
-  process.env.OPERATING_MODEL_PATH || join(config.catalog?.cacheDir || "./cache", "operating-model.json");
+const DEFAULT_STORE_PATH = join(config.catalog?.cacheDir || "./cache", "operating-model.json");
+
+function getStorePath() {
+  return process.env.OPERATING_MODEL_PATH || DEFAULT_STORE_PATH;
+}
 
 function ensureStore() {
+  const STORE_PATH = getStorePath();
   const dir = dirname(STORE_PATH);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   if (!existsSync(STORE_PATH)) {
@@ -21,6 +25,7 @@ function ensureStore() {
 }
 
 function readStore() {
+  const STORE_PATH = getStorePath();
   ensureStore();
   try {
     const raw = JSON.parse(readFileSync(STORE_PATH, "utf8"));
@@ -31,6 +36,7 @@ function readStore() {
 }
 
 function writeStore(data) {
+  const STORE_PATH = getStorePath();
   ensureStore();
   writeFileSync(STORE_PATH, JSON.stringify({ ...data, updatedAt: new Date().toISOString() }, null, 2), "utf8");
 }
@@ -103,6 +109,22 @@ export function pinPreference(id, pinned = true) {
   const idx = store.preferences.findIndex((p) => p.id === id);
   if (idx < 0) return null;
   store.preferences[idx].pinned = pinned;
+  store.preferences[idx].updatedAt = new Date().toISOString();
+  writeStore(store);
+  return normalizePref(store.preferences[idx]);
+}
+
+export function getPreferenceById(id) {
+  const pref = readStore().preferences.find((p) => p.id === id);
+  return pref ? normalizePref(pref) : null;
+}
+
+export function updatePreferenceById(id, { key, value } = {}) {
+  const store = readStore();
+  const idx = store.preferences.findIndex((p) => p.id === id);
+  if (idx < 0) return null;
+  if (key !== undefined) store.preferences[idx].key = key;
+  if (value !== undefined) store.preferences[idx].value = value;
   store.preferences[idx].updatedAt = new Date().toISOString();
   writeStore(store);
   return normalizePref(store.preferences[idx]);

@@ -4,6 +4,9 @@
 
 import { BRAND } from "../branding.js";
 import { generateDailyBriefing } from "./daily-briefing.service.js";
+import { searchProducts } from "./shopping-research.service.js";
+import { setJarvisMode, getJarvisLiveStatus } from "./jarvis-mode.service.js";
+import { listUserLifeAgents } from "./life-agent.service.js";
 import {
   capturePersonalDesktopPreview,
   readPersonalSidecarFile,
@@ -47,6 +50,9 @@ export function buildTelegramHelpText() {
     "/desktop window — aktif pencere",
     "/file <path> — sidecar dosya oku (kısa)",
     "/file list <dir> — dizin listele",
+    "/shopping <ürün> — ürün araştır",
+    "/mode <work|personal|shopping|…> — Jarvis modu",
+    "/life — life agent listesi",
     "/ask <soru> — agent'a sor",
     "/help — bu mesaj",
   ].join("\n");
@@ -215,6 +221,47 @@ async function cmdFile(chatId, args, reply) {
   await reply(`Dosya: ${trimmed}\n\n${preview}${result.data?.truncated ? "\n\n…(kısaltıldı)" : ""}`);
 }
 
+async function cmdShopping(chatId, args, reply) {
+  if (!args.trim()) {
+    await reply("Kullanım: /shopping <ürün adı>");
+    return;
+  }
+  const result = await searchProducts(args.trim(), { persist: true });
+  const lines = [result.summary, "", "Seçenekler:"];
+  for (const item of result.results.slice(0, 5)) {
+    lines.push(`• ${item.id}: ${item.title}${item.price ? ` — ${item.price}` : ""}`);
+  }
+  lines.push("", result.paymentNote);
+  await reply(lines.join("\n"));
+}
+
+async function cmdMode(chatId, args, reply) {
+  const modeId = args.trim().toLowerCase();
+  if (!modeId) {
+    const live = await getJarvisLiveStatus();
+    await reply(`Mod: ${live.mode.label} (${live.mode.id})\n${live.currentActivity.message}`);
+    return;
+  }
+  try {
+    const state = setJarvisMode(modeId);
+    await reply(`Mod değişti: ${state.mode.label}`);
+  } catch {
+    await reply("Geçersiz mod. Örnek: personal, work, shopping, research, focus");
+  }
+}
+
+async function cmdLife(chatId, reply) {
+  const agents = listUserLifeAgents().slice(0, 10);
+  if (!agents.length) {
+    await reply("Life agent yok. Web'den /life sayfasından preset ekleyin.");
+    return;
+  }
+  const lines = agents.map(
+    (a) => `• ${a.id}: ${a.name} (${a.enabled ? "aktif" : "kapalı"})`
+  );
+  await reply(["Life agent'lar:", "", ...lines].join("\n"));
+}
+
 async function cmdMemory(chatId, reply) {
   const prefs = listPersonalMemory().slice(0, 15);
   if (!prefs.length) {
@@ -281,6 +328,18 @@ export async function handleTelegramV7Command(chatId, text, { reply }) {
   }
   if (cmd === "/file") {
     await cmdFile(chatId, args, reply);
+    return { handled: true };
+  }
+  if (cmd === "/shopping" || cmd === "/shop") {
+    await cmdShopping(chatId, args, reply);
+    return { handled: true };
+  }
+  if (cmd === "/mode") {
+    await cmdMode(chatId, args, reply);
+    return { handled: true };
+  }
+  if (cmd === "/life") {
+    await cmdLife(chatId, reply);
     return { handled: true };
   }
 

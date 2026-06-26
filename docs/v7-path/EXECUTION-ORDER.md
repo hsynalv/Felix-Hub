@@ -2,9 +2,19 @@
 
 > **Son güncelleme:** 2026-06-26  
 > **Önkoşul:** [V6 EXECUTION-ORDER](../v6-path/EXECUTION-ORDER.md) **kapatıldı** (`mvp_done`, 2026-06-26)  
-> **Kural:** Önce kişisel merkez + brifing → local assistant + güvenlik → günlük hayat agent'ları → olgunlaştırma
+> **Kural:** Önce kişisel merkez + brifing → local assistant + güvenlik → günlük hayat agent'ları → olgunlaştırma  
+> **Post-MVP:** Günlük hayat + production işleri → [POST-MVP-BACKLOG.md](./POST-MVP-BACKLOG.md)
 
 ---
+
+## Durum modeli (2026-06-26)
+
+| Etiket | Anlam |
+|--------|--------|
+| `mvp_done` | İskelet, API, UI, testler — hub-native veya stub ile demo |
+| `production_pending` | Connector, scheduler, site automation, hardening, persistence |
+
+**Tüm Faz 1–4 pillar'ları `mvp_done`.** Gerçek günlük kullanım için [POST-MVP-BACKLOG.md](./POST-MVP-BACKLOG.md) P0–P3.
 
 ## Strateji özeti
 
@@ -37,38 +47,38 @@ flowchart TB
 
 ## Faz 1 — Temel kişisel katman (V7.1 – V7.4)
 
-| Sıra | Pillar | Dosya | Durum |
-|------|--------|-------|-------|
-| 7.1 | Personal Command Center | [01-personal-command-center.md](./01-personal-command-center.md) | mvp_done |
-| 7.2 | Daily Briefing Agent | [02-daily-briefing-agent.md](./02-daily-briefing-agent.md) | mvp_done |
-| 7.3 | Telegram Remote Control | [03-telegram-remote-control.md](./03-telegram-remote-control.md) | mvp_done (MVP komutlar; dosya/desktop → Faz 2) |
-| 7.4 | Personal Memory Profile | [07-personal-memory-profile.md](./07-personal-memory-profile.md) | mvp_done |
+| Sıra | Pillar | Dosya | MVP | Production |
+|------|--------|-------|-----|------------|
+| 7.1 | Personal Command Center | [01](./01-personal-command-center.md) | done | scope toggle UI |
+| 7.2 | Daily Briefing Agent | [02](./02-daily-briefing-agent.md) | done | IMAP/RSS + schedule |
+| 7.3 | Telegram Remote Control | [03](./03-telegram-remote-control.md) | done | file/desktop hardening |
+| 7.4 | Personal Memory Profile | [07](./07-personal-memory-profile.md) | done | DB persistence |
 
 ## Faz 2 — Local assistant (V7.5 – V7.7)
 
-| Sıra | Pillar | Dosya | Durum |
-|------|--------|-------|-------|
-| 7.5 | Browser Desktop Assistant | [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md) | mvp_done |
-| 7.6 | Permission Autonomy Model | [08-permission-autonomy-model.md](./08-permission-autonomy-model.md) | mvp_done |
-| 7.7 | Personal Ops Hardening | [10-personal-ops-hardening.md](./10-personal-ops-hardening.md) | mvp_done |
+| Sıra | Pillar | Dosya | MVP | Production |
+|------|--------|-------|-----|------------|
+| 7.5 | Browser Desktop Assistant | [04](./04-browser-desktop-assistant.md) | done | browser tools + Telegram photo |
+| 7.6 | Permission Autonomy Model | [08](./08-permission-autonomy-model.md) | done | full tool family map |
+| 7.7 | Personal Ops Hardening | [10](./10-personal-ops-hardening.md) | done | run replay + redaction e2e |
 
 ## Faz 3 — Günlük hayat agent'ları (V7.8 – V7.10)
 
-| Sıra | Pillar | Dosya | Durum |
-|------|--------|-------|-------|
-| 7.8 | Shopping Research Assistant | [05-shopping-research-assistant.md](./05-shopping-research-assistant.md) | not_started |
-| 7.9 | Life Automation Agents | [06-life-automation-agents.md](./06-life-automation-agents.md) | not_started |
-| 7.10 | Jarvis Interface | [09-jarvis-interface.md](./09-jarvis-interface.md) | not_started |
+| Sıra | Pillar | Dosya | MVP | Production |
+|------|--------|-------|-----|------------|
+| 7.8 | Shopping Research Assistant | [05](./05-shopping-research-assistant.md) | done | site-specific + browser cart |
+| 7.9 | Life Automation Agents | [06](./06-life-automation-agents.md) | done | executor + scheduler |
+| 7.10 | Jarvis Interface | [09](./09-jarvis-interface.md) | done | overlay depth, voice polish |
 
 ## Faz 4 — Olgunlaştırma (V7.11+)
 
-| Madde | Açıklama |
-|-------|----------|
-| Daily feedback loop | Brifing/haber "gösterme" feedback'i |
-| Memory correction UI | why_do_you_know_this, edit flow |
-| Voice interface | Speech in/out |
-| Desktop overlay | "Şu an ne yapıyor?" overlay |
-| Mobile approval polish | Onay UX mobil |
+| Madde | Açıklama | Durum |
+|-------|----------|-------|
+| Daily feedback loop | Brifing/haber "gösterme" feedback'i | mvp_done |
+| Memory correction UI | why_do_you_know_this, edit flow | mvp_done |
+| Voice interface | Speech in/out (Bugün voice bar + Chat) | mvp_done |
+| Desktop overlay | "Şu an ne yapıyor?" overlay | mvp_done |
+| Mobile approval polish | Onay UX mobil | mvp_done |
 
 ---
 
@@ -78,8 +88,9 @@ flowchart TB
 |--------|--------|
 | `v7.0-alpha` | Command Center + Daily Briefing + Telegram MVP (7.1–7.3: run/onay, event push) |
 | `v7.0-beta` | Desktop assistant + autonomy + hardening (7.5–7.7) |
-| `v7.1` | **Telegram tam kapsam** (dosya/sidecar + desktop) + shopping + life agents + Jarvis (7.8–7.10) |
-| `v7.2` | Voice, overlay, feedback loop (Faz 4) |
+| `v7.1` | ~~Telegram tam kapsam~~ → **`v7.1-prod`**: connector + life executor + sidecar hardening |
+| `v7.2` | Faz 4 MVP (voice, overlay, feedback) — ✅ |
+| `v7.2-prod` | Persistence, autonomy depth, tool schema CI |
 
 ---
 
@@ -94,7 +105,7 @@ flowchart TB
 | Agent App Store | Life Automation agent profilleri |
 | n8n plugin | Life automation orchestration (altyapı, pillar değil) |
 
-> **Ürün notu (2026-06-26):** Telegram şu an kısıtlı (`safe` profil). V7’de tam kapsam: ev bilgisayarına sidecar üzerinden dosya erişimi + V4 desktop agent ile ekran kontrolü — detay [03-telegram-remote-control.md](./03-telegram-remote-control.md).
+> **Ürün notu (2026-06-26):** Telegram MVP tamam (`/brief`, run/onay, `/file` `/desktop` text preview). Production: attachment, photo, inline desktop onay — [03](./03-telegram-remote-control.md) + [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md).
 
 ---
 
@@ -113,7 +124,8 @@ flowchart TB
 Her pillar dosyasında:
 
 ```markdown
-Status: not_started | partial | in_progress | done
-Owner: —
+Status: mvp_done | production_pending
+MVP checklist: [mvp] …
+Production checklist: [prod] …
 Last reviewed: YYYY-MM-DD
 ```

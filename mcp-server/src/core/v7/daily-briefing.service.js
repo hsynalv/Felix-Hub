@@ -9,6 +9,8 @@ import { listProjects } from "../../plugins/projects/projects.store.js";
 import { listPreferences } from "../v6-c/operating-model-store.js";
 import { listBriefingSources } from "./briefing-sources.js";
 import { saveBriefing, getLatestBriefing } from "./briefing-store.js";
+import { applyBriefingFeedbackToItems } from "./briefing-feedback.service.js";
+import { collectExternalBriefingItems } from "./briefing-connectors.service.js";
 
 function scoreItem(priority, type) {
   const base = { critical: 90, high: 70, normal: 40, low: 20 }[priority] || 30;
@@ -92,15 +94,19 @@ export async function generateDailyBriefing({ scope = "personal", projectId = nu
     });
   }
 
-  items.sort((a, b) => b.importance - a.importance);
+  const external = await collectExternalBriefingItems({ skipImap: process.env.BRIEFING_SKIP_IMAP === "true" });
+  items.push(...external.items);
+
+  const ranked = applyBriefingFeedbackToItems(items);
 
   const record = {
     date: core.date,
     scope,
     summary: core.summary,
-    items: items.slice(0, 20),
+    items: ranked.slice(0, 20),
     stats: core.stats,
     sources: listBriefingSources(),
+    externalErrors: external.errors,
     generatedAt: new Date().toISOString(),
   };
 

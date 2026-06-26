@@ -1,6 +1,7 @@
 # 10 — Personal Ops Hardening
 
-> **Status:** mvp_done  
+> **Status:** `mvp_done` — emergency stop, caps, redaction hooks  
+> **Production:** `pending` — run replay, file/desktop audit depth → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md)
 > **Faz:** V7.7  
 > **Bağımlılık:** [08-permission-autonomy-model.md](./08-permission-autonomy-model.md), [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md)
 
@@ -43,19 +44,28 @@ Desktop action başarısızsa retry yerine kullanıcıya sor.
 
 ## Kapsam (implementation)
 
-- [x] Global emergency stop API + Telegram `/stop`
-- [x] Daily spend cap + desktop action cap
-- [x] Screenshot/secret redaction pipeline
-- [x] Payment screen hard block (multi-signal)
-- [x] Prompt injection guard (screen text → ignore instructions)
-- [ ] Run replay for personal actions audit
-- [x] Manual override: emergency stop + hub pause
+### MVP (done)
+
+- [mvp] Global emergency stop API + Telegram `/stop`
+- [mvp] Daily spend cap + desktop action cap
+- [mvp] Screenshot/secret redaction pipeline (hook)
+- [mvp] Payment screen hard block (multi-signal)
+- [mvp] Prompt injection guard (screen text)
+- [mvp] Manual override: emergency stop + hub pause
+
+### Production (pending)
+
+- [prod] Run replay for personal actions audit
+- [prod] `/file` + `/desktop` audit export (path hash, actor)
+- [prod] Redaction integration tests (payment/password fixtures)
+- [prod] Per-channel rate limits (Telegram file pull)
 
 ---
 
 ## Başarı kriteri
 
-- [x] Sistem günlük hayata girecek kadar güvenli; kritik aksiyonlar kontrolsüz çalışmaz
+- [mvp] Kritik aksiyonlar kontrolsüz çalışmaz; emergency stop çalışır
+- [prod] Tüm sidecar/Telegram dosya-desktop akışları auditlenebilir ve testle doğrulanır
 
 ---
 

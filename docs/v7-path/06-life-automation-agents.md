@@ -1,6 +1,7 @@
 # 06 — Life Automation Agents
 
-> **Status:** not_started  
+> **Status:** `mvp_done` — preset + CRUD + dry-run + watcher bind  
+> **Production:** `pending` — scheduler + source + executor → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#2-life-agent-execution-pipeline-79-prod)
 > **Faz:** V7.9  
 > **Bağımlılık:** [02-daily-briefing-agent.md](./02-daily-briefing-agent.md), [07-personal-memory-profile.md](./07-personal-memory-profile.md)
 
@@ -65,17 +66,29 @@ Okumam gereken AI makalelerini bul ve Obsidian'a kaydet.
 
 ## Kapsam
 
-- [ ] Life agent profile schema + CRUD
-- [ ] Preset katalog (mail triage, calendar prep, …)
-- [ ] Schedule + watcher entegrasyonu
-- [ ] Output channel binding
-- [ ] Life agent UI: oluştur, test, geçmiş
+### MVP (done)
+
+- [mvp] Life agent profile schema + CRUD API
+- [mvp] Preset katalog (8 tip)
+- [mvp] Dry-run test (`POST …/test`)
+- [mvp] Watcher bind (placeholder skill; `dryRun: true`)
+- [mvp] UI: `/life` sayfası
+
+### Production (pending)
+
+- [prod] **Executor:** preset → gerçek workflow (skill/template/n8n)
+- [prod] **Scheduler:** `intervalMinutes` → V5 schedule fire
+- [prod] **Source connectors:** mail → IMAP; news → RSS
+- [prod] **Output delivery:** Telegram push, inbox item
+- [prod] Run history + cost cap enforcement
+- [prod] Bundle: "her sabah mail + haber + Telegram özet"
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Kullanıcı günlük tekrar eden işleri agent profilleri olarak tanımlayabilir
+- [mvp] Kullanıcı agent profili tanımlayabilir ve test edebilir
+- [prod] Zamanlanmış agent gerçek kaynaklardan veri çekip Telegram'a özet gönderir
 
 ---
 

@@ -1,6 +1,7 @@
 # 00 — V7 Vizyon: Personal AI Operating System
 
-> **Status:** in_progress (Faz 1–2 mvp_done; Faz 3 bekliyor)  
+> **Status:** `mvp_done` (Faz 1–4 iskelet) — **production omurgası pending**  
+> **Sonraki:** [POST-MVP-BACKLOG.md](./POST-MVP-BACKLOG.md) (P0: mail/RSS, scheduler, sidecar hardening)
 > **Önkoşul:** [V6 path](../v6-path/EXECUTION-ORDER.md) **kapatıldı** (`mvp_done`, 2026-06-26)  
 > **Bağımlılık:** —
 

@@ -6,6 +6,7 @@ import { listInboxItems } from "../inbox/inbox.service.js";
 import { listRuns } from "../agent-runs/agent-runs.service.js";
 import { listProjects } from "../../plugins/projects/projects.store.js";
 import { listPreferences } from "../v6-c/operating-model-store.js";
+import { getExternalSourceHealth, getMailNewsPreview } from "./briefing-connectors.service.js";
 
 function startOfToday() {
   const d = new Date();
@@ -63,6 +64,19 @@ export async function buildPersonalBriefing({ projectId = null, scope = "persona
     bullets.push(`Tercih: ${p.key} — ${String(p.value).slice(0, 80)}`);
   }
 
+  const externalHealth = getExternalSourceHealth();
+  const mailNews = await getMailNewsPreview({
+    limit: 5,
+    skipImap: process.env.BRIEFING_SKIP_IMAP === "true",
+  });
+
+  if (mailNews.mail.items.length) {
+    bullets.push(`${mailNews.mail.items.length} önemli mail (IMAP)`);
+  }
+  if (mailNews.news.items.length) {
+    bullets.push(`${mailNews.news.items.length} haber başlığı (RSS)`);
+  }
+
   if (!bullets.length) {
     bullets.push("Bugün için acil bir agent aksiyonu görünmüyor.");
   }
@@ -70,9 +84,13 @@ export async function buildPersonalBriefing({ projectId = null, scope = "persona
   const summary =
     approvals.length > 0
       ? `Bugün öncelik: ${approvals.length} onay ve ${inbox.unreadCount} inbox bildirimi.`
-      : inbox.unreadCount > 0
-        ? `Bugün ${inbox.unreadCount} yeni bildirim var; agent işleri takip edilmeli.`
-        : "Bugün sakin görünüyor — agent ve projeler stabil.";
+      : mailNews.mail.items.filter((m) => m.actionRequired).length > 0
+        ? `${mailNews.mail.items.filter((m) => m.actionRequired).length} önemli mail ve ${mailNews.news.items.length} haber başlığı.`
+        : inbox.unreadCount > 0
+          ? `Bugün ${inbox.unreadCount} yeni bildirim var; agent işleri takip edilmeli.`
+          : mailNews.news.items.length > 0
+            ? `${mailNews.news.items.length} haber başlığı ve agent özeti hazır.`
+            : "Bugün sakin görünüyor — agent ve projeler stabil.";
 
   return {
     date,
@@ -87,9 +105,18 @@ export async function buildPersonalBriefing({ projectId = null, scope = "persona
       projects: projects.length,
     },
     sources: {
-      mail: { status: "not_configured", hint: "Gmail/IMAP — V7.2" },
-      news: { status: "not_configured", hint: "RSS/haber — V7.2" },
+      mail: {
+        status: mailNews.mail.status,
+        hint: mailNews.mail.hint,
+        itemCount: mailNews.mail.items.length,
+      },
+      news: {
+        status: mailNews.news.status,
+        hint: mailNews.news.hint,
+        itemCount: mailNews.news.items.length,
+      },
       hub: { status: "active" },
+      external: externalHealth,
     },
     generatedAt: new Date().toISOString(),
   };

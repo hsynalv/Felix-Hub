@@ -14,8 +14,9 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
-  Sun,
-} from "lucide-react";
+  ThumbsDown,
+  ThumbsUp,
+  HelpCircle,
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BRAND } from "@/lib/branding";
 import { Input } from "@/components/ui/input";
-import { fetchPersonalCommandCenter, generatePersonalBriefing, rememberPersonalMemory, setPersonalAutonomyPreset, triggerPersonalEmergencyStop, clearPersonalEmergencyStop } from "@/lib/personal-api";
+import { fetchPersonalCommandCenter, generatePersonalBriefing, rememberPersonalMemory, setPersonalAutonomyPreset, setJarvisMode, triggerPersonalEmergencyStop, clearPersonalEmergencyStop, submitBriefingFeedback, explainPersonalMemory } from "@/lib/personal-api";
+import { VoiceQuickBar } from "@/components/jarvis/VoiceQuickBar";
 import { formatCostUsd, formatTokenCount } from "@/lib/usage-api";
 import { formatTime } from "@/lib/utils";
 import type { ComponentType } from "react";
@@ -38,6 +40,8 @@ export function TodayPage() {
   const queryClient = useQueryClient();
   const [memKey, setMemKey] = useState("");
   const [memValue, setMemValue] = useState("");
+  const [explainId, setExplainId] = useState<string | null>(null);
+  const [explainData, setExplainData] = useState<{ explanation: string; key: string; value: string } | null>(null);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["personal-command-center"],
@@ -87,6 +91,36 @@ export function TodayPage() {
     },
   });
 
+  const jarvisModeMutation = useMutation({
+    mutationFn: (modeId: string) => setJarvisMode(modeId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["personal-command-center"] });
+    },
+  });
+
+  const feedbackMutation = useMutation({
+    mutationFn: ({ itemId, feedback }: { itemId: string; feedback: string }) =>
+      submitBriefingFeedback(itemId, feedback, dailyBriefing?.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["personal-command-center"] });
+    },
+  });
+
+  const explainMutation = useMutation({
+    mutationFn: (id: string) => explainPersonalMemory(id),
+    onSuccess: (data) => {
+      setExplainData({ explanation: data.explanation, key: data.key, value: String(data.value) });
+    },
+  });
+
+  const jarvisModes = [
+    { id: "personal", label: "Kişisel" },
+    { id: "work", label: "İş" },
+    { id: "research", label: "Araştırma" },
+    { id: "shopping", label: "Alışveriş" },
+    { id: "focus", label: "Odak" },
+  ];
+
   return (
     <div className="mx-auto min-w-0 max-w-7xl space-y-4 sm:space-y-6">
       <PageHeader
@@ -109,6 +143,8 @@ export function TodayPage() {
         }
       />
 
+      <VoiceQuickBar speakText={briefing?.summary || dailyBriefing?.summary} />
+
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -117,6 +153,43 @@ export function TodayPage() {
         </div>
       ) : (
         <>
+          {data?.jarvis && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Sparkles className="h-4 w-4" />
+                  Jarvis — {data.jarvis.mode.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="text-muted-foreground">{data.jarvis.currentActivity.message}</p>
+                <div className="flex flex-wrap gap-2">
+                  {jarvisModes.map((m) => (
+                    <Button
+                      key={m.id}
+                      size="sm"
+                      variant={data.jarvis?.mode.id === m.id ? "default" : "outline"}
+                      disabled={jarvisModeMutation.isPending}
+                      onClick={() => jarvisModeMutation.mutate(m.id)}
+                    >
+                      {m.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(data.jarvis.quickActions ?? []).slice(0, 4).map((a) => (
+                    <Button key={a.id} size="sm" variant="ghost" asChild>
+                      <Link to={a.href}>{a.label}</Link>
+                    </Button>
+                  ))}
+                  <Button size="sm" variant="ghost" asChild>
+                    <Link to="/life">Life agents →</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatChip label="Inbox" value={stats?.unreadInbox ?? 0} icon={Inbox} href="/inbox" />
             <StatChip label="Onaylar" value={stats?.pendingApprovals ?? 0} icon={ShieldCheck} href="/approvals" />
@@ -155,19 +228,42 @@ export function TodayPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {dailyBriefing?.items.slice(0, 10).map((item) => (
-                    <Link
+                    <div
                       key={item.id}
-                      to={item.href}
-                      className="flex items-start justify-between gap-2 rounded-lg border p-2 hover:bg-muted/40"
+                      className="flex items-start justify-between gap-2 rounded-lg border p-2"
                     >
-                      <div className="min-w-0">
+                      <Link to={item.href} className="min-w-0 flex-1 hover:opacity-80">
                         <p className="text-sm font-medium">{item.title}</p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{item.body}</p>
+                      </Link>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge variant={item.actionRequired ? "destructive" : "outline"}>
+                          {item.importance}
+                        </Badge>
+                        <div className="flex gap-0.5">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            disabled={feedbackMutation.isPending}
+                            onClick={() => feedbackMutation.mutate({ itemId: item.id, feedback: "relevant" })}
+                          >
+                            <ThumbsUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            disabled={feedbackMutation.isPending}
+                            onClick={() => feedbackMutation.mutate({ itemId: item.id, feedback: "show_less" })}
+                          >
+                            <ThumbsDown className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
-                      <Badge variant={item.actionRequired ? "destructive" : "secondary"}>
-                        {item.importance}
-                      </Badge>
-                    </Link>
+                    </div>
                   ))}
                 </CardContent>
               </Card>
@@ -230,8 +326,36 @@ export function TodayPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <PlaceholderCard title="Mail" icon={Mail} hint={data?.mail.hint} />
-            <PlaceholderCard title="Haber" icon={Newspaper} hint={data?.news.hint} />
+            {data?.mail.status === "active" && (data.mail.items?.length ?? 0) > 0 ? (
+              <FeedCard
+                title="Mail"
+                icon={Mail}
+                empty={data.mail.hint || "Mail yok"}
+                items={(data.mail.items ?? []).map((item) => ({
+                  id: item.id,
+                  title: item.title,
+                  meta: item.body?.slice(0, 40),
+                  time: item.createdAt,
+                }))}
+              />
+            ) : (
+              <PlaceholderCard title="Mail" icon={Mail} hint={data?.mail.hint} />
+            )}
+            {data?.news.status === "active" && (data.news.items?.length ?? 0) > 0 ? (
+              <FeedCard
+                title="Haber"
+                icon={Newspaper}
+                empty={data.news.hint || "Haber yok"}
+                items={(data.news.items ?? []).map((item) => ({
+                  id: item.id,
+                  title: item.title,
+                  meta: item.sourceLabel || item.source,
+                  time: item.createdAt,
+                }))}
+              />
+            ) : (
+              <PlaceholderCard title="Haber" icon={Newspaper} hint={data?.news.hint} />
+            )}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -319,10 +443,28 @@ export function TodayPage() {
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 {data?.memory.preferences.map((p) => (
-                  <Badge key={p.id} variant={p.pinned ? "default" : "secondary"}>
-                    {p.key}: {String(p.value).slice(0, 40)}
-                  </Badge>
+                  <div key={p.id} className="flex items-center gap-1">
+                    <Badge variant={p.pinned ? "default" : "outline"}>
+                      {p.key}: {String(p.value).slice(0, 40)}
+                    </Badge>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      title="Neden biliyorsun?"
+                      onClick={() => {
+                        setExplainId(p.id);
+                        explainMutation.mutate(p.id);
+                      }}
+                    >
+                      <HelpCircle className="h-3 w-3" />
+                    </Button>
+                  </div>
                 ))}
+                {explainId && explainData && (
+                  <p className="w-full text-xs text-muted-foreground">{explainData.explanation}</p>
+                )}
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/v6">Profil (V6)</Link>
                 </Button>

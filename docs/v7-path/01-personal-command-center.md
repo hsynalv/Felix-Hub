@@ -46,11 +46,11 @@ Suggested Actions
 
 ## Kapsam
 
-- [x] Personal Command Center sayfası (Home → `/` Today, mühendislik `/system`)
-- [x] Widget aggregation API (`GET /personal/command-center`)
-- [x] "Suggested actions" engine (açık approval, stale run, briefing highlight)
-- [ ] Proje + kişisel scope toggle (API hazır; UI toggle V7.1+)
-- [x] Mobile-responsive layout
+- [mvp] Personal Command Center sayfası (Home → `/` Today, mühendislik `/system`)
+- [mvp] Widget aggregation API (`GET /personal/command-center`)
+- [mvp] "Suggested actions" engine (açık approval, stale run, briefing highlight)
+- [prod] Proje + kişisel scope toggle (API hazır; UI toggle)
+- [mvp] Mobile-responsive layout
 
 ---
 

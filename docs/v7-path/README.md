@@ -5,6 +5,9 @@
 
 Bu klasör, V7 büyüme adımlarının **tek tek takip edilebilir planlarıdır**. Önkoşul: [V6 path](../v6-path/README.md) (veya V4/V5 çekirdek). Sıra için [EXECUTION-ORDER.md](./EXECUTION-ORDER.md) esas alınır.
 
+**MVP tamamlandı** (2026-06-26): kişisel agent OS iskeleti — Command Center, briefing (hub-native), Telegram, memory, autonomy, life agents, Jarvis UI.  
+**Production backlog:** [POST-MVP-BACKLOG.md](./POST-MVP-BACKLOG.md) — mail/haber connector'ları, zamanlanmış execution, Telegram dosya/desktop hardening.
+
 ---
 
 ## Strateji özeti
@@ -52,7 +55,10 @@ V7'nin amacı, MCP Hub'ı kullanıcının **günlük hayatını ve bilgisayarın
 | 09 | [09-jarvis-interface.md](./09-jarvis-interface.md) | Çok kanallı premium UI |
 | 10 | [10-personal-ops-hardening.md](./10-personal-ops-hardening.md) | Fail-safe, emergency stop |
 
-**Sıra:** [EXECUTION-ORDER.md](./EXECUTION-ORDER.md)
+**Sıra:** [EXECUTION-ORDER.md](./EXECUTION-ORDER.md)  
+**Production:** [POST-MVP-BACKLOG.md](./POST-MVP-BACKLOG.md)
+
+Checklist etiketleri: **`[mvp]`** = iskelet tamam; **`[prod]`** = günlük kullanım / production için kalan.
 
 ---
 

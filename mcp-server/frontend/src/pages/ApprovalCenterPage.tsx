@@ -43,9 +43,10 @@ export function ApprovalCenterPage() {
 
   const pending = pendingData?.approvals ?? [];
   const history = historyData?.approvals ?? [];
+  const showMobileActions = !!selectedId && detail?.status === "pending";
 
   return (
-    <OpsPageShell>
+    <OpsPageShell className="pb-24 md:pb-0">
       <OpsPageHero icon={Shield} title="Approval Center" description="Risk skoru, masked preview ve birleşik onay kararı" />
       <div className="mb-4">
         <Button variant="outline" size="sm" asChild>
@@ -53,15 +54,15 @@ export function ApprovalCenterPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
         <OpsPanel title={`Bekleyen (${pending.length})`}>
-          <ScrollArea className="h-72">
+          <ScrollArea className="h-64 md:h-72">
             <div className="space-y-2 pr-2">
               {pending.map((a) => (
                 <button
                   key={a.id}
                   type="button"
-                  className={`w-full rounded-md border p-2 text-left text-sm ${selectedId === a.id ? "border-primary bg-muted" : ""}`}
+                  className={`w-full rounded-md border p-3 text-left text-sm active:bg-muted ${selectedId === a.id ? "border-primary bg-muted" : ""}`}
                   onClick={() => setSelectedId(a.id)}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -76,7 +77,7 @@ export function ApprovalCenterPage() {
           </ScrollArea>
         </OpsPanel>
 
-        <OpsPanel title="Detay">
+        <OpsPanel title="Detay" className="hidden md:block">
           {detail ? (
             <ApprovalDetailPanel
               detail={detail}
@@ -87,6 +88,17 @@ export function ApprovalCenterPage() {
             <p className="text-sm text-muted-foreground">Soldan bir onay seçin</p>
           )}
         </OpsPanel>
+
+        {selectedId && detail && (
+          <OpsPanel title="Detay" className="md:hidden">
+            <ApprovalDetailPanel
+              detail={detail}
+              onDecide={(decision) => decideMutation.mutate({ id: selectedId, decision })}
+              pending={decideMutation.isPending}
+              compact
+            />
+          </OpsPanel>
+        )}
 
         <OpsPanel title="Geçmiş" className="lg:col-span-2">
           <ScrollArea className="h-40">
@@ -101,6 +113,37 @@ export function ApprovalCenterPage() {
           </ScrollArea>
         </OpsPanel>
       </div>
+
+      {showMobileActions && detail && (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 p-3 backdrop-blur md:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <p className="mb-2 truncate text-xs text-muted-foreground">{detail.toolName || detail.id}</p>
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              className="h-11"
+              disabled={decideMutation.isPending}
+              onClick={() => decideMutation.mutate({ id: selectedId!, decision: "approve_once" })}
+            >
+              Onayla
+            </Button>
+            <Button
+              className="h-11"
+              variant="secondary"
+              disabled={decideMutation.isPending}
+              onClick={() => decideMutation.mutate({ id: selectedId!, decision: "approve_project" })}
+            >
+              Her zaman
+            </Button>
+            <Button
+              className="h-11"
+              variant="destructive"
+              disabled={decideMutation.isPending}
+              onClick={() => decideMutation.mutate({ id: selectedId!, decision: "deny" })}
+            >
+              Reddet
+            </Button>
+          </div>
+        </div>
+      )}
     </OpsPageShell>
   );
 }
@@ -109,10 +152,12 @@ function ApprovalDetailPanel({
   detail,
   onDecide,
   pending,
+  compact = false,
 }: {
   detail: ApprovalDetail;
   onDecide: (d: ApprovalDecision) => void;
   pending: boolean;
+  compact?: boolean;
 }) {
   return (
     <div className="space-y-3 text-sm">
@@ -128,7 +173,9 @@ function ApprovalDetailPanel({
       )}
       <div>
         <div className="mb-1 font-medium">Input (masked)</div>
-        <pre className="max-h-32 overflow-auto rounded bg-muted p-2 text-xs">{JSON.stringify(detail.body, null, 2)}</pre>
+        <pre className={`overflow-auto rounded bg-muted p-2 text-xs ${compact ? "max-h-24" : "max-h-32"}`}>
+          {JSON.stringify(detail.body, null, 2)}
+        </pre>
       </div>
       {detail.priorStepOutput != null && (
         <div>
@@ -136,7 +183,7 @@ function ApprovalDetailPanel({
           <pre className="max-h-24 overflow-auto rounded bg-muted p-2 text-xs">{JSON.stringify(detail.priorStepOutput, null, 2)}</pre>
         </div>
       )}
-      {detail.status === "pending" && (
+      {detail.status === "pending" && !compact && (
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={pending} onClick={() => onDecide("approve_once")}>
             Bir kez onayla

@@ -1,6 +1,7 @@
 # 03 — Telegram Remote Control
 
-> **Status:** mvp_done (komutlar + inline onay); tam dosya push / photo screenshot → Faz 3 polish  
+> **Status:** `mvp_done` — komut router, run/onay, `/brief` `/file` `/desktop` (text preview)  
+> **Production:** `pending` — dosya audit, photo push, redaction tests → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#3-telegram-file--desktop-production-hardening-73--75-prod)
 > **Faz:** V7.3 (MVP) → **V7.3+ / V7.5 birleşimi** (tam kapsam)  
 > **Son ürün notu:** 2026-06-26  
 > **Bağımlılık:** [02-daily-briefing-agent.md](./02-daily-briefing-agent.md), [08-permission-autonomy-model.md](./08-permission-autonomy-model.md), [04-browser-desktop-assistant.md](./04-browser-desktop-assistant.md), [V4 Desktop Control](../v4-path/06-desktop-control-agent.md), [V3 Sidecar](../v3-path/09-local-sidecar-desktop-agent.md)
@@ -18,8 +19,8 @@ Kullanıcı evde değilken agent sistemini **Telegram üzerinden** yönetebilsin
 ## Ürün notu — tam kapsamlı Telegram (V7’ye gelindiğinde)
 
 > **Kaynak:** Ürün sahibi notu (2026-06-26)  
-> **Mevcut durum:** `telegram.webhook.js` → `chatProfile: "safe"`, `allowWriteTools: false`, komutlar `/start` `/help` `/tools` `/ask` ile sınırlı.  
-> **Hedef:** V7 Faz 2–3 tamamlandığında Telegram’ı **tam kapsamlı uzaktan kontrol** katmanına yükselt.
+> **MVP (2026-06-26):** `telegram-commands.js` — `/brief`, `/runs`, `/approve`, `/file`, `/desktop`, `/life`, `/shopping`, `/mode`, memory komutları; run/onay köprüsü; text preview.  
+> **Production pending:** dosya attachment, photo screenshot, inline desktop onay, sidecar offline UX → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#3-telegram-file--desktop-production-hardening-73--75-prod)
 
 ### Kullanıcı senaryosu
 
@@ -83,20 +84,19 @@ flowchart LR
 
 ### Fazlama özeti
 
-| Aşama | İçerik | Önkoşul |
-|-------|--------|---------|
-| **Şimdi (partial)** | Bildirim + güvenli `/ask` | notifications plugin |
-| **V7.3 MVP** | Komut router, run/onay, event push, inline keyboard | Command Center, approval API |
-| **V7.3+ tam** | `/file`, sidecar delegation, dosya attachment | V3 sidecar pairing + FS allowlist |
-| **V7.5 entegrasyon** | `/desktop *`, screenshot preview, browser assist | V4 desktop tools + V7.5 assistant |
+| Aşama | İçerik | Durum |
+|-------|--------|-------|
+| **V7.3 MVP** | Komut router, run/onay, brifing, memory, `/file` `/desktop` text | `mvp_done` |
+| **V7.3+ prod** | `sendDocument`, allowlist audit, photo push | `production_pending` |
+| **V7.5 prod** | Inline desktop onay, browser assist via Telegram | `production_pending` |
 
-### Başarı kriteri (tam kapsam — ürün notu)
+### Başarı kriteri (ürün notu — MVP vs prod)
 
-- [ ] Kullanıcı evde değilken Telegram’dan allowlist’teki bir dosyayı alabilir
-- [ ] Ekran görüntüsü veya aktif pencere bilgisini görebilir
-- [ ] Riskli desktop aksiyonunu screenshot + inline onay ile yapabilir
-- [ ] Run başlatma, durdurma ve approval Telegram’dan tamamlanır
-- [ ] Sidecar kapalıyken anlamlı hata ve güvenli fallback
+- [mvp] Run başlatma, durdurma ve approval Telegram'dan tamamlanır
+- [mvp] `/file` ve `/desktop` sidecar ile text preview (risk: hardening gerekli)
+- [prod] Allowlist dosya Telegram attachment olarak indirilebilir
+- [prod] Ekran photo + redaction; riskli aksiyon screenshot + inline onay
+- [prod] Sidecar kapalıyken anlamlı hata ve güvenli fallback
 
 ---
 
@@ -145,44 +145,41 @@ incident_alert
 
 ## Kapsam
 
-### Faz 1 — MVP (7.3)
+### MVP (done)
 
-- [ ] Telegram command router (mevcut webhook genişletme; `safe` profilden çıkış — intent bazlı)
-- [ ] Run/approval API köprüsü
-- [ ] Inline keyboard: approve/deny
-- [ ] Event push formatter (her event tipi)
-- [ ] Admin command ikinci onay
-- [ ] Emergency `/stop` global pause (hub scope)
+- [mvp] Telegram command router (`telegram-commands.js` + webhook)
+- [mvp] `/brief`, `/runs`, `/approve`, `/deny`, `/stop`, `/resume`
+- [mvp] `/remember`, `/forget`, `/memory`, `/mode`, `/life`, `/shopping`
+- [mvp] Inline keyboard: approve/deny callbacks
+- [mvp] Emergency `/stop` → hub pause
+- [mvp] `/file`, `/file list` — sidecar read (text preview, kısaltılmış)
+- [mvp] `/desktop screenshot|window` — text preview (photo push yok)
 
-### Faz 2 — Sidecar + dosya (7.3+ → 7.5 köprüsü)
+### Production (pending)
 
-- [ ] `/file list` / `/file get` — sidecar FS allowlist
-- [ ] Telegram `sendDocument` / boyut limiti / audit
-- [ ] Sidecar offline detection + kullanıcı mesajı
-- [ ] Chat profile: `research` veya `personal_assistant` (Telegram kanalına özel policy)
-
-### Faz 3 — Desktop agent entegrasyonu (7.5)
-
-- [ ] `/desktop screenshot` → photo push
-- [ ] `/desktop status` (active window, sidecar health)
-- [ ] Desktop action preview + inline onay (V4 observe → assist)
-- [ ] Browser assist komutları (scoped automation)
-- [ ] Emergency `/stop` sidecar delegation kill
+- [prod] Path allowlist server-side enforce + max size + audit log
+- [prod] `sendDocument` / `sendPhoto` + boyut limiti
+- [prod] Screenshot redaction integration tests
+- [prod] Sidecar offline structured error + last_seen
+- [prod] Desktop action: screenshot preview → inline onay → click/type
+- [prod] Event push formatter (tüm event tipleri)
+- [prod] Chat profile: `telegram_assistant` policy genişletme
+- [prod] Admin command ikinci onay
 
 ---
 
 ## Başarı kriteri
 
-### MVP (Faz 1)
+### MVP
 
-- [ ] Kullanıcı Telegram'dan run başlatabilir, durum sorabilir, onay verebilir ve sistemi durdurabilir
+- [mvp] Run/onay/brifing/memory Telegram'dan tamamlanır
+- [mvp] `/file` ve `/desktop` sidecar ile text preview (risk: production hardening gerekli)
 
-### Tam kapsam (ürün notu — Faz 2–3)
+### Production (tam kapsam)
 
-- [ ] Ev bilgisayarından allowlist dosya Telegram’a indirilebilir
-- [ ] Ekran/aktif pencere uzaktan görülebilir
-- [ ] Onaylı desktop/browser aksiyonu Telegram üzerinden tamamlanır
-- [ ] Tek bot, tek webhook — hub + sidecar + desktop agent birleşik yüzey
+- [prod] Allowlist dosya Telegram'a güvenli attachment
+- [prod] Ekran photo + redaction + onaylı desktop aksiyon
+- [prod] Sidecar kapalıyken anlamlı hata
 
 ---
 

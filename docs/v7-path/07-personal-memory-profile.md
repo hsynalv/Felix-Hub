@@ -1,6 +1,7 @@
 # 07 — Personal Memory Profile
 
-> **Status:** partial ([V6 Personal Operating Model](../v6-path/10-personal-operating-model.md), workspace prefs)  
+> **Status:** `mvp_done` — CRUD, explain, Telegram, briefing injection  
+> **Production:** `pending` — encrypted persistence, multi-device → [POST-MVP-BACKLOG](./POST-MVP-BACKLOG.md#7-v7-personal-layer-persistence-encryption-backup)
 > **Faz:** V7.4  
 > **Bağımlılık:** [V4 workspace preferences](../v4-path/05-project-command-center.md)
 
@@ -53,18 +54,25 @@ why_do_you_know_this
 
 ## Kapsam
 
-- [ ] `personal_memory` store (scoped: global / project)
-- [ ] remember/forget/pin API + MCP tools
-- [ ] `why_do_you_know_this` attribution UI
-- [ ] Briefing + life agent prompt injection
-- [ ] Telegram memory komutları
-- [ ] Export / GDPR delete
+### MVP (done)
+
+- [mvp] remember/forget/pin API + MCP tools
+- [mvp] `why_do_you_know_this` / explain attribution UI
+- [mvp] Briefing + life agent prompt injection
+- [mvp] Telegram memory komutları
+- [mvp] Export / GDPR delete
+
+### Production (pending)
+
+- [prod] Encrypted at-rest store (vs JSON cache)
+- [prod] Multi-device sync + conflict resolution
+- [prod] Backup/restore for personal layer
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Agent zamanla daha kişisel davranır ama neyi neden bildiği şeffaftır
+- [x] Agent zamanla daha kişisel davranır ama neyi neden bildiği şeffaftır
 
 ---
 
