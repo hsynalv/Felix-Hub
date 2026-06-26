@@ -31,10 +31,14 @@ const sheetVariants = {
 
 export const SheetContent = forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
-  ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & { side?: keyof typeof sheetVariants.side }
->(({ side = "right", className, children, ...props }, ref) => (
+  ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & {
+    side?: keyof typeof sheetVariants.side;
+    /** false = overlay yok (sidebar navigasyonu engellenmesin) */
+    overlay?: boolean;
+  }
+>(({ side = "right", overlay = true, className, children, ...props }, ref) => (
   <SheetPortal>
-    <SheetOverlay />
+    {overlay ? <SheetOverlay /> : null}
     <SheetPrimitive.Content
       ref={ref}
       className={cn(

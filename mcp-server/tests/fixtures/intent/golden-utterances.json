@@ -1,13 +1,424 @@
 {
   "utterances": [
-    { "utterance": "bunu kaydet", "intent": "brain_save" },
-    { "utterance": "git status ne", "intent": "read_repo" },
-    { "utterance": "merhaba", "intent": "no_tool" },
-    { "utterance": "gigi projesinde alacağımız tutarın tl karşılığı ne kanka", "intent": "project_context" },
-    { "utterance": "n8n workflow oluştur", "intent": "automation" },
-    { "utterance": "bugün dolar kuru ne", "intent": "external_api" },
-    { "utterance": "testleri çalıştır", "intent": "run_command" },
-    { "utterance": "bu dosyayı düzenle", "intent": "modify_files" },
-    { "utterance": "what do you know about billing", "intent": "brain_recall" }
+    {
+      "utterance": "create n8n workflow",
+      "intent": "automation"
+    },
+    {
+      "utterance": "n8n create workflow",
+      "intent": "automation"
+    },
+    {
+      "utterance": "n8n otomasyon workflow",
+      "intent": "automation"
+    },
+    {
+      "utterance": "n8n workflow node",
+      "intent": "automation"
+    },
+    {
+      "utterance": "n8n workflow oluştur",
+      "intent": "automation"
+    },
+    {
+      "utterance": "otomasyon kur",
+      "intent": "automation"
+    },
+    {
+      "utterance": "otomasyon n8n kurulum",
+      "intent": "automation"
+    },
+    {
+      "utterance": "schedule automation",
+      "intent": "automation"
+    },
+    {
+      "utterance": "schedule n8n automation",
+      "intent": "automation"
+    },
+    {
+      "utterance": "workflow automation kur",
+      "intent": "automation"
+    },
+    {
+      "utterance": "bunu hatırlıyor musun",
+      "intent": "brain_recall"
+    },
+    {
+      "utterance": "hatırlıyor musun deploy",
+      "intent": "brain_recall"
+    },
+    {
+      "utterance": "ne biliyorsun bunun hakkında",
+      "intent": "brain_recall"
+    },
+    {
+      "utterance": "ne biliyorsun proje",
+      "intent": "brain_recall"
+    },
+    {
+      "utterance": "recall billing notes",
+      "intent": "brain_recall"
+    },
+    {
+      "utterance": "recall from memory",
+      "intent": "brain_recall"
+    },
+    {
+      "utterance": "what do you know about this",
+      "intent": "brain_recall"
+    },
+    {
+      "utterance": "bunu hatırla mısın",
+      "intent": "brain_save"
+    },
+    {
+      "utterance": "bunu kaydet",
+      "intent": "brain_save"
+    },
+    {
+      "utterance": "kaydet bunu",
+      "intent": "brain_save"
+    },
+    {
+      "utterance": "remember this",
+      "intent": "brain_save"
+    },
+    {
+      "utterance": "api ile veri çek",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "bugün dolar kuru ne",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "bugün usd kuru",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "eur tl çevir",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "fetch from notion api",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "fetch github api data",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "güncel dolar ne",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "http api çağır",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "kur dolar bugün",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "notion api fetch",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "search github issues",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "tavily ile ara",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "tavily search news",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "tl karşılığı usd",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "usd try çevir",
+      "intent": "external_api"
+    },
+    {
+      "utterance": "açıkla",
+      "intent": "general"
+    },
+    {
+      "utterance": "bana yardım et",
+      "intent": "general"
+    },
+    {
+      "utterance": "help me understand",
+      "intent": "general"
+    },
+    {
+      "utterance": "what can you do",
+      "intent": "general"
+    },
+    {
+      "utterance": "bu dosyayı düzenle",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "create edit patch",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "delete refactor module",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "fix implement delete file",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "implement api handler",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "implement the feature",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "oluştur yeni dosya",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "refactor this file",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "sil refactor düzenle",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "workspace write file yap",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "yeni bir component oluştur",
+      "intent": "modify_files"
+    },
+    {
+      "utterance": "hello",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "hello world",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "merhaba",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "merhaba nasılsın",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "selam",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "selam nasılsın",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "teşekkür ederim selam",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "thanks",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "thanks buddy",
+      "intent": "no_tool"
+    },
+    {
+      "utterance": "acme projesinde scope ne",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "bu projede ne kadar alacağız",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "gigi projesinde alacağımız tutarın tl karşılığı ne",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "proje context search",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "proje workspace context",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "project workspace dosyaları",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "projede auth modülü",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "projede bütçe tablosu",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "projede milestone listesi",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "projede ödeme",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "projede son durum ne",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "projede timeline",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "what is the project budget",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "workspace billing context",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "workspace context for billing",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "workspace proje notları",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "workspace project billing",
+      "intent": "project_context"
+    },
+    {
+      "utterance": "branch commit log",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "commit branch pr",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "commit diff göster",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "diff branch",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "git commit listesi",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "git diff göster",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "git diff master",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "git log main",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "git status ne",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "git status repo",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "github repo api",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "pr durumu ne",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "repo analyze et",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "repo recent commits",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "repo summary",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "repo summary please",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "show git log",
+      "intent": "read_repo"
+    },
+    {
+      "utterance": "çalıştır npm install",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "execute shell command",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "execute vitest suite",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "npm ci run",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "npm run test",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "npm test run",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "run execute testleri",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "run vitest",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "shell execute komut",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "testleri çalıştır",
+      "intent": "run_command"
+    },
+    {
+      "utterance": "vitest execute",
+      "intent": "run_command"
+    }
   ]
 }

@@ -55,7 +55,7 @@ export function SettingsPage() {
   const header = SECTION_HEADERS[section];
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 lg:flex-row lg:items-start">
+    <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-4 sm:gap-6 lg:flex-row lg:items-start">
       <SettingsNav active={section} onSelect={setSection} />
 
       <div className="min-w-0 flex-1 space-y-5">

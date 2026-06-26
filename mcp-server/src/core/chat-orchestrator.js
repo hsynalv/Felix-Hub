@@ -19,6 +19,11 @@ import {
   formatToolResultForModel,
 } from "./chat/tool-result-summarizer.js";
 import { resolveChatProfile, applyProfileToToolIntent } from "./chat/chat-profiles.js";
+import { shouldDisableChatTools } from "./chat/intent-decision.js";
+import { getRequestContext } from "./auth/request-context.js";
+import { loadTenantOverlay } from "./auth/tenant-overlay.js";
+import { shouldAutoApproveTelegramTool } from "./chat/telegram-auto-approve.js";
+import { auditLog } from "./audit/index.js";
 import { CHAT_HISTORY_RAW_LIMIT } from "./chat/chat-config.js";
 import {
   getLlmKeyMode,
@@ -189,6 +194,9 @@ export function selectChatTools(
   if (!profileAllowsWrite || !allowWriteTools) {
     tools = tools.filter((t) => !isWriteToolDef(t));
   }
+  if (shouldDisableChatTools(toolIntent, profile?.id || chatProfile)) {
+    return [];
+  }
   if (toolIntent) {
     tools = shortlistToolsForIntent(tools, toolIntent);
   }
@@ -226,7 +234,9 @@ export function isWriteToolName(name) {
 }
 
 export function buildOpenAiTools(options = {}) {
-  return selectChatTools(listTools(), options).map((tool) => ({
+  const selected = selectChatTools(listTools(), options);
+  if (!selected.length) return [];
+  return selected.map((tool) => ({
     type: "function",
     function: {
       name: tool.name,
@@ -263,6 +273,11 @@ export function deleteApprovalWaiter(approvalId) {
 async function runToolWithApproval(name, args, context, handlers = {}) {
   const { allowWriteTools = true, onToolCall = () => {}, onApproval = () => {} } = handlers;
 
+  const reqCtx = getRequestContext();
+  if (reqCtx?.namespace) {
+    await loadTenantOverlay(reqCtx.namespace);
+  }
+
   const brainToolCounts = context.brainToolCounts || {};
   const capCheck = checkBrainToolCap(name, brainToolCounts);
   if (capCheck.blocked) {
@@ -292,6 +307,8 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
     return rejected;
   }
   if (guard.warn) {
+    if (!context.guardBlocks) context.guardBlocks = [];
+    context.guardBlocks.push({ toolName: name, code: guard.code, reason: guard.reason, warn: true });
     context._guardWarning = guard.reason;
   }
 
@@ -327,7 +344,21 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
   );
 
   if (result?.status === "approval_required" && result.approval?.id) {
-    if (!allowWriteTools) {
+    if (shouldAutoApproveTelegramTool(context, name)) {
+      void auditLog({
+        plugin: "notifications",
+        operation: "telegram_auto_approved",
+        actor: context.actor || "telegram",
+        workspaceId: "global",
+        allowed: true,
+        success: true,
+        metadata: { toolName: name, approvalId: result.approval.id, channel: "telegram" },
+      }).catch(() => {});
+      const approved = await approveTool(result.approval.id, {
+        user: context.actor || "telegram:auto",
+      });
+      result = approved.ok ? (approved.data?.result ?? approved) : approved;
+    } else if (!allowWriteTools) {
       const rejected = {
         ok: false,
         error: { code: "approval_required_blocked", message: "Tool approval not available in this channel" },
@@ -423,13 +454,13 @@ async function chatWithOpenAi({ messages, model, tools, context, handlers }) {
   if (!client) throw new Error("OPENAI_API_KEY not configured");
 
   const resolvedModel = model || getDefaultModel();
-  const { onDelta = () => {}, ...toolHandlers } = handlers;
+  const { onDelta = () => {}, maxIterations = MAX_TOOL_ITERATIONS, ...toolHandlers } = handlers;
   let currentMessages = [...messages];
   let iterations = 0;
   const toolCallsLog = [];
   let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
 
-  while (iterations < MAX_TOOL_ITERATIONS) {
+  while (iterations < maxIterations) {
     iterations++;
     const iterStart = Date.now();
     const stream = await client.chat.completions.create({
@@ -524,7 +555,13 @@ async function chatWithOpenAi({ messages, model, tools, context, handlers }) {
 async function chatWithOllama({ messages, model, tools, context, handlers }) {
   const baseUrl = getOllamaBaseUrl();
   const resolvedModel = model || getDefaultModel();
-  const { allowWriteTools = true, onDelta = () => {}, onToolCall, onApproval } = handlers;
+  const {
+    allowWriteTools = true,
+    onDelta = () => {},
+    onToolCall,
+    onApproval,
+    maxIterations = MAX_TOOL_ITERATIONS,
+  } = handlers;
   const ollamaTools = tools?.length ? tools : buildOpenAiTools({ allowWriteTools });
 
   let currentMessages = [...messages];
@@ -532,7 +569,7 @@ async function chatWithOllama({ messages, model, tools, context, handlers }) {
   const toolCallsLog = [];
   let totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
 
-  while (iterations < MAX_TOOL_ITERATIONS) {
+  while (iterations < maxIterations) {
     iterations++;
     const iterStart = Date.now();
     const res = await fetch(`${baseUrl}/api/chat`, {
@@ -703,12 +740,24 @@ export async function runChatTurn({
   });
   chatContext.intent = chatCtx.toolIntent;
 
+  const profile = resolveChatProfile(chatProfile);
+  const effectiveAllowWrite = allowWriteTools && profile.allowWriteTools;
+  const maxIterations = profile.maxIterations ?? MAX_TOOL_ITERATIONS;
+
   const instructionsBlock = buildInstructionsBlock({}, systemPrompt);
-  const systemContent = buildSystemPrompt(instructionsBlock ? `${instructionsBlock}\n\n${chatCtx.contextHints}` : chatCtx.contextHints, {
-    toolCatalog: buildToolCatalogSummary(
-      selectChatTools(listTools(), { allowWriteTools, toolIntent: chatCtx.toolIntent, chatProfile })
-    ),
-  });
+  const systemContent = buildSystemPrompt(
+    instructionsBlock ? `${instructionsBlock}\n\n${chatCtx.contextHints}` : chatCtx.contextHints,
+    {
+      toolCatalog: buildToolCatalogSummary(
+        selectChatTools(listTools(), {
+          allowWriteTools: effectiveAllowWrite,
+          toolIntent: chatCtx.toolIntent,
+          chatProfile,
+        })
+      ),
+      channel: chatContext.channel,
+    }
+  );
 
   const messages = [
     { role: "system", content: systemContent },
@@ -724,9 +773,14 @@ export async function runChatTurn({
     }
   }
 
-  const tools = buildOpenAiTools({ allowWriteTools, toolIntent: chatCtx.toolIntent, chatProfile });
+  const tools = buildOpenAiTools({
+    allowWriteTools: effectiveAllowWrite,
+    toolIntent: chatCtx.toolIntent,
+    chatProfile,
+  });
   const handlers = {
-    allowWriteTools,
+    allowWriteTools: effectiveAllowWrite,
+    maxIterations,
     onDelta: () => {},
     onToolCall: onToolCall || (() => {}),
     onApproval: () => {},

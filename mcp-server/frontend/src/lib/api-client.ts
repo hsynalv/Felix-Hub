@@ -23,6 +23,8 @@ function authHeaders(extra: HeadersInit = {}): HeadersInit {
   };
 }
 
+const fetchCredentials: RequestInit = { credentials: "include" };
+
 function unwrap<T>(json: unknown): T {
   if (json && typeof json === "object" && "ok" in json && (json as { ok: boolean }).ok === true && "data" in json) {
     return (json as { data: T }).data;
@@ -31,7 +33,7 @@ function unwrap<T>(json: unknown): T {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: authHeaders(), cache: "no-store" });
+  const res = await fetch(path, { ...fetchCredentials, headers: authHeaders(), cache: "no-store" });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(
@@ -46,6 +48,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
+    ...fetchCredentials,
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body ?? {}),
   });
@@ -63,6 +66,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "PUT",
+    ...fetchCredentials,
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body ?? {}),
   });
@@ -80,6 +84,7 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
 export async function apiDelete<T>(path: string): Promise<T> {
   const res = await fetch(path, {
     method: "DELETE",
+    ...fetchCredentials,
     headers: authHeaders(),
   });
   const json = await res.json().catch(() => ({}));
@@ -96,6 +101,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
 export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "PATCH",
+    ...fetchCredentials,
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body ?? {}),
   });
@@ -111,7 +117,7 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function apiGetRaw<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: authHeaders() });
+  const res = await fetch(path, { ...fetchCredentials, headers: authHeaders() });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(
@@ -169,6 +175,7 @@ export interface ChatModelsData {
   providerAvailable?: boolean;
   providerHint?: string | null;
   toolCount: number;
+  toolIntents?: string[];
   persistenceEnabled?: boolean;
   models?: Array<{ provider?: string; name?: string; models?: string[]; available?: boolean }>;
   availableModels?: Array<{ provider?: string; name?: string; models?: string[]; available?: boolean }>;
@@ -176,7 +183,8 @@ export interface ChatModelsData {
 }
 
 export interface WhoamiData {
-  auth?: { enabled?: boolean; scopes?: string[] };
-  actor?: { type?: string } | null;
+  auth?: { enabled?: boolean; scopes?: string[]; mode?: string };
+  actor?: { type?: string; email?: string } | null;
+  user?: { id?: string; email?: string; displayName?: string; namespace?: string } | null;
   project?: { id?: string; env?: string };
 }

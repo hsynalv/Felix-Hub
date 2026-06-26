@@ -1,4 +1,4 @@
-import { config } from "../../core/config.js";
+import { getN8nConfig } from "../../core/settings/effective-config.js";
 
 const TIMEOUT_MS = 15_000;
 
@@ -33,14 +33,13 @@ function classifyHttpError(status) {
  *   n8n_server_error      – HTTP 5xx
  */
 export function createN8nClient() {
-  const { baseUrl, apiBase, apiKey } = config.n8n;
-
   async function request(method, path, body) {
+    const { baseUrl, apiBase, apiKey } = getN8nConfig();
     if (!apiKey) {
       return {
         ok: false,
         error: "missing_api_key",
-        message: "N8N_API_KEY is not configured — set it in environment variables",
+        message: "N8N_API_KEY is not configured — set it in Ayarlar → Entegrasyonlar → n8n",
       };
     }
 

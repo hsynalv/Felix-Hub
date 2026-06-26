@@ -8,7 +8,12 @@ import { loadPlugins, getPlugins } from "./plugins.js";
 import { initializeToolHooks } from "./tool-registry.js";
 import { auditMiddleware, getLogs, getStats } from "./audit.js";
 import { getAuditManager, initAuditManager } from "./audit/index.js";
-import { requireScope, isAuthEnabled, optionalAuthMiddleware } from "./auth.js";
+import { requireScope, isAuthEnabled, optionalAuthMiddleware, authEnabled, refreshAuthEnabledState } from "./auth.js";
+import { sessionMiddleware } from "./auth/session-middleware.js";
+import { requestContextMiddleware } from "./auth/request-context.js";
+import { tenantOverlayMiddleware } from "./auth/tenant-middleware.js";
+import { registerAuthRoutes } from "./auth/routes.js";
+import { seedOwnerAndMigrateSettings } from "./auth/seed.js";
 import { submitJob, getJob, listJobs, getJobStats } from "./jobs.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -50,6 +55,7 @@ import { loadSettingsOverlay } from "./settings/effective-config.js";
 import { registerSettingsRoutes } from "./settings/routes.js";
 import { registerReloadHooks } from "./settings/reload-registry.js";
 import { rateLimitMiddleware } from "./ratelimit.js";
+import { skipForHtmlNavigation } from "./http/html-navigation.js";
 
 import { workspaceContextMiddleware } from "./workspace.js";
 
@@ -224,6 +230,10 @@ function projectContextMiddleware(req, res, next) {
 export async function createServer() {
   const app = express();
 
+  if (process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "true") {
+    app.set("trust proxy", 1);
+  }
+
   const corsOrigins = process.env.CORS_ALLOWED_ORIGINS?.trim();
   if (corsOrigins) {
     const originList = corsOrigins.split(",").map((s) => s.trim()).filter(Boolean);
@@ -260,16 +270,22 @@ export async function createServer() {
   app.use(workspaceContextMiddleware);
   app.use(auditMiddleware);
   app.use(responseEnvelopeMiddleware);
+  app.use(sessionMiddleware);
   app.use(optionalAuthMiddleware);
+  app.use(requestContextMiddleware);
+  app.use(tenantOverlayMiddleware);
   app.use(policyGuardrailMiddleware);
+
+  registerAuthRoutes(app);
 
   // ── Core routes ────────────────────────────────────────────────────────────
 
-  app.get("/health", (req, res) => {
+  app.get("/health", async (_req, res) => {
     const persistence = getPersistenceStatus();
+    const authOn = await authEnabled();
     res.json({
       status: "ok",
-      auth: isAuthEnabled() ? "enabled" : "disabled",
+      auth: authOn ? "enabled" : "disabled",
       persistence,
     });
   });
@@ -277,10 +293,19 @@ export async function createServer() {
   app.get("/whoami", requireScope("read"), (req, res) => {
     res.json({
       auth: {
-        enabled: isAuthEnabled(),
+        enabled: true,
         scopes: req.authScopes ?? [],
+        mode: req.user ? "session" : req.actor?.type || "api_key",
       },
       actor: req.actor ?? null,
+      user: req.user
+        ? {
+            id: req.user.userId,
+            email: req.user.email,
+            displayName: req.user.displayName,
+            namespace: req.user.namespace,
+          }
+        : null,
       project: {
         id: req.projectId,
         env: req.projectEnv,
@@ -288,7 +313,7 @@ export async function createServer() {
     });
   });
 
-  app.get("/plugins", requireScope("read"), async (_req, res) => {
+  app.get("/plugins", skipForHtmlNavigation, requireScope("read"), async (_req, res) => {
     try {
       const connectors = await getConnectorPluginManifests();
       res.json([...getPlugins(), ...connectors]);
@@ -664,9 +689,20 @@ export async function createServer() {
     res.redirect(301, "/observability")
   );
 
-  app.post("/ui/token", (req, res) => {
+  app.post("/ui/token", async (req, res) => {
+    const usersActive = await authEnabled();
     const ip = req.ip || "";
     const isLocal = ip === "127.0.0.1" || ip === "::1" || ip.endsWith("::ffff:127.0.0.1");
+    if (usersActive && !isLocal) {
+      return res.status(403).json({
+        ok: false,
+        error: {
+          code: "forbidden",
+          message: "UI token issuance disabled when user auth is active. Use /auth/login.",
+        },
+        meta: { requestId: req.requestId },
+      });
+    }
     if (!isLocal) {
       return res.status(403).json({
         ok: false,
@@ -727,6 +763,8 @@ export async function createServer() {
     console.warn(`[settings] Master key init failed: ${err.message}`);
   }
   if (isPersistenceHealthy()) {
+    await seedOwnerAndMigrateSettings();
+    await refreshAuthEnabledState();
     const count = await loadSettingsOverlay();
     if (count > 0) console.log(`[settings] Loaded ${count} encrypted setting(s) from MSSQL`);
 
@@ -792,37 +830,20 @@ export async function createServer() {
   // ── React SPA static + HTML fallback ───────────────────────────────────────
 
   const spaIndexPath = join(appDistPath, "index.html");
-  const spaApiPrefixes = [
-    "/mcp",
-    "/health",
-    "/openapi",
-    "/plugins",
-    "/audit",
-    "/jobs",
-    "/approvals",
-    "/approve",
-    "/ui/chat",
-    "/ui/token",
-    "/whoami",
-    "/brain",
-    "/settings/reload",
-    "/settings/effective",
-    "/settings/connections",
-    "/observability/health",
-    "/observability/metrics",
-    "/observability/errors",
-  ];
 
   if (existsSync(spaIndexPath)) {
     app.use(express.static(appDistPath, { index: false }));
     app.get("*", (req, res, next) => {
-      if (req.method !== "GET") return next();
-      if (spaApiPrefixes.some((p) => req.path === p || req.path.startsWith(`${p}/`))) return next();
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
       if (req.path.includes(".")) return next();
       const accept = req.headers.accept || "";
       const wantsHtml = accept.includes("text/html") || accept.includes("*/*") || accept === "";
       if (!wantsHtml) return next();
       res.setHeader("Cache-Control", "no-store");
+      if (req.method === "HEAD") {
+        res.setHeader("Content-Type", "text/html; charset=UTF-8");
+        return res.status(200).end();
+      }
       res.sendFile(spaIndexPath);
     });
   } else {

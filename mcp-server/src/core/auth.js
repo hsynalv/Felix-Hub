@@ -1,21 +1,22 @@
 /**
  * Authentication & RBAC middleware.
  *
- * Keys and scopes (set via .env):
- *   HUB_READ_KEY   → scopes: ["read"]
- *   HUB_WRITE_KEY  → scopes: ["read", "write"]
- *   HUB_ADMIN_KEY  → scopes: ["read", "write", "admin"]
- *
- * Usage:
- *   import { requireScope } from "./auth.js";
- *   router.post("/apply", requireScope("write"), handler);
- *
- * If no keys are configured the server runs in open mode (dev-friendly).
+ * Auth priority:
+ *   1. Session cookie (hub_session) → per-user tenant
+ *   2. Bearer HUB_*_KEY / UI token
+ *   3. Open mode (dev only, no keys and no users)
  */
 
 import { validateUiToken } from "./ui-tokens.js";
+import { getCookie, SESSION_COOKIE } from "./auth/cookies.js";
+import { buildUserFromSession } from "./auth/session-middleware.js";
+import { validateSessionToken } from "./auth/sessions.service.js";
+import { hasAnyUsers } from "./auth/users.service.js";
 
 const SCOPE_HIERARCHY = ["read", "write", "admin"];
+
+/** @type {boolean|null} */
+let userAuthActiveCache = null;
 
 function normalizeScope(scope) {
   if (scope === "danger") return "admin";
@@ -24,10 +25,6 @@ function normalizeScope(scope) {
 
 const WRITE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-/**
- * Middleware: read scope for GET/HEAD/OPTIONS, write scope for mutating methods.
- * Optional pathScopes map overrides scope per path (e.g. { "/drive/upload": "admin" }).
- */
 export function requireScopeByMethod(options = {}) {
   const readScope = options.read ?? "read";
   const writeScope = options.write ?? "write";
@@ -47,23 +44,42 @@ export function requireScopeByMethod(options = {}) {
 
 function getKeyMap() {
   const map = new Map();
-  const readKey  = process.env.HUB_READ_KEY?.trim();
+  const readKey = process.env.HUB_READ_KEY?.trim();
   const writeKey = process.env.HUB_WRITE_KEY?.trim();
   const adminKey = process.env.HUB_ADMIN_KEY?.trim();
 
-  if (readKey)  map.set(readKey,  ["read"]);
+  if (readKey) map.set(readKey, ["read"]);
   if (writeKey) map.set(writeKey, ["read", "write"]);
   if (adminKey) map.set(adminKey, ["read", "write", "admin"]);
 
   return map;
 }
 
-function authEnabled() {
+function hubKeysConfigured() {
   return !!(
     process.env.HUB_READ_KEY?.trim() ||
     process.env.HUB_WRITE_KEY?.trim() ||
     process.env.HUB_ADMIN_KEY?.trim()
   );
+}
+
+export async function isUserAuthActive() {
+  if (userAuthActiveCache !== null) return userAuthActiveCache;
+  userAuthActiveCache = await hasAnyUsers();
+  return userAuthActiveCache;
+}
+
+export function invalidateUserAuthCache() {
+  userAuthActiveCache = null;
+}
+
+function authEnabledSync() {
+  return hubKeysConfigured();
+}
+
+export async function authEnabled() {
+  if (hubKeysConfigured()) return true;
+  return isUserAuthActive();
 }
 
 export function extractAuthKey(req) {
@@ -81,11 +97,40 @@ function extractKey(req) {
   return extractAuthKey(req);
 }
 
-/**
- * Resolve API key or UI token to scopes (sync).
- * @param {string} key
- * @returns {{ valid: boolean, scopes?: string[], type?: string, actor?: Object }}
- */
+function actorFromUser(user) {
+  return {
+    type: "user",
+    userId: user.userId,
+    email: user.email,
+    displayName: user.displayName,
+    namespace: user.namespace,
+    scopes: user.scopes,
+  };
+}
+
+async function authenticateSession(req) {
+  if (req.user) {
+    return {
+      authenticated: true,
+      scopes: req.user.scopes,
+      actor: actorFromUser(req.user),
+      type: "session",
+    };
+  }
+  const token = getCookie(req, SESSION_COOKIE);
+  if (!token) return null;
+  const session = await validateSessionToken(token);
+  if (!session) return null;
+  const user = buildUserFromSession(session);
+  req.user = user;
+  return {
+    authenticated: true,
+    scopes: user.scopes,
+    actor: actorFromUser(user),
+    type: "session",
+  };
+}
+
 export function resolveApiKeyOrUiToken(key) {
   if (!key) {
     return { valid: false };
@@ -116,13 +161,12 @@ export function resolveApiKeyOrUiToken(key) {
   return { valid: false };
 }
 
-/**
- * Unified request authentication (REST) — API key + UI token.
- * @param {import('express').Request} req
- * @returns {{ authenticated: boolean, scopes: string[], actor: Object|null, type?: string }}
- */
-export function authenticateRequest(req) {
-  if (!authEnabled()) {
+export async function authenticateRequest(req) {
+  const sessionAuth = await authenticateSession(req);
+  if (sessionAuth) return sessionAuth;
+
+  const enabled = await authEnabled();
+  if (!enabled) {
     if (process.env.NODE_ENV === "production") {
       return { authenticated: false, scopes: [], actor: null, error: "auth_not_configured" };
     }
@@ -147,25 +191,25 @@ export function authenticateRequest(req) {
   };
 }
 
-/**
- * Optional auth: populate req.authScopes / req.actor when a valid token is present.
- */
 export function optionalAuthMiddleware(req, res, next) {
-  const result = authenticateRequest(req);
-  if (result.error === "auth_not_configured" && process.env.NODE_ENV === "production") {
-    return res.status(503).json({
-      ok: false,
-      error: {
-        code: "auth_not_configured",
-        message: "Server auth is not configured. Set HUB_READ_KEY, HUB_WRITE_KEY, and HUB_ADMIN_KEY.",
-      },
-    });
-  }
-  if (result.authenticated && result.scopes?.length) {
-    req.authScopes = result.scopes;
-    req.actor = result.actor;
-  }
-  next();
+  authenticateRequest(req)
+    .then((result) => {
+      if (result.error === "auth_not_configured" && process.env.NODE_ENV === "production") {
+        return res.status(503).json({
+          ok: false,
+          error: {
+            code: "auth_not_configured",
+            message: "Server auth is not configured.",
+          },
+        });
+      }
+      if (result.authenticated && result.scopes?.length) {
+        req.authScopes = result.scopes;
+        req.actor = result.actor;
+      }
+      next();
+    })
+    .catch(next);
 }
 
 function authorizeScope(scopes, requiredScope) {
@@ -174,21 +218,16 @@ function authorizeScope(scopes, requiredScope) {
   return scopes.some((s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex);
 }
 
-/**
- * Middleware factory.
- * requireScope("read")   — any valid key
- * requireScope("write")  — write or admin key
- * requireScope("danger") — admin key only
- */
 export function requireScope(scope = "read") {
-  return (req, res, next) => {
-    if (!authEnabled()) {
+  return async (req, res, next) => {
+    const enabled = await authEnabled();
+    if (!enabled) {
       if (process.env.NODE_ENV === "production") {
         return res.status(503).json({
           ok: false,
           error: {
             code: "auth_not_configured",
-            message: "Server auth is not configured. Set HUB_READ_KEY, HUB_WRITE_KEY, and HUB_ADMIN_KEY.",
+            message: "Server auth is not configured.",
           },
         });
       }
@@ -196,14 +235,14 @@ export function requireScope(scope = "read") {
     }
 
     const requiredScope = normalizeScope(scope);
-    const auth = authenticateRequest(req);
+    const auth = await authenticateRequest(req);
 
     if (!auth.authenticated) {
       return res.status(401).json({
         ok: false,
         error: {
           code: "unauthorized",
-          message: "Authorization header required. Use: Authorization: Bearer <HUB_API_KEY>",
+          message: "Giriş gerekli veya Authorization: Bearer <API_KEY>",
         },
       });
     }
@@ -225,24 +264,18 @@ export function requireScope(scope = "read") {
   };
 }
 
-/** Returns whether the server is running with auth enabled. */
 export function isAuthEnabled() {
-  return authEnabled();
+  return authEnabledSync() || userAuthActiveCache === true;
+}
+
+export async function refreshAuthEnabledState() {
+  const users = await hasAnyUsers();
+  userAuthActiveCache = users;
+  return hubKeysConfigured() || users;
 }
 
 // ── OAuth 2.1 Bearer Token Support ───────────────────────────────────────────
 
-/**
- * OAuth 2.1 Token Introspection (RFC 7662)
- * Validates a Bearer token against an authorization server.
- *
- * Environment variables:
- *   OAUTH_INTROSPECTION_ENDPOINT - Token introspection URL
- *   OAUTH_INTROSPECTION_AUTH     - Basic auth credentials (optional)
- *
- * @param {string} token - The Bearer token to validate
- * @returns {Promise<Object|null>} Token claims or null if invalid
- */
 export async function introspectOAuthToken(token) {
   const endpoint = process.env.OAUTH_INTROSPECTION_ENDPOINT;
   if (!endpoint) {
@@ -254,7 +287,6 @@ export async function introspectOAuthToken(token) {
       "Content-Type": "application/x-www-form-urlencoded",
     };
 
-    // Add Basic auth if configured
     const auth = process.env.OAUTH_INTROSPECTION_AUTH;
     if (auth) {
       headers["Authorization"] = `Basic ${Buffer.from(auth).toString("base64")}`;
@@ -273,7 +305,6 @@ export async function introspectOAuthToken(token) {
 
     const claims = await response.json();
 
-    // RFC 7662: active=true means token is valid
     if (!claims.active) {
       return null;
     }
@@ -285,11 +316,6 @@ export async function introspectOAuthToken(token) {
   }
 }
 
-/**
- * Validate a Bearer token (API key or OAuth 2.1)
- * @param {string} token
- * @returns {Promise<{valid: boolean, scopes?: string[], claims?: Object}>}
- */
 export async function validateBearerToken(token) {
   const resolved = resolveApiKeyOrUiToken(token);
   if (resolved.valid) {
@@ -305,17 +331,9 @@ export async function validateBearerToken(token) {
   return { valid: false };
 }
 
-/**
- * Middleware for OAuth 2.1 Bearer token validation
- * Usage: app.use('/mcp', requireOAuthScope('read'))
- *
- * @param {string} scope - Required scope
- * @returns {Function} Express middleware
- */
 export function requireOAuthScope(scope = "read") {
   return async (req, res, next) => {
-    // Skip if no auth configured
-    if (!authEnabled() && !process.env.OAUTH_INTROSPECTION_ENDPOINT) {
+    if (!authEnabledSync() && !process.env.OAUTH_INTROSPECTION_ENDPOINT) {
       return next();
     }
 
@@ -341,7 +359,6 @@ export function requireOAuthScope(scope = "read") {
       });
     }
 
-    // Check scope
     const hasScope = authorizeScope(validation.scopes, scope);
 
     if (!hasScope) {
@@ -354,7 +371,6 @@ export function requireOAuthScope(scope = "read") {
       });
     }
 
-    // Attach auth info to request
     req.authScopes = validation.scopes.map(normalizeScope);
     req.actor = {
       type: validation.type,

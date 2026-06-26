@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { apiGet, type PluginInfo } from "@/lib/api-client";
@@ -330,7 +331,7 @@ export function ToolsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid h-[min(60vh,520px)] min-h-[320px] gap-4 lg:grid-cols-5">
+      <div className="grid min-h-[320px] gap-4 lg:h-[min(60vh,520px)] lg:grid-cols-5">
         <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-3">
           <CardHeader className="shrink-0 border-b border-border/60 py-3">
             <CardTitle className="text-sm font-medium">Araç listesi</CardTitle>
@@ -411,7 +412,7 @@ export function ToolsPage() {
           )}
         </Card>
 
-        <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-2">
+        <Card className="hidden min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-2 lg:flex">
           <CardHeader className="flex shrink-0 flex-row items-center justify-between border-b border-border/60 py-3">
             <CardTitle className="text-sm font-medium">Araç detayı</CardTitle>
             {selected && (
@@ -484,6 +485,46 @@ export function ToolsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <SheetContent side="right" className="flex w-full max-w-md flex-col gap-0 p-0 lg:hidden">
+          <SheetHeader className="shrink-0 border-b border-border/60 px-4 py-3 text-left">
+            <SheetTitle className="text-sm font-medium">Araç detayı</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="min-h-0 flex-1">
+            {selected ? (
+              <div className="space-y-4 overflow-hidden p-4">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Araç adı</p>
+                  <p className="mt-1 break-all font-mono text-sm font-semibold">{selected.name}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Açıklama</p>
+                  <p className="mt-1 break-words text-sm leading-relaxed text-muted-foreground">
+                    {selected.description || "Bu araç için açıklama tanımlanmamış."}
+                  </p>
+                </div>
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <Badge className="max-w-full truncate border border-border/60 bg-transparent">{selected.plugin}</Badge>
+                  {selected.tags?.map((x) => (
+                    <Badge key={x} className="max-w-full truncate">
+                      {x}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="min-w-0">
+                  <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Giriş parametreleri ({countSchemaFields(selected.inputSchema)} alan)
+                  </p>
+                  <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-muted/40 p-3 font-mono text-[11px] leading-relaxed">
+                    {JSON.stringify(selected.inputSchema ?? {}, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            ) : null}
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

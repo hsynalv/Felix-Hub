@@ -244,7 +244,10 @@ export function toolMatchesIntent(intent, toolName) {
  */
 export function shortlistToolsForIntent(tools, intent, opts = {}) {
   const maxTools = opts.maxTools ?? 128;
-  if (!tools?.length || intent === "general" || intent === "no_tool") {
+  if (intent === "no_tool") {
+    return [];
+  }
+  if (!tools?.length || intent === "general") {
     return tools.slice(0, maxTools);
   }
 

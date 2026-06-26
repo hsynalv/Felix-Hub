@@ -41,6 +41,8 @@ import { ensureRunForChat, completeRun } from "./agent-runs/run-orchestrator.js"
 import { CHAT_HISTORY_RAW_LIMIT } from "./chat/chat-config.js";
 import { maybeCompressConversation } from "./chat/conversation-compression.js";
 import { resolveChatProfile } from "./chat/chat-profiles.js";
+import { TOOL_INTENTS } from "./chat/tool-intent.js";
+import { resolveChatNamespace } from "./auth/tenant-middleware.js";
 
 const DEFAULT_TASK = "general";
 
@@ -69,6 +71,7 @@ export function registerUiChatRoutes(app) {
       providerAvailable: providerStatus.available,
       providerHint: providerStatus.hint || null,
       toolCount: listTools().length,
+      toolIntents: TOOL_INTENTS,
       persistenceEnabled: isPersistenceHealthy(),
     });
   });
@@ -93,7 +96,12 @@ export function registerUiChatRoutes(app) {
       } else {
         projectId = undefined;
       }
-      const conversations = await listConversations({ projectId, limit, offset });
+      const conversations = await listConversations({
+        projectId,
+        limit,
+        offset,
+        namespace: resolveChatNamespace(req),
+      });
       res.json({ ok: true, data: { conversations } });
     } catch (err) {
       const status = err.code === "persistence_unavailable" ? 503 : 500;
@@ -112,6 +120,7 @@ export function registerUiChatRoutes(app) {
         model: model || null,
         projectId,
         metadata: metadata || null,
+        namespace: resolveChatNamespace(req),
       });
       res.status(201).json({ ok: true, data: conversation });
     } catch (err) {
@@ -124,7 +133,9 @@ export function registerUiChatRoutes(app) {
     if (!isPersistenceHealthy()) return persistenceError(res);
     try {
       res.setHeader("Cache-Control", "no-store");
-      const conversation = await getConversation(req.params.id);
+      const conversation = await getConversation(req.params.id, {
+        namespace: resolveChatNamespace(req),
+      });
       if (!conversation) {
         return res.status(404).json({ ok: false, error: { code: "not_found", message: "Conversation not found" } });
       }
@@ -139,7 +150,12 @@ export function registerUiChatRoutes(app) {
     if (!isPersistenceHealthy()) return persistenceError(res);
     try {
       const { title, model, metadata } = req.body ?? {};
-      const conversation = await updateConversation(req.params.id, { title, model, metadata });
+      const conversation = await updateConversation(req.params.id, {
+        title,
+        model,
+        metadata,
+        namespace: resolveChatNamespace(req),
+      });
       if (!conversation) {
         return res.status(404).json({ ok: false, error: { code: "not_found", message: "Conversation not found" } });
       }
@@ -153,7 +169,7 @@ export function registerUiChatRoutes(app) {
   app.delete("/ui/chat/conversations/:id", requireScope("write"), async (req, res) => {
     if (!isPersistenceHealthy()) return persistenceError(res);
     try {
-      await archiveConversation(req.params.id);
+      await archiveConversation(req.params.id, { namespace: resolveChatNamespace(req) });
       res.json({ ok: true, data: { id: req.params.id, archived: true } });
     } catch (err) {
       const status = err.code === "persistence_unavailable" ? 503 : 500;
@@ -191,6 +207,36 @@ export function registerUiChatRoutes(app) {
     }
 
     res.json({ ok: true, data: { status: "approved", result: outcome.result } });
+  });
+
+  app.post("/ui/chat/intent-feedback", requireScope("read"), async (req, res) => {
+    const { userMessage, predictedIntent, correctIntent, conversationId, runId } = req.body ?? {};
+    if (!userMessage?.trim() || !correctIntent?.trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: { code: "invalid_input", message: "userMessage and correctIntent required" },
+      });
+    }
+    if (!TOOL_INTENTS.includes(correctIntent)) {
+      return res.status(400).json({
+        ok: false,
+        error: { code: "invalid_intent", message: `Unknown intent: ${correctIntent}` },
+      });
+    }
+    try {
+      const { recordWrongIntentFeedback } = await import("./chat/tool-intent-samples.service.js");
+      const result = await recordWrongIntentFeedback({
+        userMessage: String(userMessage).trim(),
+        predictedIntent: predictedIntent ? String(predictedIntent) : undefined,
+        correctIntent: String(correctIntent),
+        conversationId: conversationId ? String(conversationId) : undefined,
+        runId: runId ? String(runId) : undefined,
+        confirmedBy: req.user?.id || "ui",
+      });
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { message: err.message } });
+    }
   });
 
   app.post("/ui/chat", requireScope("read"), async (req, res) => {
@@ -239,16 +285,19 @@ export function registerUiChatRoutes(app) {
     let conversationMetadata = {};
     let historySummaryBlock = "";
 
+    const chatNamespace = resolveChatNamespace(req);
+
     if (isPersistenceHealthy()) {
       try {
         if (activeConversationId) {
           void maybeCompressConversation(activeConversationId).catch(() => {});
-          const conv = await getConversation(activeConversationId);
+          const conv = await getConversation(activeConversationId, { namespace: chatNamespace });
           if (conv) {
             conversationMetadata = normalizeConversationMetadata(conv.metadata);
           }
           const loaded = await getConversationHistoryForChat(activeConversationId, {
             limit: CHAT_HISTORY_RAW_LIMIT,
+            namespace: chatNamespace,
           });
           if (loaded) {
             chatHistory = loaded.history;
@@ -258,6 +307,7 @@ export function registerUiChatRoutes(app) {
           const created = await createConversation({
             projectId: context.projectId || null,
             model: model || null,
+            namespace: chatNamespace,
           });
           activeConversationId = created.id;
         }
@@ -313,7 +363,7 @@ export function registerUiChatRoutes(app) {
     const toolSelectOpts = {
       allowWriteTools,
       pluginFilter: scopedPlugin,
-      toolIntent: scopedPlugin ? null : chatCtx.toolIntent,
+      toolIntent: chatCtx.toolIntent,
       chatProfile,
     };
     const scopedToolDefs = selectChatTools(listTools(), toolSelectOpts);
@@ -335,6 +385,7 @@ export function registerUiChatRoutes(app) {
     ];
 
     const tools = buildOpenAiTools(toolSelectOpts);
+    const toolsDisabled = tools.length === 0;
     const useOpenAi = !!getOpenAiClient();
     if (!useOpenAi) {
       const status = await checkProviderAvailable();
@@ -372,8 +423,10 @@ export function registerUiChatRoutes(app) {
       contextStrategy: chatCtx.meta.contextStrategy,
       toolIntent: chatCtx.meta.toolIntent,
       toolIntentSource: chatCtx.meta.toolIntentSource,
+      rawIntent: chatCtx.toolClassification.rawIntent ?? chatCtx.toolClassification.intent,
       modelVersion: chatCtx.meta.modelVersion,
       chatProfile: chatCtx.meta.chatProfile,
+      toolsDisabled,
       pluginFilter: scopedPlugin,
       conversationId: activeConversationId,
       runId: context.runId,
@@ -440,6 +493,7 @@ export function registerUiChatRoutes(app) {
               : null,
             toolMessages,
             autoTitle: true,
+            namespace: chatNamespace,
           });
         } catch (err) {
           console.warn("[ui-chat] persistence append failed:", err.message);
@@ -465,20 +519,31 @@ export function registerUiChatRoutes(app) {
       try {
         const { getIntentTrainConfig } = await import("./chat/tool-intent-config.js");
         const { recordIntentSample } = await import("./chat/tool-intent-samples.service.js");
-        if (getIntentTrainConfig().collectEnabled) {
+        if (getIntentTrainConfig().collectEnabled && !getIntentTrainConfig().privateMode) {
+          const { buildIntentDecisionEnvelope } = await import("./chat/intent-decision.js");
+          const tc = chatCtx.toolClassification;
           void recordIntentSample({
             userMessage: message,
-            predictedIntent: chatCtx.toolClassification.intent,
-            predictedConfidence: chatCtx.toolClassification.confidence,
-            predictionSource: chatCtx.toolClassification.source || "regex",
+            predictedIntent: tc.rawIntent ?? tc.intent,
+            predictedConfidence: tc.confidence,
+            predictionSource: tc.source || "regex",
             effectiveIntent: chatCtx.toolIntent,
             toolsUsed: toolMessages.map((t) => t.metadata?.toolName).filter(Boolean),
             guardBlocks: context.guardBlocks || [],
+            decisionEnvelope: buildIntentDecisionEnvelope({
+              rawClassification: tc,
+              effectiveIntent: chatCtx.toolIntent,
+              chatProfile: chatCtx.meta.chatProfile,
+              profileOverride: tc.profileOverride,
+              toolCount: tools.length,
+              guardBlocks: context.guardBlocks || [],
+              pluginFilter: scopedPlugin,
+            }),
             projectId: context.projectId,
             conversationId: activeConversationId,
             runId: context.runId,
             chatProfile: chatCtx.meta.chatProfile,
-            modelVersion: chatCtx.toolClassification.modelVersion,
+            modelVersion: tc.modelVersion,
           });
         }
       } catch (err) {

@@ -8,6 +8,8 @@ import {
   formatMarkdownV2,
   isTelegramConfigured,
   sendTelegram,
+  splitTelegramText,
+  sendChatAction,
 } from "../../src/plugins/notifications/channels/telegram.js";
 import * as notifications from "../../src/plugins/notifications/index.js";
 
@@ -71,6 +73,28 @@ describe("Telegram channel", () => {
     const result = await sendTelegram({ title: "T", message: "M" });
     expect(result.success).toBe(true);
     expect(result.messageId).toBe(7);
+    vi.unstubAllGlobals();
+  });
+
+  it("splitTelegramText chunks long messages", () => {
+    const long = "a".repeat(5000);
+    const chunks = splitTelegramText(long, 4000);
+    expect(chunks.length).toBe(2);
+    expect(chunks[0].length).toBeLessThanOrEqual(4000);
+  });
+
+  it("sendChatAction calls Telegram API", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "123:abc";
+    process.env.TELEGRAM_CHAT_ID = "42";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendChatAction("99", "typing");
+    expect(result.success).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toContain("sendChatAction");
     vi.unstubAllGlobals();
   });
 });

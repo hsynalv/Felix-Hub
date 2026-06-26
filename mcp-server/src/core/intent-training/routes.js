@@ -51,6 +51,8 @@ const configSchema = z.object({
   nlpConfidenceThreshold: z.number().min(0).max(1).optional(),
   runtimeLlmFallback: z.boolean().optional(),
   requireHumanOnDisagreement: z.boolean().optional(),
+  redactSamples: z.boolean().optional(),
+  privateMode: z.boolean().optional(),
 });
 
 const resolveSchema = z.object({
@@ -278,6 +280,28 @@ export function registerIntentTrainingRoutes(app) {
         source: "manual",
       });
       res.json({ ok: true, data: entry });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: { message: err.message } });
+    }
+  });
+
+  router.post("/feedback/wrong-intent", requireScope("admin"), async (req, res) => {
+    try {
+      const body = z
+        .object({
+          userMessage: z.string().min(1),
+          predictedIntent: z.string().optional(),
+          correctIntent: z.string().min(1),
+          conversationId: z.string().optional(),
+          runId: z.string().optional(),
+        })
+        .parse(req.body);
+      const { recordWrongIntentFeedback } = await import("../chat/tool-intent-samples.service.js");
+      const result = await recordWrongIntentFeedback({
+        ...body,
+        confirmedBy: req.user?.id || "admin",
+      });
+      res.json({ ok: true, data: result });
     } catch (err) {
       res.status(400).json({ ok: false, error: { message: err.message } });
     }

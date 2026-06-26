@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/layout/StatusBadge";
 
 export function OpsPageShell({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("relative mx-auto max-w-6xl space-y-6 pb-8", className)}>
+    <div className={cn("relative mx-auto min-w-0 max-w-6xl space-y-4 pb-6 sm:space-y-6 sm:pb-8", className)}>
       <div className="pointer-events-none absolute inset-x-0 -top-6 h-48 bg-[radial-gradient(ellipse_70%_60%_at_50%_-10%,oklch(0.55_0.14_280/0.14),transparent)]" />
       <div className="relative">{children}</div>
     </div>
@@ -43,7 +43,7 @@ export function OpsPageHero({
           <Icon className="h-6 w-6 text-primary" />
         </div>
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{description}</p>
         </div>
       </div>

@@ -34,6 +34,11 @@ describe("tool-intent", () => {
     expect(sorted[0].name).toBe("git_status");
   });
 
+  it("returns empty shortlist for no_tool", () => {
+    const tools = [{ name: "git_status" }, { name: "brain_recall" }];
+    expect(shortlistToolsForIntent(tools, "no_tool")).toEqual([]);
+  });
+
   it("classifies gigi project TL question as project_context", () => {
     const r = classifyToolIntentRegex("gigi projesinde alacağımız tutarın tl karşılığı ne kanka");
     expect(r.intent).toBe("project_context");

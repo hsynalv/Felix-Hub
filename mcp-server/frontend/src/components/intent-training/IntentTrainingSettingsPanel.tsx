@@ -29,6 +29,27 @@ export function IntentTrainingSettingsPanel({
       </div>
       <div className="space-y-3 rounded-xl border border-border/60 p-4">
         <div className="flex items-center justify-between">
+          <Label>Örnek toplama</Label>
+          <Switch
+            checked={config.collectEnabled}
+            onCheckedChange={(v) => onChange({ collectEnabled: v })}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">Private mode (örnek kaydetme)</Label>
+          <Switch
+            checked={config.privateMode}
+            onCheckedChange={(v) => onChange({ privateMode: v })}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">PII redaction</Label>
+          <Switch
+            checked={config.redactSamples}
+            onCheckedChange={(v) => onChange({ redactSamples: v })}
+          />
+        </div>
+        <div className="flex items-center justify-between">
           <Label>Runtime LLM fallback</Label>
           <Switch
             checked={config.runtimeLlmFallback}

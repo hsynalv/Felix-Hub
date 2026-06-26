@@ -1,6 +1,6 @@
 # V7 Execution Order
 
-> **Son güncelleme:** 2026-06-24  
+> **Son güncelleme:** 2026-06-26  
 > **Önkoşul:** [V6 EXECUTION-ORDER](../v6-path/EXECUTION-ORDER.md) veya V4/V5 çekirdek exit  
 > **Kural:** Önce kişisel merkez + brifing → local assistant + güvenlik → günlük hayat agent'ları → olgunlaştırma
 
@@ -41,7 +41,7 @@ flowchart TB
 |------|--------|-------|-------|
 | 7.1 | Personal Command Center | [01-personal-command-center.md](./01-personal-command-center.md) | not_started |
 | 7.2 | Daily Briefing Agent | [02-daily-briefing-agent.md](./02-daily-briefing-agent.md) | not_started |
-| 7.3 | Telegram Remote Control | [03-telegram-remote-control.md](./03-telegram-remote-control.md) | partial (notifications) |
+| 7.3 | Telegram Remote Control | [03-telegram-remote-control.md](./03-telegram-remote-control.md) | partial (MVP: bildirim + güvenli `/ask`; **tam kapsam** → 7.5 sidecar/desktop sonrası) |
 | 7.4 | Personal Memory Profile | [07-personal-memory-profile.md](./07-personal-memory-profile.md) | partial (V6 personal model) |
 
 ## Faz 2 — Local assistant (V7.5 – V7.7)
@@ -76,9 +76,9 @@ flowchart TB
 
 | Etiket | İçerik |
 |--------|--------|
-| `v7.0-alpha` | Command Center + Daily Briefing + Telegram MVP (7.1–7.3) |
+| `v7.0-alpha` | Command Center + Daily Briefing + Telegram MVP (7.1–7.3: run/onay, event push) |
 | `v7.0-beta` | Desktop assistant + autonomy + hardening (7.5–7.7) |
-| `v7.1` | Shopping + life agents + Jarvis (7.8–7.10) |
+| `v7.1` | **Telegram tam kapsam** (dosya/sidecar + desktop) + shopping + life agents + Jarvis (7.8–7.10) |
 | `v7.2` | Voice, overlay, feedback loop (Faz 4) |
 
 ---
@@ -89,10 +89,12 @@ flowchart TB
 |----|---------------------|
 | Personal Operating Model | Personal Memory Profile |
 | Agent Inbox | Command Center + Telegram |
-| Desktop Control | Browser Desktop Assistant |
+| Desktop Control | Browser Desktop Assistant → **Telegram uzaktan yüzeyi** (`/file`, `/desktop`) |
 | Managed autonomy (V5) | Permission Autonomy Model (personal scope) |
 | Agent App Store | Life Automation agent profilleri |
 | n8n plugin | Life automation orchestration (altyapı, pillar değil) |
+
+> **Ürün notu (2026-06-26):** Telegram şu an kısıtlı (`safe` profil). V7’de tam kapsam: ev bilgisayarına sidecar üzerinden dosya erişimi + V4 desktop agent ile ekran kontrolü — detay [03-telegram-remote-control.md](./03-telegram-remote-control.md).
 
 ---
 

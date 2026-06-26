@@ -166,6 +166,49 @@ export async function setupProjectInNotion(data) {
   };
 }
 
+/**
+ * List rows from the configured Projeler database.
+ * @param {{ status?: string; limit?: number }} [opts]
+ */
+export async function listProjectsInNotion(opts = {}) {
+  const { projectsDbId: dbId } = notionDbIds();
+  if (!dbId) {
+    return {
+      ok: false,
+      error: "config_error",
+      details: {
+        message: "NOTION_PROJECTS_DB_ID ayarlanmalı (Ayarlar → Entegrasyonlar → notion)",
+      },
+    };
+  }
+
+  const limit = Math.min(Number(opts.limit ?? 20), 100);
+  const payload = { page_size: limit };
+  if (opts.status) {
+    payload.filter = { property: notionFields.projectStatus, status: { equals: opts.status } };
+  }
+  payload.sorts = [{ property: notionFields.projectStart, direction: "descending" }];
+
+  let result = await queryNotionDatabase(dbId, payload);
+  if (!result.ok && payload.sorts) {
+    const { sorts: _sorts, ...withoutSort } = payload;
+    result = await queryNotionDatabase(dbId, withoutSort);
+  }
+  if (!result.ok) return result;
+
+  const projects = (result.data.results ?? []).map((p) => ({
+    id: p.id,
+    name: p.properties?.[notionFields.projectName]?.title?.[0]?.plain_text ?? "Untitled",
+    status: p.properties?.[notionFields.projectStatus]?.status?.name ?? null,
+    oncelik: p.properties?.[notionFields.projectPriority]?.select?.name ?? null,
+    baslangic: p.properties?.[notionFields.projectStart]?.date?.start ?? null,
+    bitis: p.properties?.[notionFields.projectEnd]?.date?.start ?? null,
+    url: p.url,
+  }));
+
+  return { ok: true, data: { count: projects.length, projects } };
+}
+
 /** Create a child page under NOTION_ROOT_PAGE_ID or parentPageId */
 export async function createNotionPage({ title, parentPageId, blocks, icon, explanation }) {
   const { rootPageId } = notionDbIds();
@@ -251,6 +294,63 @@ export const tools = [
       const result = await notionRequest("POST", "/search", body);
       if (!result.ok) return result;
       return { ok: true, data: result.data.results };
+    },
+  },
+  {
+    name: "notion_list_projects",
+    description: "List projects from the configured Notion Projeler database",
+    tags: [ToolTags.READ, ToolTags.NETWORK, ToolTags.EXTERNAL_API],
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          description: "Filter by status (e.g. Yapılıyor, Yapılmadı, Tamamlandı)",
+        },
+        limit: { type: "number", default: 20, description: "Max results (1-100)" },
+      },
+    },
+    handler: async (args) => listProjectsInNotion({ status: args.status, limit: args.limit }),
+  },
+  {
+    name: "notion_setup_project",
+    description: "Create a project in Notion Projeler DB and optional linked tasks in Yapılacaklar DB",
+    tags: [ToolTags.WRITE, ToolTags.NETWORK, ToolTags.EXTERNAL_API],
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Project name" },
+        status: { type: "string", description: "Status (default: Yapılmadı)" },
+        oncelik: { type: "string", description: "Priority: Az | Normal | Yüksek" },
+        baslangic: { type: "string", description: "Start date ISO (optional)" },
+        bitis: { type: "string", description: "End date ISO (optional)" },
+        tasks: {
+          type: "array",
+          description: "Optional tasks to create and link",
+          items: {
+            type: "object",
+            properties: {
+              gorev: { type: "string" },
+              sonTarih: { type: "string" },
+            },
+            required: ["gorev"],
+          },
+        },
+        explanation: { type: "string", description: "Why you are creating this project" },
+      },
+      required: ["name", "explanation"],
+    },
+    handler: async (args) => {
+      const result = await setupProjectInNotion({
+        name: args.name,
+        status: args.status,
+        oncelik: args.oncelik,
+        baslangic: args.baslangic,
+        bitis: args.bitis,
+        tasks: args.tasks,
+      });
+      if (!result.ok) return result;
+      return { ok: true, data: result.data };
     },
   },
   {
@@ -1422,8 +1522,15 @@ export function register(app) {
     const data = validate(addProjectSchema, req.body, res);
     if (!data) return;
 
-    const dbId = config.notion.projectsDbId;
-    if (!dbId) return err(res, 500, "config_error", "NOTION_PROJECTS_DB_ID is not set in .env");
+    const { projectsDbId: dbId } = notionDbIds();
+    if (!dbId) {
+      return err(
+        res,
+        500,
+        "config_error",
+        "NOTION_PROJECTS_DB_ID ayarlanmalı (Ayarlar → Entegrasyonlar → notion)"
+      );
+    }
 
     const properties = {
       [notionFields.projectName]:     { title: [{ type: "text", text: { content: data.name } }] },
@@ -1459,29 +1566,15 @@ export function register(app) {
    *   limit  = max results (default: 20)
    */
   router.get("/projects", async (req, res) => {
-    const dbId = config.notion.projectsDbId;
-    if (!dbId) return err(res, 500, "config_error", "NOTION_PROJECTS_DB_ID is not set in .env");
-
-    const payload = { page_size: Math.min(Number(req.query.limit ?? 20), 100) };
-    if (req.query.status) {
-      payload.filter = { property: notionFields.projectStatus, status: { equals: req.query.status } };
+    const result = await listProjectsInNotion({
+      status: req.query.status,
+      limit: req.query.limit,
+    });
+    if (!result.ok) {
+      const status = result.error === "config_error" ? 500 : 502;
+      return err(res, status, result.error, result.details?.message, result.details);
     }
-    payload.sorts = [{ property: notionFields.projectStart, direction: "descending" }];
-
-    const result = await queryNotionDatabase(dbId, payload);
-    if (!result.ok) return err(res, 502, result.error, result.details?.message, result.details);
-
-    const projects = (result.data.results ?? []).map((p) => ({
-      id: p.id,
-      name: p.properties?.[notionFields.projectName]?.title?.[0]?.plain_text ?? "Untitled",
-      status: p.properties?.[notionFields.projectStatus]?.status?.name ?? null,
-      oncelik: p.properties?.[notionFields.projectPriority]?.select?.name ?? null,
-      baslangic: p.properties?.[notionFields.projectStart]?.date?.start ?? null,
-      bitis: p.properties?.[notionFields.projectEnd]?.date?.start ?? null,
-      url: p.url,
-    }));
-
-    res.json({ ok: true, count: projects.length, projects });
+    res.json({ ok: true, count: result.data.count, projects: result.data.projects });
   });
 
   /**
@@ -1494,8 +1587,15 @@ export function register(app) {
     const data = validate(addWorkTaskSchema, req.body, res);
     if (!data) return;
 
-    const dbId = config.notion.tasksDbId;
-    if (!dbId) return err(res, 500, "config_error", "NOTION_TASKS_DB_ID is not set in .env");
+    const { tasksDbId: dbId } = notionDbIds();
+    if (!dbId) {
+      return err(
+        res,
+        500,
+        "config_error",
+        "NOTION_TASKS_DB_ID ayarlanmalı (Ayarlar → Entegrasyonlar → notion)"
+      );
+    }
 
     const properties = {
       [notionFields.taskName]: { title: [{ type: "text", text: { content: data.gorev } }] },
@@ -1531,8 +1631,15 @@ export function register(app) {
    *   limit      = max results (default: 30)
    */
   router.get("/tasks", async (req, res) => {
-    const dbId = config.notion.tasksDbId;
-    if (!dbId) return err(res, 500, "config_error", "NOTION_TASKS_DB_ID is not set in .env");
+    const { tasksDbId: dbId } = notionDbIds();
+    if (!dbId) {
+      return err(
+        res,
+        500,
+        "config_error",
+        "NOTION_TASKS_DB_ID ayarlanmalı (Ayarlar → Entegrasyonlar → notion)"
+      );
+    }
 
     const payload = { page_size: Math.min(Number(req.query.limit ?? 30), 100) };
 

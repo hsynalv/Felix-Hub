@@ -69,7 +69,7 @@ export function SettingsNav({
   onSelect: (id: SettingsSectionId) => void;
 }) {
   return (
-    <nav className="flex shrink-0 flex-row gap-1 overflow-x-auto lg:w-52 lg:flex-col lg:gap-1">
+    <nav className="scrollbar-chip-row -mx-1 flex w-full shrink-0 flex-row gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:w-52 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
       {SETTINGS_SECTIONS.map((s) => {
         const Icon = s.icon;
         const selected = active === s.id;

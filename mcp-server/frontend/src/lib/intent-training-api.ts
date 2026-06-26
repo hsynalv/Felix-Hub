@@ -10,7 +10,8 @@ export interface IntentTrainConfig {
   minPendingForTrain: number;
   nlpConfidenceThreshold: number;
   runtimeLlmFallback: boolean;
-  requireHumanOnDisagreement: boolean;
+  redactSamples: boolean;
+  privateMode: boolean;
 }
 
 export interface IntentTrainingStatus {

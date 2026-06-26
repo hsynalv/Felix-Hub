@@ -1,6 +1,7 @@
 import { lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 const HomePage = lazy(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
 const ChatPage = lazy(() => import("@/pages/ChatPage").then((m) => ({ default: m.ChatPage })));
@@ -17,27 +18,33 @@ const BrainPage = lazy(() => import("@/pages/BrainPage").then((m) => ({ default:
 const IntentTrainingPage = lazy(() =>
   import("@/pages/IntentTrainingPage").then((m) => ({ default: m.IntentTrainingPage }))
 );
+const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<HomePage />} />
-          <Route path="chat" element={<ChatPage />} />
-          <Route path="tools" element={<ToolsPage />} />
-          <Route path="plugins" element={<PluginsPage />} />
-          <Route path="audit" element={<AuditPage />} />
-          <Route path="admin" element={<AdminPage />} />
-          <Route path="approvals" element={<AdminPage defaultTab="approvals" />} />
-          <Route path="observability" element={<ObservabilityPage />} />
-          <Route path="usage" element={<UsagePage />} />
-          <Route path="runs" element={<RunsPage />} />
-          <Route path="projects" element={<ProjectsPage />} />
-          <Route path="projects/:projectKey" element={<ProjectsPage />} />
-          <Route path="brain" element={<BrainPage />} />
-          <Route path="intent-training" element={<IntentTrainingPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppShell />}>
+            <Route index element={<HomePage />} />
+            <Route path="chat" element={<ChatPage />} />
+            <Route path="tools" element={<ToolsPage />} />
+            <Route path="plugins" element={<PluginsPage />} />
+            <Route path="audit" element={<AuditPage />} />
+            <Route path="admin" element={<AdminPage />} />
+            <Route path="approvals" element={<AdminPage defaultTab="approvals" />} />
+            <Route path="observability" element={<ObservabilityPage />} />
+            <Route path="usage" element={<UsagePage />} />
+            <Route path="runs" element={<RunsPage />} />
+            <Route path="projects" element={<ProjectsPage />} />
+            <Route path="projects/:projectKey" element={<ProjectsPage />} />
+            <Route path="brain" element={<BrainPage />} />
+            <Route path="intent-training" element={<IntentTrainingPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
         </Route>
         <Route path="ui" element={<Navigate to="/chat" replace />} />
         <Route path="ui/*" element={<Navigate to="/chat" replace />} />

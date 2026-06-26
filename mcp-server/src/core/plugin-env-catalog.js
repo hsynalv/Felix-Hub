@@ -18,6 +18,9 @@ export const CORE_ENV_CATALOG = [
   { name: "HUB_PERSISTENCE_ENABLED", required: false, description: "Enable MSSQL persistence" },
   { name: "HUB_MSSQL_URL", required: false, description: "MSSQL connection for hub persistence" },
   { name: "HUB_SETTINGS_MASTER_KEY", required: false, description: "Master key for encrypted settings storage" },
+  { name: "HUB_SEED_EMAIL", required: false, description: "Initial owner email when no users exist (bootstrap)" },
+  { name: "HUB_SEED_PASSWORD", required: false, description: "Initial owner password for first-time seed (set in .env only)" },
+  { name: "HUB_SEED_DISPLAY_NAME", required: false, description: "Display name for seeded owner account" },
   { name: "REDIS_URL", required: false, description: "Redis connection URL for jobs and cache" },
 ];
 
@@ -69,10 +72,15 @@ export const PLUGIN_ENV_CATALOG = {
     { name: "N8N_BASE_URL", required: false, description: "n8n instance base URL" },
   ],
   notifications: [
-    { name: "TELEGRAM_BOT_TOKEN", required: false, description: "Telegram bot token for outbound messages" },
-    { name: "TELEGRAM_WEBHOOK_SECRET", required: false, description: "Secret for Telegram webhook validation" },
-    { name: "TELEGRAM_ALLOWED_CHAT_IDS", required: false, description: "Comma-separated allowed Telegram chat IDs" },
-    { name: "TELEGRAM_POLLING", required: false, description: "Enable Telegram long-polling mode" },
+    { name: "TELEGRAM_BOT_TOKEN", required: false, description: "Telegram bot token (BotFather)" },
+    { name: "TELEGRAM_CHAT_ID", required: false, description: "Bildirimlerin gideceği chat ID (genelde senin kullanıcı ID'n)" },
+    { name: "TELEGRAM_ALLOWED_CHAT_IDS", required: false, description: "Bota yazabilecek chat ID'ler (virgülle ayrılmış whitelist)" },
+    { name: "TELEGRAM_WEBHOOK_SECRET", required: false, description: "Webhook doğrulama secret'ı (production zorunlu)" },
+    { name: "TELEGRAM_POLLING", required: false, description: "Long-polling (sadece lokal dev; production'da false)" },
+    { name: "TELEGRAM_NOTIFY_UI_TOKEN", required: false, description: "UI giriş kodlarını Telegram'a gönder (true/false)" },
+    { name: "TELEGRAM_CHAT_PROFILE", required: false, description: "Telegram chat profili (default: telegram_assistant)" },
+    { name: "TELEGRAM_AUTO_APPROVE_TOOLS", required: false, description: "Virgülle ayrılmış otomatik onaylı tool adları (Notion write)" },
+    { name: "TELEGRAM_RATE_LIMIT_PER_MIN", required: false, description: "Kullanıcı mesajı rate limit (default: 20)" },
   ],
   rag: [
     { name: "OPENAI_API_KEY", required: false, description: "Embedding provider API key" },

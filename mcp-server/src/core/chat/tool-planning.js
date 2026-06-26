@@ -4,6 +4,7 @@
 
 import { toolMatchesIntent } from "./tool-intent.js";
 import { checkHttpRequestDedicatedRouting } from "./http-dedicated-routing.js";
+import { isRiskyIntentMismatch } from "./intent-decision.js";
 
 const PLANNING_PROTOCOL = `## Tool planning protocol
 Before calling any tool:
@@ -144,13 +145,23 @@ export function guardToolCall(name, args, context = {}, toolDef = null) {
   }
 
   if (context.intent && context.intent !== "general" && context.intent !== "no_tool") {
-    if (!toolMatchesIntent(context.intent, name) && isWrite) {
-      return {
-        blocked: false,
-        warn: true,
-        code: "tool_intent_mismatch",
-        reason: `Tool ${name} may not match detected intent ${context.intent}. Proceed only if justified.`,
-      };
+    const matches = toolMatchesIntent(context.intent, name);
+    if (!matches) {
+      if (isRiskyIntentMismatch(name, context.intent)) {
+        return {
+          blocked: true,
+          code: "tool_call_rejected_by_guard",
+          reason: `Tool ${name} does not match intent ${context.intent} (risky family blocked).`,
+        };
+      }
+      if (isWrite || isReadToolName(name, tags)) {
+        return {
+          blocked: false,
+          warn: true,
+          code: "tool_intent_mismatch",
+          reason: `Tool ${name} may not match detected intent ${context.intent}. Prefer intent-aligned tools.`,
+        };
+      }
     }
   }
 

@@ -5,15 +5,25 @@
 import { Router } from "express";
 import { getEnvValue } from "../../core/settings/effective-config.js";
 import { runChatTurn } from "../../core/chat-orchestrator.js";
+import { resolveTelegramChatProfile } from "../../core/chat/chat-profiles.js";
 import { auditLog } from "../../core/audit/index.js";
-import { sendTelegram, getTelegramConfig, isTelegramConfigured } from "./channels/telegram.js";
+import {
+  sendTelegram,
+  sendChatAction,
+  replyToChatChunks,
+  getTelegramConfig,
+  isTelegramConfigured,
+} from "./channels/telegram.js";
 import {
   getTelegramSession,
   appendTelegramHistory,
 } from "./telegram-session.js";
 
 const rateLimitBuckets = new Map();
-const RATE_LIMIT_PER_MIN = parseInt(process.env.TELEGRAM_RATE_LIMIT_PER_MIN || "10", 10);
+
+function getRateLimitPerMin() {
+  return parseInt(getEnvValue("TELEGRAM_RATE_LIMIT_PER_MIN") || "20", 10);
+}
 
 let pollingActive = false;
 
@@ -31,6 +41,7 @@ function isChatAllowed(chatId) {
 
 function checkRateLimit(chatId) {
   const key = String(chatId);
+  const limit = getRateLimitPerMin();
   const now = Date.now();
   let bucket = rateLimitBuckets.get(key);
   if (!bucket || now - bucket.windowStart > 60_000) {
@@ -38,7 +49,7 @@ function checkRateLimit(chatId) {
     rateLimitBuckets.set(key, bucket);
   }
   bucket.count += 1;
-  return bucket.count <= RATE_LIMIT_PER_MIN;
+  return bucket.count <= limit;
 }
 
 export function verifyWebhookSecret(req) {
@@ -65,22 +76,29 @@ async function auditTelegramTurn(chatId, operation, success, extra = {}) {
 }
 
 async function replyToChat(chatId, text) {
-  await sendTelegram({
-    message: text.slice(0, 4000),
-    chatId: String(chatId),
-  });
+  await replyToChatChunks(chatId, text);
+}
+
+function toolProgressLabel(toolName) {
+  const n = String(toolName || "");
+  if (n.startsWith("notion_")) return "Notion'da işlem yapıyorum…";
+  if (n.startsWith("tavily")) return "İnternette araştırıyorum…";
+  if (n.startsWith("brain_")) return "Bellekte arıyorum…";
+  return "İşlem yapıyorum…";
 }
 
 function helpText() {
   return [
-    "mcp-hub Telegram bot",
+    "Asistan — MCP Hub kişisel yardımcı bot",
+    "Geliştiren: Hüseyin Alav",
+    "https://asistan.huseyinalav.com",
     "",
     "/start — karşılama",
     "/help — bu mesaj",
     "/tools — kullanılabilir araç sayısı",
     "/ask <soru> — hub agent'a sor",
     "",
-    "Serbest metin de soru olarak işlenir (read-only tools).",
+    "Serbest metin: araştırma, Notion projeleri, web araması (Tavily).",
   ].join("\n");
 }
 
@@ -89,7 +107,10 @@ async function handleCommand(chatId, text) {
   const lower = trimmed.toLowerCase();
 
   if (lower === "/start") {
-    await replyToChat(chatId, "Merhaba! mcp-hub Telegram bot aktif.\n\n/help ile komutları gör.");
+    await replyToChat(
+      chatId,
+      "Merhaba! Ben Asistan — Hüseyin Alav tarafından geliştirilen MCP Hub yardımcı botuyum.\n\n/help ile komutları gör."
+    );
     return { handled: true };
   }
 
@@ -119,32 +140,46 @@ async function handleCommand(chatId, text) {
 }
 
 async function processAgentMessage(chatId, text) {
+  const rateLimit = getRateLimitPerMin();
   if (!checkRateLimit(chatId)) {
-    await replyToChat(chatId, "Rate limit: dakikada en fazla " + RATE_LIMIT_PER_MIN + " mesaj.");
+    await replyToChat(chatId, `Rate limit: dakikada en fazla ${rateLimit} kullanıcı mesajı.`);
     await auditTelegramTurn(chatId, "telegram_message", false, { reason: "rate_limit" });
     return;
   }
 
   const session = await getTelegramSession(chatId);
   const history = session.history || [];
+  const chatProfile = resolveTelegramChatProfile();
+
+  await sendChatAction(chatId, "typing");
+  await replyToChat(chatId, "Bakıyorum, birazdan yazacağım…");
+
+  let progressSent = false;
 
   try {
     const result = await runChatTurn({
       message: text,
       history,
       includeBrainContext: true,
-      allowWriteTools: false,
+      allowWriteTools: true,
+      chatProfile,
       context: {
         method: "TELEGRAM",
         actor: `telegram:${chatId}`,
         user: `telegram:${chatId}`,
         channel: "telegram",
-        scopes: ["read"],
+        scopes: ["read", "write"],
+        guardBlocks: [],
       },
-      onToolCall: (payload) => {
+      onToolCall: async (payload) => {
         void auditTelegramTurn(chatId, `tool_${payload.name || "unknown"}`, true, {
           phase: payload.phase,
         });
+        if (payload.phase === "start" && !progressSent) {
+          progressSent = true;
+          await sendChatAction(chatId, "typing");
+          await replyToChat(chatId, toolProgressLabel(payload.name));
+        }
       },
     });
 
@@ -154,11 +189,13 @@ async function processAgentMessage(chatId, text) {
         ? "Yanıt üretilemedi (tool iterasyon limiti)."
         : "Yanıt üretilemedi.");
 
-    await replyToChat(chatId, answer);
+    await sendChatAction(chatId, "typing");
+    await replyToChatChunks(chatId, answer);
     await appendTelegramHistory(chatId, text, answer);
     await auditTelegramTurn(chatId, "telegram_chat_turn", true, {
       iterations: result.iterations,
       toolCount: result.toolCalls?.length || 0,
+      chatProfile,
     });
   } catch (err) {
     await replyToChat(chatId, `Hata: ${err.message}`);

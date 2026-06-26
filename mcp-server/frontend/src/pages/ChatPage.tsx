@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Menu, PanelRight, Sparkles } from "lucide-react";
+import { Bot, MessagesSquare, PanelRight, Sparkles } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,7 @@ import { ChatInstructionsSheet } from "@/components/chat/ChatInstructionsSheet";
 import {
   streamChat,
   submitChatApproval,
+  submitWrongIntentFeedback,
   type ApprovalPayload,
   type ChatMessage,
   type ChatStreamMeta,
@@ -50,6 +51,8 @@ import { useSpeechSynthesis } from "@/lib/use-speech-synthesis";
 import { parsePluginSlashMessage } from "@/lib/chat-plugin-slash";
 import type { SlashPluginOption } from "@/components/chat/ChatSlashMenu";
 import { conversationIdsMatch, normalizeConversationId } from "@/lib/conversation-ids";
+import { PREPARE_NAVIGATION_EVENT, releaseRadixBodyLock } from "@/lib/radix-body-lock";
+import { MainNavMenuButton } from "@/components/layout/MainNavMenuButton";
 
 let messageIdSeq = 0;
 function nextMessageId() {
@@ -89,9 +92,15 @@ export function ChatPage() {
   });
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
   const [turnMeta, setTurnMeta] = useState<ChatStreamMeta | null>(null);
+  const [lastTurnUserMessage, setLastTurnUserMessage] = useState<string | null>(null);
+  const [intentFeedbackOpen, setIntentFeedbackOpen] = useState(false);
+  const [correctIntent, setCorrectIntent] = useState("general");
+  const [intentFeedbackBusy, setIntentFeedbackBusy] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(() => searchParams.get("run"));
-  const [traceOpen, setTraceOpen] = useState(true);
   const [isDesktopTrace, setIsDesktopTrace] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches
+  );
+  const [traceOpen, setTraceOpen] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -119,7 +128,11 @@ export function ChatPage() {
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
-    const onChange = () => setIsDesktopTrace(mq.matches);
+    const onChange = () => {
+      const desktop = mq.matches;
+      setIsDesktopTrace(desktop);
+      if (!desktop) setTraceOpen(false);
+    };
     onChange();
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
@@ -137,7 +150,28 @@ export function ChatPage() {
         cancelAnimationFrame(tokenRafRef.current);
         tokenRafRef.current = null;
       }
+      releaseRadixBodyLock();
     };
+  }, []);
+
+  const closeOverlays = useCallback(() => {
+    setTraceOpen(false);
+    setSidebarOpen(false);
+    setIntentFeedbackOpen(false);
+    setApproval(null);
+    approvalResolve.current?.(false);
+    approvalResolve.current = null;
+    releaseRadixBodyLock();
+  }, []);
+
+  useEffect(() => {
+    const onPrepareNav = () => closeOverlays();
+    window.addEventListener(PREPARE_NAVIGATION_EVENT, onPrepareNav);
+    return () => window.removeEventListener(PREPARE_NAVIGATION_EVENT, onPrepareNav);
+  }, [closeOverlays]);
+
+  useLayoutEffect(() => {
+    return () => releaseRadixBodyLock();
   }, []);
 
   const flushTokenBuffer = useCallback(() => {
@@ -321,6 +355,7 @@ export function ChatPage() {
   );
 
   const applyPendingUrl = useCallback(() => {
+    if (!mountedRef.current) return;
     const pending = pendingUrlRef.current;
     if (!pending?.c) return;
     const normalized = normalizeConversationId(pending.c) ?? pending.c;
@@ -379,6 +414,7 @@ export function ChatPage() {
     setInput("");
     setStreaming(true);
     setTurnMeta(null);
+    setLastTurnUserMessage(msg);
     holdLocalMessagesRef.current = true;
     requestAnimationFrame(() => composerRef.current?.focus());
 
@@ -418,6 +454,8 @@ export function ChatPage() {
             toolCount: data.toolCount,
             brainContext: data.brainContext,
             projectContext: data.projectContext,
+            runId: data.runId,
+            conversationId: data.conversationId,
           });
           if (data.conversationId && typeof data.conversationId === "string") {
             resolvedConversationId = data.conversationId;
@@ -617,6 +655,45 @@ export function ChatPage() {
       ? conversationQuery.data?.title
       : undefined;
 
+  const toolIntentOptions = useMemo(
+    () =>
+      modelsData?.toolIntents?.length
+        ? modelsData.toolIntents
+        : [
+            "no_tool",
+            "brain_save",
+            "brain_recall",
+            "project_context",
+            "read_repo",
+            "modify_files",
+            "run_command",
+            "external_api",
+            "automation",
+            "general",
+          ],
+    [modelsData?.toolIntents]
+  );
+
+  const submitIntentFeedback = async () => {
+    if (!lastTurnUserMessage || !turnMeta?.toolIntent) return;
+    setIntentFeedbackBusy(true);
+    try {
+      await submitWrongIntentFeedback({
+        userMessage: lastTurnUserMessage,
+        predictedIntent: turnMeta.toolIntent,
+        correctIntent,
+        conversationId: turnMeta.conversationId ?? activeConversationId ?? undefined,
+        runId: turnMeta.runId,
+      });
+      toast.show("Intent geri bildirimi kaydedildi");
+      setIntentFeedbackOpen(false);
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "Geri bildirim kaydedilemedi", "error");
+    } finally {
+      setIntentFeedbackBusy(false);
+    }
+  };
+
   const sidebarHighlightId = sidebarActiveId ?? activeConversationId;
 
   const loadingConversation =
@@ -627,14 +704,17 @@ export function ChatPage() {
 
   const sidebarProps = {
     activeId: sidebarHighlightId,
-    onSelect: selectConversation,
+    onSelect: (id: string | null) => {
+      selectConversation(id);
+      setSidebarOpen(false);
+    },
     persistenceEnabled: modelsData?.persistenceEnabled,
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <div className="flex h-full min-h-0 flex-1 overflow-hidden">
-        <div className="hidden h-full min-h-0 shrink-0 md:flex">
+        <div className="hidden h-full min-h-0 shrink-0 lg:flex">
           <ChatSidebar {...sidebarProps} />
         </div>
 
@@ -642,36 +722,47 @@ export function ChatPage() {
           <motion.header
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-md"
+            className="relative z-10 flex shrink-0 flex-col gap-2 border-b border-border/60 bg-background/80 px-3 py-2 backdrop-blur-md sm:gap-3 sm:px-4 sm:py-3"
           >
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+              <MainNavMenuButton className="md:hidden shrink-0 rounded-xl" />
               <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="shrink-0 rounded-xl md:hidden">
-                    <Menu className="h-5 w-5" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 gap-1.5 rounded-xl px-2 lg:hidden"
+                    title="Sohbet listesi"
+                    aria-label="Sohbet listesi"
+                  >
+                    <MessagesSquare className="h-5 w-5" />
+                    <span className="hidden text-xs font-medium sm:inline">Sohbetler</span>
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="flex h-full w-80 flex-col border-border/60 p-0">
-                  <SheetHeader className="sr-only">
-                    <SheetTitle>Sohbetler</SheetTitle>
+                <SheetContent
+                  side="left"
+                  className="z-[60] flex h-full w-[min(20rem,88vw)] flex-col gap-0 border-border/60 p-0 lg:hidden"
+                >
+                  <SheetHeader className="border-b border-border/60 px-4 py-3 text-left">
+                    <SheetTitle className="text-sm font-semibold">Sohbetler</SheetTitle>
                   </SheetHeader>
-                  {sidebarProps && <ChatSidebar {...sidebarProps} />}
+                  <ChatSidebar {...sidebarProps} embedded className="w-full border-0" />
                 </SheetContent>
               </Sheet>
 
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-gradient-to-br from-primary/15 to-accent/10">
+              <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-gradient-to-br from-primary/15 to-accent/10 sm:flex">
                 <Bot className="h-5 w-5 text-primary" />
               </div>
 
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
                   <h1 className="truncate text-sm font-semibold">
                     {conversationTitle || "Yeni sohbet"}
                   </h1>
                   <AnimatePresence>
                     {streaming && (
                       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-                        <Badge variant="success" className="gap-1 text-[10px]">
+                        <Badge variant="success" className="hidden gap-1 text-[10px] sm:inline-flex">
                           <span className="relative flex h-1.5 w-1.5">
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
                             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
@@ -682,15 +773,36 @@ export function ChatPage() {
                     )}
                   </AnimatePresence>
                 </div>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="hidden truncate text-xs text-muted-foreground sm:block">
                   {modelsLoading
                     ? "Modeller yükleniyor…"
                     : modelsError
                       ? "Model listesi alınamadı"
                       : `${modelsData?.provider ?? "—"} · ${modelsData?.toolCount ?? 0} araç`}
                 </p>
-                {turnMeta && (
-                  <div className="mt-1 flex flex-wrap gap-1">
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1 sm:hidden">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-xl"
+                  title="Run trace"
+                  onClick={() => setTraceOpen((o) => !o)}
+                >
+                  <PanelRight className="h-4 w-4" />
+                </Button>
+                <ChatInstructionsSheet
+                  settings={chatSettings}
+                  persistenceEnabled={modelsData?.persistenceEnabled !== false}
+                  onSave={handleSaveSettings}
+                  disabled={modelsLoading}
+                />
+              </div>
+            </div>
+
+            {turnMeta && (
+              <div className="hidden max-w-full flex-wrap gap-1 sm:flex">
                     {turnMeta.toolIntent && (
                       <Badge variant="default" className="font-mono text-[9px]">
                         Intent: {turnMeta.toolIntent}
@@ -711,28 +823,42 @@ export function ChatPage() {
                         {turnMeta.toolCount} tool
                       </Badge>
                     )}
-                  </div>
-                )}
+                    {turnMeta.toolIntent && lastTurnUserMessage && !streaming && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-5 px-1.5 text-[9px]"
+                        onClick={() => {
+                          setCorrectIntent("general");
+                          setIntentFeedbackOpen(true);
+                        }}
+                      >
+                        Yanlış intent
+                      </Button>
+                    )}
               </div>
-            </div>
+            )}
 
-            <div className="flex shrink-0 items-center gap-2">
-              <ProjectSwitcher className="hidden sm:flex" />
+            <div className="flex min-w-0 items-center gap-2 overflow-x-auto sm:justify-end">
+              <ProjectSwitcher className="hidden md:flex" />
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-xl"
+                className="hidden shrink-0 rounded-xl sm:inline-flex"
                 title="Run trace"
                 onClick={() => setTraceOpen((o) => !o)}
               >
                 <PanelRight className="h-4 w-4" />
               </Button>
-              <ChatInstructionsSheet
-                settings={chatSettings}
-                persistenceEnabled={modelsData?.persistenceEnabled !== false}
-                onSave={handleSaveSettings}
-                disabled={modelsLoading}
-              />
+              <div className="hidden sm:block">
+                <ChatInstructionsSheet
+                  settings={chatSettings}
+                  persistenceEnabled={modelsData?.persistenceEnabled !== false}
+                  onSave={handleSaveSettings}
+                  disabled={modelsLoading}
+                />
+              </div>
               <Select
                 value={selectedModel}
                 onValueChange={(v) => {
@@ -741,7 +867,7 @@ export function ChatPage() {
                 }}
                 disabled={modelsLoading || !modelsData}
               >
-              <SelectTrigger className="w-[min(180px,36vw)] rounded-xl border-border/60 bg-card/60 backdrop-blur-sm">
+              <SelectTrigger className="h-9 min-w-0 flex-1 rounded-xl border-border/60 bg-card/60 backdrop-blur-sm sm:w-[min(180px,36vw)] sm:flex-none">
                 <Sparkles className="mr-2 h-3.5 w-3.5 shrink-0 text-primary" />
                 <SelectValue placeholder="Model seç" />
               </SelectTrigger>
@@ -754,7 +880,7 @@ export function ChatPage() {
               </SelectContent>
             </Select>
             <Input
-              className="hidden w-[min(140px,30vw)] rounded-xl border-border/60 bg-card/60 sm:block"
+              className="hidden h-9 w-[min(140px,30vw)] shrink-0 rounded-xl border-border/60 bg-card/60 md:block"
               placeholder="Özel model"
               value={customModel}
               onChange={(e) => setCustomModel(e.target.value)}
@@ -819,8 +945,8 @@ export function ChatPage() {
         )}
       </div>
 
-      <Sheet open={traceOpen && !isDesktopTrace} onOpenChange={setTraceOpen}>
-        <SheetContent side="right" className="flex h-full w-[min(20rem,90vw)] flex-col border-border/60 p-0 lg:hidden">
+      <Sheet open={traceOpen && !isDesktopTrace} onOpenChange={setTraceOpen} modal={false}>
+        <SheetContent side="right" overlay={false} className="flex h-full w-[min(20rem,90vw)] flex-col border-border/60 p-0 lg:hidden">
           <SheetHeader className="sr-only">
             <SheetTitle>Run trace</SheetTitle>
           </SheetHeader>
@@ -859,6 +985,38 @@ export function ChatPage() {
             </Button>
             <Button variant="destructive" onClick={() => handleApproval(true)}>
               Onayla ve çalıştır
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={intentFeedbackOpen} onOpenChange={setIntentFeedbackOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Intent düzelt</DialogTitle>
+            <DialogDescription>
+              Tahmin: <span className="font-mono">{turnMeta?.toolIntent}</span>. Doğru intent&apos;i seçin;
+              örnek eğitim korpusuna eklenir.
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={correctIntent} onValueChange={setCorrectIntent}>
+            <SelectTrigger>
+              <SelectValue placeholder="Intent seç" />
+            </SelectTrigger>
+            <SelectContent>
+              {toolIntentOptions.map((intent) => (
+                <SelectItem key={intent} value={intent}>
+                  {intent}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIntentFeedbackOpen(false)}>
+              İptal
+            </Button>
+            <Button onClick={() => void submitIntentFeedback()} disabled={intentFeedbackBusy}>
+              Kaydet
             </Button>
           </DialogFooter>
         </DialogContent>

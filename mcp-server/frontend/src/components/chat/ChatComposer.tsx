@@ -123,7 +123,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   return (
     <TooltipProvider>
-      <div className="relative z-10 shrink-0 px-3 pb-2 pt-1 sm:px-4 sm:pb-3">
+      <div className="relative z-10 shrink-0 px-3 pb-safe pt-1 sm:px-4 sm:pb-3">
         <div className="pointer-events-auto relative mx-auto max-w-3xl">
           {slashState?.open && (
             <ChatSlashMenu
@@ -232,7 +232,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             </motion.div>
           </div>
 
-          <p className="mt-1 text-center text-[10px] leading-tight text-muted-foreground/70">
+          <p className="mt-1 hidden text-center text-[10px] leading-tight text-muted-foreground/70 sm:block">
             <span className="font-mono">/brain</span> gibi eklenti seç · Enter gönder · Shift+Enter satır
           </p>
         </div>

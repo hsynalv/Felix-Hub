@@ -2,6 +2,8 @@
  * Chat tool profiles — per-conversation behavior modes.
  */
 
+import { getEnvValue } from "../settings/effective-config.js";
+
 export const CHAT_PROFILE_IDS = [
   "balanced",
   "answer_only",
@@ -11,6 +13,7 @@ export const CHAT_PROFILE_IDS = [
   "automation",
   "personal_assistant",
   "safe",
+  "telegram_assistant",
   "high_autonomy",
 ];
 
@@ -66,6 +69,13 @@ export const CHAT_PROFILES = {
     toolIntents: ["no_tool", "brain_recall"],
     maxIterations: 3,
   },
+  telegram_assistant: {
+    label: "Telegram asistan",
+    description: "Telegram kanalı — araştırma, Notion, brain; sınırlı write (policy)",
+    allowWriteTools: true,
+    toolIntents: ["brain_recall", "project_context", "external_api", "automation"],
+    maxIterations: 6,
+  },
   high_autonomy: {
     label: "Yüksek özerklik",
     description: "Tüm write araçları (onay politikası geçerli)",
@@ -78,6 +88,14 @@ export const CHAT_PROFILES = {
 export function resolveChatProfile(profileId) {
   const id = profileId && CHAT_PROFILES[profileId] ? profileId : "balanced";
   return { id, ...CHAT_PROFILES[id] };
+}
+
+/**
+ * Telegram webhook chat profile (env override).
+ */
+export function resolveTelegramChatProfile() {
+  const raw = (getEnvValue("TELEGRAM_CHAT_PROFILE") || "telegram_assistant").trim();
+  return CHAT_PROFILES[raw] ? raw : "telegram_assistant";
 }
 
 /**

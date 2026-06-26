@@ -1,4 +1,4 @@
-import { config } from "../../core/config.js";
+import { getN8nConfig } from "../../core/settings/effective-config.js";
 
 const TIMEOUT_MS = 15_000;
 
@@ -10,13 +10,13 @@ function classifyHttpError(status) {
 }
 
 async function apiRequest(path) {
-  const { baseUrl, apiBase, apiKey } = config.n8n;
+  const { baseUrl, apiBase, apiKey } = getN8nConfig();
 
   if (!apiKey) {
     return {
       ok: false,
       error: "missing_api_key",
-      message: "N8N_API_KEY is not configured — set it in environment variables",
+      message: "N8N_API_KEY is not configured — set it in Ayarlar → Entegrasyonlar → n8n",
     };
   }
 
@@ -100,13 +100,13 @@ export async function fetchWorkflowById(id) {
  * @returns {Promise<{ok: boolean, data?: any, error?: string}>}
  */
 export async function createWorkflow(workflowJson) {
-  const { baseUrl, apiBase, apiKey } = config.n8n;
+  const { baseUrl, apiBase, apiKey } = getN8nConfig();
 
   if (!apiKey) {
     return {
       ok: false,
       error: "missing_api_key",
-      message: "N8N_API_KEY is not configured",
+      message: "N8N_API_KEY is not configured — set it in Ayarlar → Entegrasyonlar → n8n",
     };
   }
 
@@ -149,7 +149,7 @@ export async function createWorkflow(workflowJson) {
  * @returns {Promise<{ok: boolean, data?: any, error?: string}>}
  */
 export async function updateWorkflow(id, workflowJson) {
-  const { baseUrl, apiBase, apiKey } = config.n8n;
+  const { baseUrl, apiBase, apiKey } = getN8nConfig();
 
   if (!apiKey) {
     return {
@@ -198,7 +198,7 @@ export async function updateWorkflow(id, workflowJson) {
  * @returns {Promise<{ok: boolean, data?: any, error?: string}>}
  */
 export async function activateWorkflow(id, active) {
-  const { baseUrl, apiBase, apiKey } = config.n8n;
+  const { baseUrl, apiBase, apiKey } = getN8nConfig();
 
   if (!apiKey) {
     return {

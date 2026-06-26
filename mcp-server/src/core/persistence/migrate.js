@@ -21,6 +21,8 @@ const MIGRATION_FILES = [
   { version: 9, file: "009_sidecar_devices.sql" },
   { version: 10, file: "010_mcp_connectors.sql" },
   { version: 11, file: "011_intent_training.sql" },
+  { version: 12, file: "012_intent_sample_decision.sql" },
+  { version: 13, file: "013_users_auth.sql" },
 ];
 
 /**

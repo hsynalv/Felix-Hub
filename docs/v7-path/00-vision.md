@@ -71,7 +71,7 @@ Agent her şeyi yapabilir, ama her şeyi onaysız yapmamalı.
 ## Ürün ilkeleri (V7)
 
 1. **Personal first** — Engineering dashboard değil; günlük merkez ekran.
-2. **Remote by default** — Telegram ile uzaktan yönetim birincil kanal.
+2. **Remote by default** — Telegram ile uzaktan yönetim birincil kanal. Tam kapsam hedefi: evde değilken bile **kendi bilgisayarından dosya alma**, ekran görme ve onaylı desktop/browser işlemleri — V4 sidecar/desktop agent üzerinden ([03-telegram-remote-control.md](./03-telegram-remote-control.md) ürün notu).
 3. **Payment is sacred** — Ödeme, kart, adres değişikliği her zaman insan onayında.
 4. **Memory is explicit** — remember / forget / pin / edit; gizli profil yok.
 5. **Fail-safe over retry** — Belirsiz UI hedefi → tıklama yok; desktop fail → kullanıcıya sor.

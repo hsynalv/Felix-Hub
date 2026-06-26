@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { MainNavMenuButton } from "@/components/layout/MainNavMenuButton";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { BrainGraph, MEMORY_TYPE_COLORS } from "@/components/BrainGraph";
 import {
@@ -489,6 +490,7 @@ export function BrainPage() {
 
   const headerActions = (
     <div className="flex flex-wrap items-center gap-2">
+      <MainNavMenuButton className="md:hidden" showLabel />
       <Button variant="outline" size="sm" onClick={refreshAll} disabled={listQuery.isFetching}>
         <RefreshCw className={cn("mr-1.5 h-4 w-4", listQuery.isFetching && "animate-spin")} />
         Yenile
@@ -676,7 +678,7 @@ export function BrainPage() {
         </CardContent>
       </Card>
 
-      <div className="grid min-h-[min(70vh,640px)] shrink-0 gap-4 lg:grid-cols-5">
+      <div className="grid min-h-[min(50vh,520px)] shrink-0 gap-4 lg:min-h-[min(70vh,640px)] lg:grid-cols-5">
         <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-3">
           <CardHeader className="shrink-0 border-b border-border/60 py-3">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
@@ -753,7 +755,7 @@ export function BrainPage() {
             </ScrollArea>
         </Card>
 
-        <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-2">
+        <Card className="hidden min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-2 lg:flex">
           <CardHeader className="shrink-0 border-b border-border/60 py-3">
             <CardTitle className="text-sm font-medium">Bellek detayı</CardTitle>
           </CardHeader>
@@ -773,6 +775,17 @@ export function BrainPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Sheet open={!!selectedId} onOpenChange={(open) => !open && setSelectedId(null)}>
+        <SheetContent side="right" className="flex w-full max-w-md flex-col gap-0 p-0 lg:hidden">
+          <SheetHeader className="shrink-0 border-b border-border/60 px-4 py-3 text-left">
+            <SheetTitle className="text-sm font-medium">Bellek detayı</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="min-h-0 flex-1">
+            {detailProps ? <MemoryDetailContent {...detailProps} /> : null}
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
             </div>
           </div>
         </>
@@ -780,6 +793,7 @@ export function BrainPage() {
         <>
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-card/80 px-3 py-2 backdrop-blur-sm">
             <div className="flex min-w-0 items-center gap-2">
+              <MainNavMenuButton className="md:hidden shrink-0" />
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Network className="h-4 w-4" />
               </div>

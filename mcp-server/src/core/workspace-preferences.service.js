@@ -17,6 +17,7 @@ const VALID_ENVS = new Set(["development", "staging", "production"]);
 const memoryStore = new Map();
 
 export function resolveActorId(req) {
+  if (req?.user?.userId) return String(req.user.userId);
   if (!isAuthEnabled()) return "open";
   const key = extractAuthKey(req);
   if (!key) return "anonymous";

@@ -39,6 +39,8 @@ type ChatSidebarProps = {
   onSelect: (id: string | null) => void;
   persistenceEnabled?: boolean;
   className?: string;
+  /** Inside a drawer — hide duplicate chrome; sheet supplies the title. */
+  embedded?: boolean;
 };
 
 const SCOPE_OPTIONS: { id: ConversationProjectScope; label: string }[] = [
@@ -47,7 +49,7 @@ const SCOPE_OPTIONS: { id: ConversationProjectScope; label: string }[] = [
   { id: "unassigned", label: "Projesiz" },
 ];
 
-export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className }: ChatSidebarProps) {
+export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className, embedded }: ChatSidebarProps) {
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<ConversationProjectScope>("all");
   const [workspaceProjectId, setWorkspaceProjectId] = useState(() => getProjectId());
@@ -110,6 +112,7 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
       <aside
         className={cn(
           "flex h-full min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-sidebar/95 backdrop-blur-sm",
+          embedded && "w-full border-0 bg-sidebar",
           className
         )}
       >
@@ -123,13 +126,15 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r border-border/60 bg-sidebar/95 text-sidebar-foreground backdrop-blur-sm",
+        "flex h-full min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r border-violet-500/15 bg-sidebar/95 text-sidebar-foreground backdrop-blur-sm",
+        embedded && "w-full border-0",
         className
       )}
     >
-      <div className="shrink-0 space-y-3 border-b border-border/60 p-4">
+      <div className={cn("shrink-0 space-y-3 border-b border-border/60 p-4", embedded && "border-violet-500/10 pt-3")}>
+        {!embedded && (
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
             <MessagesSquare className="h-4 w-4" />
           </div>
           <div>
@@ -137,6 +142,11 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
             <p className="text-[10px] text-muted-foreground">{conversations.length} kayıt</p>
           </div>
         </div>
+        )}
+
+        {embedded && (
+          <p className="text-[11px] text-muted-foreground">{conversations.length} sohbet</p>
+        )}
 
         <motion.div whileTap={{ scale: 0.98 }}>
           <Button

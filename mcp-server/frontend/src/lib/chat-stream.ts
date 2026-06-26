@@ -77,15 +77,16 @@ export async function streamChat(
   }
 ): Promise<void> {
   const key = getApiKey();
-  if (!key) throw new Error("API key gerekli");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...getProjectHeaders(),
+  };
+  if (key) headers.Authorization = `Bearer ${key}`;
 
   const res = await fetch("/ui/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-      ...getProjectHeaders(),
-    },
+    credentials: "include",
+    headers,
     signal: options?.signal,
     body: JSON.stringify({
       message,
@@ -174,4 +175,17 @@ export async function streamChat(
 
 export async function submitChatApproval(approvalId: string, approved: boolean): Promise<void> {
   await apiPost("/ui/chat/approve", { approval_id: approvalId, approved });
+}
+
+export async function submitWrongIntentFeedback(body: {
+  userMessage: string;
+  predictedIntent?: string;
+  correctIntent: string;
+  conversationId?: string;
+  runId?: string;
+}) {
+  return apiPost<{ ok: boolean; data: { sampleId?: string; skipped?: boolean } }>(
+    "/ui/chat/intent-feedback",
+    body
+  );
 }

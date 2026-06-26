@@ -4,6 +4,8 @@
 
 import { randomUUID } from "crypto";
 import { persistenceQuery, isPersistenceHealthy } from "../persistence/index.js";
+import { redactIntentSampleText } from "./intent-sample-redaction.js";
+import { getIntentTrainConfig } from "./tool-intent-config.js";
 
 /**
  * @param {object} sample
@@ -11,26 +13,35 @@ import { persistenceQuery, isPersistenceHealthy } from "../persistence/index.js"
 export async function recordIntentSample(sample) {
   if (!isPersistenceHealthy()) return null;
 
+  const config = getIntentTrainConfig();
+  if (config.privateMode) return null;
+
+  let userMessage = (sample.userMessage || "").slice(0, 2000);
+  if (config.redactSamples !== false) {
+    userMessage = redactIntentSampleText(userMessage).text;
+  }
+
   const id = randomUUID();
   await persistenceQuery(
     `INSERT INTO intent_training_samples (
       id, user_message, predicted_intent, predicted_confidence, prediction_source,
-      effective_intent, tools_used_json, guard_blocks_json, project_id, conversation_id,
-      run_id, chat_profile, model_version, label_status
+      effective_intent, tools_used_json, guard_blocks_json, decision_envelope_json,
+      project_id, conversation_id, run_id, chat_profile, model_version, label_status
     ) VALUES (
       @id, @userMessage, @predictedIntent, @predictedConfidence, @predictionSource,
-      @effectiveIntent, @toolsUsedJson, @guardBlocksJson, @projectId, @conversationId,
-      @runId, @chatProfile, @modelVersion, 'pending'
+      @effectiveIntent, @toolsUsedJson, @guardBlocksJson, @decisionEnvelopeJson,
+      @projectId, @conversationId, @runId, @chatProfile, @modelVersion, 'pending'
     )`,
     {
       id,
-      userMessage: (sample.userMessage || "").slice(0, 2000),
+      userMessage,
       predictedIntent: sample.predictedIntent || "general",
       predictedConfidence: sample.predictedConfidence ?? 0.5,
       predictionSource: sample.predictionSource || "regex",
       effectiveIntent: sample.effectiveIntent || null,
       toolsUsedJson: JSON.stringify(sample.toolsUsed || []),
       guardBlocksJson: JSON.stringify(sample.guardBlocks || []),
+      decisionEnvelopeJson: sample.decisionEnvelope ? JSON.stringify(sample.decisionEnvelope) : null,
       projectId: sample.projectId || null,
       conversationId: sample.conversationId || null,
       runId: sample.runId || null,
@@ -69,6 +80,7 @@ function mapSampleRow(r) {
     effectiveIntent: r.effective_intent,
     toolsUsed: safeJson(r.tools_used_json, []),
     guardBlocks: safeJson(r.guard_blocks_json, []),
+    decisionEnvelope: safeJson(r.decision_envelope_json, null),
     projectId: r.project_id,
     conversationId: r.conversation_id,
     runId: r.run_id,
@@ -199,6 +211,92 @@ export async function confirmSampleIntent(id, intent, { confirmedBy = "admin", l
     confirmedAt: new Date().toISOString(),
     confirmedBy,
   });
+}
+
+/**
+ * User feedback from chat UI — mark prediction wrong and add corrected utterance to corpus.
+ * @param {object} feedback
+ */
+export async function recordWrongIntentFeedback(feedback) {
+  const {
+    userMessage,
+    predictedIntent,
+    correctIntent,
+    conversationId,
+    runId,
+    confirmedBy = "ui",
+  } = feedback;
+
+  if (!userMessage?.trim() || !correctIntent?.trim()) {
+    throw Object.assign(new Error("userMessage and correctIntent required"), { code: "invalid_input" });
+  }
+
+  const config = getIntentTrainConfig();
+  if (config.privateMode) {
+    return { ok: true, skipped: true, reason: "private_mode" };
+  }
+
+  let redactedMessage = String(userMessage).slice(0, 2000);
+  if (config.redactSamples !== false) {
+    redactedMessage = redactIntentSampleText(redactedMessage).text;
+  }
+
+  let sampleId = null;
+  if (isPersistenceHealthy()) {
+    const match = await persistenceQuery(
+      `SELECT TOP 1 id FROM intent_training_samples
+       WHERE user_message = @userMessage
+         AND (@predictedIntent IS NULL OR predicted_intent = @predictedIntent)
+         AND (@conversationId IS NULL OR conversation_id = @conversationId)
+       ORDER BY created_at DESC`,
+      {
+        userMessage: redactedMessage,
+        predictedIntent: predictedIntent || null,
+        conversationId: conversationId || null,
+      }
+    );
+    sampleId = match?.recordset?.[0]?.id ?? null;
+
+    if (sampleId) {
+      await confirmSampleIntent(sampleId, correctIntent, { confirmedBy, labelStatus: "manual" });
+    } else {
+      sampleId = randomUUID();
+      await persistenceQuery(
+        `INSERT INTO intent_training_samples (
+          id, user_message, predicted_intent, predicted_confidence, prediction_source,
+          effective_intent, tools_used_json, guard_blocks_json, decision_envelope_json,
+          project_id, conversation_id, run_id, chat_profile, model_version, label_status,
+          labeled_intent, user_confirmed_intent, confirmed_at, confirmed_by
+        ) VALUES (
+          @id, @userMessage, @predictedIntent, 0.5, 'user_feedback',
+          @effectiveIntent, '[]', '[]', NULL,
+          NULL, @conversationId, @runId, NULL, NULL, 'manual',
+          @correctIntent, @correctIntent, SYSUTCDATETIME(), @confirmedBy
+        )`,
+        {
+          id: sampleId,
+          userMessage: redactedMessage,
+          predictedIntent: predictedIntent || "general",
+          effectiveIntent: predictedIntent || null,
+          conversationId: conversationId || null,
+          runId: runId || null,
+          correctIntent,
+          confirmedBy,
+        }
+      );
+    }
+
+    const { addCorpusEntry } = await import("./tool-intent-corpus.js");
+    await addCorpusEntry({
+      intent: correctIntent,
+      utterance: redactedMessage,
+      locale: /[çğıöşü]/i.test(redactedMessage) ? "tr" : "en",
+      source: "user_feedback",
+      sampleId,
+    });
+  }
+
+  return { ok: true, sampleId };
 }
 
 export async function countSamplesToday() {

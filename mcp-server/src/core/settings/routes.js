@@ -36,6 +36,13 @@ import { getPlugins } from "../plugins.js";
 import { getLlmConfigSnapshot } from "../llm-config.js";
 import { saveLlmConfig } from "./llm-config.service.js";
 import { normalizeNotionIdIfApplicable } from "../../plugins/notion/notion-ids.js";
+import { resolveSettingsNamespace } from "../auth/tenant-middleware.js";
+import { invalidateTenantOverlay } from "../auth/tenant-overlay.js";
+import { skipForHtmlNavigation } from "../http/html-navigation.js";
+
+function settingsActor(req) {
+  return req.user?.email || req.actor?.email || req.actor?.type || "admin";
+}
 
 const settingSchema = z.object({
   value: z.string().min(0).max(16_000),
@@ -53,18 +60,13 @@ const profileSchema = z.object({
   namespace: z.string().max(64).optional(),
 });
 
-function wantsHtml(req) {
-  const accept = req.headers.accept || "";
-  return accept.includes("text/html") && !accept.includes("application/json");
-}
-
 export function registerSettingsRoutes(app) {
   const router = Router();
 
-  router.get("/", requireScope("admin"), async (req, res, next) => {
-    if (wantsHtml(req)) return next();
+  router.get("/", skipForHtmlNavigation, requireScope("admin"), async (req, res) => {
     try {
-      const settings = await listSettings(req.query.namespace);
+      const namespace = resolveSettingsNamespace(req);
+      const settings = await listSettings(namespace);
       res.json({
         ok: true,
         data: {
@@ -94,9 +96,9 @@ export function registerSettingsRoutes(app) {
     }
   });
 
-  router.get("/connections", requireScope("admin"), async (_req, res) => {
+  router.get("/connections", requireScope("admin"), async (req, res) => {
     try {
-      const profiles = await listConnectionProfiles();
+      const profiles = await listConnectionProfiles(resolveSettingsNamespace(req));
       res.json({ ok: true, data: { profiles } });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "profiles_list_failed", message: err.message } });
@@ -109,11 +111,14 @@ export function registerSettingsRoutes(app) {
       if (!parsed.success) {
         return res.status(400).json({ ok: false, error: parsed.error.flatten() });
       }
-      const profile = await upsertConnectionProfile(parsed.data);
+      const profile = await upsertConnectionProfile({
+        ...parsed.data,
+        namespace: resolveSettingsNamespace(req),
+      });
       await writeConfigAudit({
         operation: "upsert_connection_profile",
         keyName: parsed.data.profileName,
-        actor: req.user?.sub,
+        actor: settingsActor(req),
       });
       res.json({ ok: true, data: profile });
     } catch (err) {
@@ -292,17 +297,18 @@ export function registerSettingsRoutes(app) {
         return res.status(400).json({ ok: false, error: parsed.error.flatten() });
       }
       const keyName = req.params.key;
-      const namespace = parsed.data.namespace || "default";
+      const namespace = resolveSettingsNamespace(req);
       const value = normalizeNotionIdIfApplicable(keyName, parsed.data.value);
       const result = await upsertSetting(keyName, value, {
         namespace,
-        updatedBy: req.user?.sub || "admin",
+        updatedBy: settingsActor(req),
       });
+      invalidateTenantOverlay(namespace);
       const applied = applyOverlayEntry(keyName, value);
       await writeConfigAudit({
         operation: "upsert_setting",
         keyName,
-        actor: req.user?.sub,
+        actor: settingsActor(req),
       });
       const reload = await runSettingsReload([keyName]);
       res.json({
@@ -324,10 +330,11 @@ export function registerSettingsRoutes(app) {
   router.delete("/:key", requireScope("admin"), async (req, res) => {
     try {
       const keyName = req.params.key;
-      const namespace = req.query.namespace || "default";
+      const namespace = resolveSettingsNamespace(req);
       await deleteSetting(keyName, namespace);
+      invalidateTenantOverlay(namespace);
       removeOverlayEntry(keyName);
-      await writeConfigAudit({ operation: "delete_setting", keyName, actor: req.user?.sub });
+      await writeConfigAudit({ operation: "delete_setting", keyName, actor: settingsActor(req) });
       res.json({ ok: true, data: { deleted: keyName } });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "settings_delete_failed", message: err.message } });

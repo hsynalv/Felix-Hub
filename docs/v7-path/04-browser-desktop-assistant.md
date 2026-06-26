@@ -10,6 +10,8 @@
 
 Local sidecar üzerinden browser ve desktop'ta **güvenli yardımcı agent** — kişisel kullanım odaklı.
 
+**Uzaktan yüzey:** Tam kapsamda bu yetenekler [03 Telegram Remote Control](./03-telegram-remote-control.md) üzerinden de kullanılabilir olacak (`/desktop screenshot`, onaylı click/type). Evde değilken Telegram birincil kumanda; sidecar ev bilgisayarında çalışır.
+
 ---
 
 ## Modlar

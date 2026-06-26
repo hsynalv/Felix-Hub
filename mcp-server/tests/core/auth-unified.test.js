@@ -37,11 +37,11 @@ describe("Unified auth", () => {
     expect(result.scopes).toContain("admin");
   });
 
-  it("authenticateRequest populates scopes from bearer token", () => {
+  it("authenticateRequest populates scopes from bearer token", async () => {
     const req = {
       headers: { authorization: "Bearer write-key-1234567890" },
     };
-    const auth = authenticateRequest(req);
+    const auth = await authenticateRequest(req);
     expect(auth.authenticated).toBe(true);
     expect(auth.scopes).toContain("write");
     expect(auth.actor?.type).toBe("api_key");

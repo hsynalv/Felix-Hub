@@ -22,6 +22,7 @@ import { listWorkflowTemplates } from "./workflow-templates.js";
 import { createRunFromTemplate, replayRun } from "./run-orchestrator.js";
 import { queryRunUsage } from "../usage/usage-ledger.service.js";
 import { assertRunQuota } from "../usage/run-quota.js";
+import { skipForHtmlNavigation } from "../http/html-navigation.js";
 
 function quotaErrorResponse(res, err) {
   return res.status(429).json({
@@ -81,7 +82,7 @@ export function registerAgentRunRoutes(app) {
     }
   });
 
-  app.get("/runs", requireScope("read"), async (req, res) => {
+  app.get("/runs", skipForHtmlNavigation, requireScope("read"), async (req, res) => {
     try {
       const { status, projectId, conversationId, limit, offset } = req.query;
       const runs = await listRuns({

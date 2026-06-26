@@ -1,4 +1,4 @@
-import { config } from "../../core/config.js";
+import { getN8nConfig } from "../../core/settings/effective-config.js";
 
 const TIMEOUT_MS = 15_000;
 
@@ -10,7 +10,7 @@ function classifyHttpError(status) {
 }
 
 async function apiRequest(path) {
-  const { baseUrl, apiBase, apiKey } = config.n8n;
+  const { baseUrl, apiBase, apiKey } = getN8nConfig();
 
   if (!apiKey) {
     return {

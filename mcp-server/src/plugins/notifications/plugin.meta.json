@@ -39,6 +39,16 @@
   "dependencies": [],
   "envVars": [
     {
+      "name": "TELEGRAM_BOT_TOKEN",
+      "required": false,
+      "description": "Telegram bot token (BotFather)"
+    },
+    {
+      "name": "TELEGRAM_CHAT_ID",
+      "required": false,
+      "description": "Outbound notification chat ID"
+    },
+    {
       "name": "TELEGRAM_ALLOWED_CHAT_IDS",
       "required": false,
       "description": "Comma-separated allowed Telegram chat IDs"

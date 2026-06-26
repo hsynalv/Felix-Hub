@@ -192,7 +192,7 @@ export function HomePage() {
   const modelReady = chatModels?.providerAvailable !== false;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-4 sm:space-y-6">
       <PageHeader
         title="Kontrol Paneli"
         description="Sistem durumu, aktivite ve entegrasyonlar — tek bakışta."

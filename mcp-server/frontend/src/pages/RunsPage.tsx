@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   OpsPageHero,
   OpsPageShell,
@@ -92,7 +94,7 @@ function RunRow({
     >
       <Badge className={cn("shrink-0 font-mono text-[10px]", statusTone(run.status))}>{run.status}</Badge>
       <span className="min-w-0 flex-1 truncate font-medium">{run.goal || "Agent run"}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">{run.stepCount ?? 0} adım</span>
+      <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{run.stepCount ?? 0} adım</span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
     </button>
   );
@@ -421,7 +423,7 @@ export function RunsPage() {
         <OpsPanel
           title={detail ? `Run ${detail.id.slice(0, 8)}…` : "Run detayı"}
           description={detail?.goal || "Bir run seçin"}
-          className="min-h-[320px]"
+          className="hidden min-h-[320px] lg:flex lg:flex-col"
         >
           {!selectedId ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Timeline görmek için soldan bir run seçin.</p>
@@ -543,6 +545,44 @@ export function RunsPage() {
           )}
         </OpsPanel>
       </div>
+
+      <Sheet open={!!selectedId} onOpenChange={(open) => !open && setSelectedId(null)}>
+        <SheetContent side="bottom" className="flex h-[min(85vh,720px)] flex-col gap-0 p-0 lg:hidden">
+          <SheetHeader className="shrink-0 border-b border-border/60 px-4 py-3 text-left">
+            <SheetTitle className="text-sm font-medium">
+              {detail ? `Run ${detail.id.slice(0, 8)}…` : "Run detayı"}
+            </SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="p-4">
+              {!selectedId ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Bir run seçin</p>
+              ) : detailLoading || stepsLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-12 rounded-xl" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {detail?.goal && (
+                    <p className="text-sm text-muted-foreground">{detail.goal}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Badge className={cn("font-mono", statusTone(detail?.status))}>{detail?.status}</Badge>
+                    {detail?.startedAt && <span>Başlangıç: {formatTime(detail.startedAt)}</span>}
+                  </div>
+                  <div className="space-y-2">
+                    {steps.map((step, i) => (
+                      <StepRow key={step.id} step={step} index={i} usage={stepUsageByIndex.get(step.stepIndex)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </OpsPageShell>
   );
 }

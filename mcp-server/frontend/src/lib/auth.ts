@@ -1,8 +1,27 @@
+/**
+ * Session cookie auth + legacy API key fallback (localhost dev).
+ */
+
 const STORAGE_KEY = "mcpHubApiKey";
 const EXPIRES_KEY = "mcpHubApiKeyExpires";
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-let authInFlight: Promise<void> | null = null;
+let authInFlight: Promise<AuthMode> | null = null;
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  namespace: string;
+};
+
+export type AuthMode = "open" | "session" | "key" | "login_required";
+
+const AUTH_PATHS = new Set(["/login", "/register"]);
+
+export function isAuthRoute(pathname: string) {
+  return AUTH_PATHS.has(pathname);
+}
 
 export function getApiKey(): string {
   return localStorage.getItem(STORAGE_KEY) || "";
@@ -34,6 +53,78 @@ function unwrapApiData<T>(json: unknown): T {
   return json as T;
 }
 
+async function parseJsonResponse(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error(res.ok ? "Sunucu boş yanıt döndü" : `Sunucu hatası (${res.status})`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Geçersiz sunucu yanıtı (${res.status})`);
+  }
+}
+
+const fetchOpts: RequestInit = { credentials: "include" };
+
+export async function getSession(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch("/auth/me", { ...fetchOpts, headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const data = unwrapApiData<{ user?: AuthUser }>(json);
+    return data.user ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch("/auth/login", {
+    method: "POST",
+    ...fetchOpts,
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const json = await parseJsonResponse(res);
+  if (!res.ok) {
+    throw new Error((json as { error?: { message?: string } })?.error?.message || "Giriş başarısız");
+  }
+  const data = unwrapApiData<{ user: AuthUser }>(json);
+  return data.user;
+}
+
+export async function register(
+  email: string,
+  password: string,
+  displayName?: string
+): Promise<AuthUser> {
+  const res = await fetch("/auth/register", {
+    method: "POST",
+    ...fetchOpts,
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email, password, displayName }),
+  });
+  const json = await parseJsonResponse(res);
+  if (!res.ok) {
+    throw new Error((json as { error?: { message?: string } })?.error?.message || "Kayıt başarısız");
+  }
+  const data = unwrapApiData<{ user: AuthUser }>(json);
+  return data.user;
+}
+
+export async function logout(): Promise<void> {
+  await fetch("/auth/logout", { method: "POST", ...fetchOpts });
+  setApiKey("");
+  sessionStorage.removeItem(EXPIRES_KEY);
+  if (refreshTimer) clearTimeout(refreshTimer);
+}
+
+export async function refreshSession(): Promise<boolean> {
+  const res = await fetch("/auth/refresh", { method: "POST", ...fetchOpts });
+  return res.ok;
+}
+
 export async function requestUiToken(options?: { silent?: boolean }): Promise<{
   token: string;
   expiresAt?: string;
@@ -56,7 +147,6 @@ export async function requestUiToken(options?: { silent?: boolean }): Promise<{
   };
 }
 
-/** Uses /health — /whoami requires auth and must not be used here. */
 async function isAuthRequired(): Promise<boolean> {
   try {
     const res = await fetch("/health", { headers: { Accept: "application/json" } });
@@ -81,6 +171,7 @@ async function validateCurrentKey(): Promise<boolean> {
 
   try {
     const res = await fetch("/whoami", {
+      credentials: "include",
       headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
     });
     if (!res.ok) return false;
@@ -92,48 +183,60 @@ async function validateCurrentKey(): Promise<boolean> {
   }
 }
 
-function scheduleRefresh(expiresAt?: string, ttlMs?: number) {
+function scheduleSessionRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
-
-  let delay = 23 * 60 * 60 * 1000;
-  const expMs = parseExpiresMs(expiresAt ?? null);
-  if (expMs != null) {
-    delay = Math.max(60_000, expMs - Date.now() - 5 * 60_000);
-  } else if (ttlMs) {
-    delay = Math.max(60_000, ttlMs - 5 * 60_000);
-  }
-
   refreshTimer = setTimeout(() => {
-    void ensureAuth(true);
-  }, delay);
+    void refreshSession().then((ok) => {
+      if (ok) scheduleSessionRefresh();
+    });
+  }, 6 * 60 * 60 * 1000);
 }
 
-async function runEnsureAuth(forceRefresh = false): Promise<void> {
+function isLocalhost(): boolean {
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+async function runEnsureAuth(pathname: string): Promise<AuthMode> {
   const authRequired = await isAuthRequired();
   if (!authRequired) {
     setApiKey("");
     sessionStorage.removeItem(EXPIRES_KEY);
-    if (refreshTimer) clearTimeout(refreshTimer);
-    return;
+    return "open";
   }
 
-  if (!forceRefresh && (await validateCurrentKey())) {
-    const expires = sessionStorage.getItem(EXPIRES_KEY);
-    scheduleRefresh(expires ?? undefined);
-    return;
+  if (isAuthRoute(pathname)) {
+    return "login_required";
   }
 
-  const { token, expiresAt, ttlMs } = await requestUiToken({ silent: true });
-  if (!token) throw new Error("Oturum token alınamadı");
-  storeToken(token, expiresAt);
-  scheduleRefresh(expiresAt, ttlMs);
+  const sessionUser = await getSession();
+  if (sessionUser) {
+    scheduleSessionRefresh();
+    return "session";
+  }
+
+  if (await validateCurrentKey()) {
+    return "key";
+  }
+
+  if (isLocalhost()) {
+    try {
+      const { token, expiresAt } = await requestUiToken({ silent: true });
+      if (token) {
+        storeToken(token, expiresAt);
+        return "key";
+      }
+    } catch {
+      /* user auth required */
+    }
+  }
+
+  return "login_required";
 }
 
-/** Acquire or refresh localhost UI session token (admin scope). No-op when auth is disabled. */
-export async function ensureAuth(forceRefresh = false): Promise<void> {
-  if (authInFlight && !forceRefresh) return authInFlight;
-
-  authInFlight = runEnsureAuth(forceRefresh).finally(() => {
+export async function ensureAuth(pathname = window.location.pathname): Promise<AuthMode> {
+  if (authInFlight) return authInFlight;
+  authInFlight = runEnsureAuth(pathname).finally(() => {
     authInFlight = null;
   });
   return authInFlight;

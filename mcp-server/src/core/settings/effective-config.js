@@ -5,9 +5,26 @@
 import { config as baseConfig } from "../config.js";
 import { sanitizeConfig } from "../config-schema.js";
 import { listAllSettingsDecrypted } from "./settings.service.js";
+import { getRequestContext } from "../auth/request-context.js";
+import { getTenantOverlaySync } from "../auth/tenant-overlay.js";
 
 /** @type {Map<string, string>} */
 const overlay = new Map();
+
+export const BOOTSTRAP_KEYS = new Set([
+  "PORT",
+  "NODE_ENV",
+  "HUB_READ_KEY",
+  "HUB_WRITE_KEY",
+  "HUB_ADMIN_KEY",
+  "HUB_MSSQL_URL",
+  "HUB_SETTINGS_MASTER_KEY",
+  "HUB_PERSISTENCE_ENABLED",
+  "MSSQL_CONNECTION_STRING",
+  "HUB_SEED_EMAIL",
+  "HUB_SEED_PASSWORD",
+  "HUB_SEED_DISPLAY_NAME",
+]);
 
 export const RESTART_REQUIRED_KEYS = new Set([
   "PORT",
@@ -65,20 +82,35 @@ export function deleteOverlayEntry(key) {
 }
 
 export function getEnvValue(key) {
+  if (BOOTSTRAP_KEYS.has(key)) {
+    return process.env[key];
+  }
+  const ctx = getRequestContext();
+  if (ctx?.namespace) {
+    const tenant = getTenantOverlaySync(ctx.namespace);
+    if (tenant?.has(key)) return tenant.get(key);
+  }
   if (overlay.has(key)) return overlay.get(key);
   return process.env[key];
 }
 
+export function applyToProcessEnvForTenant(key, value) {
+  if (BOOTSTRAP_KEYS.has(key) || RESTART_REQUIRED_KEYS.has(key)) return false;
+  process.env[key] = value;
+  return true;
+}
+
 function applyToProcessEnv(key, value) {
-  if (RESTART_REQUIRED_KEYS.has(key)) return false;
+  if (RESTART_REQUIRED_KEYS.has(key) || BOOTSTRAP_KEYS.has(key)) return false;
   process.env[key] = value;
   return true;
 }
 
 export async function loadSettingsOverlay() {
   overlay.clear();
-  const rows = await listAllSettingsDecrypted();
+  const rows = await listAllSettingsDecrypted("default");
   for (const { keyName, value } of rows) {
+    if (BOOTSTRAP_KEYS.has(keyName)) continue;
     overlay.set(keyName, value);
     applyToProcessEnv(keyName, value);
   }
@@ -138,6 +170,16 @@ export function getEffectiveConfig() {
 
 export function getEffectiveConfigMasked() {
   return sanitizeConfig(getEffectiveConfig());
+}
+
+/** Runtime n8n config (respects per-user settings overlay). */
+export function getN8nConfig() {
+  return {
+    baseUrl: getEnvValue("N8N_BASE_URL") || baseConfig.n8n?.baseUrl || "http://n8n:5678",
+    apiBase: getEnvValue("N8N_API_BASE") || baseConfig.n8n?.apiBase || "/api/v1",
+    apiKey: getEnvValue("N8N_API_KEY") || baseConfig.n8n?.apiKey || undefined,
+    allowWrite: getEnvValue("ALLOW_N8N_WRITE") === "true" || baseConfig.n8n?.allowWrite === true,
+  };
 }
 
 export function listOverlayKeys() {

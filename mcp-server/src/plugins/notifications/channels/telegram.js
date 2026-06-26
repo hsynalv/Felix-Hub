@@ -29,6 +29,63 @@ export function isTelegramConfigured() {
   return !!(token && chatId);
 }
 
+const TELEGRAM_MSG_MAX = 4000;
+
+/**
+ * Split text into Telegram message-sized chunks.
+ * @param {string} text
+ * @param {number} [maxLen]
+ */
+export function splitTelegramText(text, maxLen = TELEGRAM_MSG_MAX) {
+  const s = String(text || "");
+  if (s.length <= maxLen) return [s];
+  const chunks = [];
+  let rest = s;
+  while (rest.length > maxLen) {
+    let cut = rest.lastIndexOf("\n", maxLen);
+    if (cut < maxLen * 0.5) cut = maxLen;
+    chunks.push(rest.slice(0, cut).trimEnd());
+    rest = rest.slice(cut).trimStart();
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
+}
+
+/**
+ * @param {string} chatId
+ * @param {"typing"|"upload_document"} [action]
+ * @param {string} [token]
+ */
+export async function sendChatAction(chatId, action = "typing", token) {
+  const cfg = getTelegramConfig();
+  const botToken = (token || cfg.token).trim();
+  const targetChatId = String(chatId || cfg.chatId).trim();
+  if (!botToken || !targetChatId) return { success: false };
+
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendChatAction`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: targetChatId, action }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { success: res.ok && data.ok !== false };
+}
+
+/**
+ * Send one or more messages (4000 char chunks).
+ * @param {string} chatId
+ * @param {string} text
+ * @param {object} [opts]
+ */
+export async function replyToChatChunks(chatId, text, opts = {}) {
+  const chunks = splitTelegramText(text);
+  let last;
+  for (const chunk of chunks) {
+    last = await sendTelegram({ message: chunk, chatId: String(chatId), ...opts });
+  }
+  return last;
+}
+
 /**
  * @param {object} opts
  * @param {string} [opts.title]

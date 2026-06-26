@@ -34,7 +34,12 @@ export async function getChatContext({
   const rawClassification = await classifyToolIntent(message);
   const profile = resolveChatProfile(chatProfile);
   const effectiveIntent = applyProfileToToolIntent(rawClassification.intent, profile.id);
-  const toolClassification = { ...rawClassification, intent: effectiveIntent };
+  const toolClassification = {
+    ...rawClassification,
+    intent: effectiveIntent,
+    rawIntent: rawClassification.intent,
+    profileOverride: effectiveIntent !== rawClassification.intent,
+  };
 
   const brainMax = route.needsSemanticRecall ? 3_000 : 1_500;
   const projectMax = route.needsProjectMemory ? 2_000 : 0;

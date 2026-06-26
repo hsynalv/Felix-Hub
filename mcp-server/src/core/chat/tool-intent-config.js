@@ -19,6 +19,8 @@ export const DEFAULT_INTENT_TRAIN_CONFIG = {
   nlpConfidenceThreshold: 0.75,
   runtimeLlmFallback: false,
   requireHumanOnDisagreement: true,
+  redactSamples: true,
+  privateMode: false,
 };
 
 /** @type {IntentTrainConfig | null} */
@@ -59,6 +61,8 @@ export function normalizeIntentTrainConfig(raw) {
         : base.nlpConfidenceThreshold,
     runtimeLlmFallback: o.runtimeLlmFallback === true,
     requireHumanOnDisagreement: o.requireHumanOnDisagreement !== false,
+    redactSamples: o.redactSamples !== false,
+    privateMode: o.privateMode === true,
   };
 }
 
