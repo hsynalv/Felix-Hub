@@ -49,18 +49,52 @@ export function listGoldenTraces() {
 }
 
 export function getGoldenTrace(traceId) {
+  if (!traceId) return null;
   for (const dir of GOLDEN_DIRS) {
     const candidates = [`${traceId}.json`, traceId.endsWith(".json") ? traceId : null].filter(Boolean);
     for (const file of candidates) {
       const path = join(dir, file);
       if (existsSync(path)) return loadGoldenFile(path);
     }
+    if (!existsSync(dir)) continue;
     for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
       const data = loadGoldenFile(join(dir, file));
       if (data.id === traceId || file.replace(/\.json$/, "") === traceId) return data;
     }
   }
   return null;
+}
+
+/** Resolve golden fixture for eval — prefers explicit id, avoids wrong template fallback when ambiguous. */
+export function resolveGoldenForEval({ goldenId = null, templateId = null } = {}) {
+  if (goldenId) {
+    const byId = getGoldenTrace(goldenId);
+    if (byId) return byId;
+  }
+  if (!templateId) return null;
+
+  const byFile = getGoldenTrace(templateId);
+  if (byFile) return byFile;
+
+  const matches = listGoldenTraces().filter((t) => t.templateId === templateId);
+  if (matches.length === 1) return getGoldenTrace(matches[0].id);
+  return null;
+}
+
+/** Eval a single golden trace by id. */
+export function evalGoldenTraceById(goldenId, { parameters = {} } = {}) {
+  const golden = getGoldenTrace(goldenId);
+  if (!golden) {
+    return { pass: false, error: { code: "not_found", message: `Golden trace not found: ${goldenId}` } };
+  }
+  if (!golden.templateId) {
+    return { pass: false, error: { code: "invalid_golden", message: "Golden trace missing templateId" } };
+  }
+  return evalTemplateRegression({
+    templateId: golden.templateId,
+    parameters: { ...(golden.parameters || {}), ...parameters },
+    golden,
+  });
 }
 
 /** Run golden trace regression for a single template fixture. */

@@ -1,6 +1,6 @@
 # 10 — Managed Autonomy Policies
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.3  
 > **Bağımlılık:** [V4 Approval Center Pro](../v4-path/04-approval-center-pro.md), [V4 Cost Guardrails](../v4-path/09-cost-quota-policy-guardrails.md)
 
@@ -37,19 +37,19 @@ L5 production autonomous with escalation
 
 ## Kapsam
 
-- [ ] Autonomy level model (per project, env, runbook, schedule)
-- [ ] Policy DSL veya structured rules
-- [ ] Runtime enforcement: run spawn + step execution
-- [ ] UI: autonomy matrix (env × tool class)
-- [ ] L4/L5 için SLA escalation zorunluluğu
-- [ ] Audit: autonomy level değişiklikleri
+- [x] Autonomy level model (per project, env, runbook, schedule)
+- [x] Policy DSL veya structured rules
+- [x] Runtime enforcement: run spawn + step execution
+- [x] UI: autonomy matrix (env × tool class)
+- [x] L4/L5 için SLA escalation zorunluluğu (schedule policy + workflow step gate)
+- [x] Audit: autonomy level değişiklikleri
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Production'da L1 agent destructive tool çağıramaz
-- [ ] Schedule L4 ile çalışırken max cost ve escalation policy uygulanır
+- [x] Production'da L1 agent destructive tool çağıramaz
+- [x] Schedule L4 ile çalışırken max cost ve escalation policy uygulanır
 
 ---
 

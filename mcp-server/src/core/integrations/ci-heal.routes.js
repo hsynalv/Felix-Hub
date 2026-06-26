@@ -7,7 +7,7 @@ import { createRunFromTemplate } from "../agent-runs/run-orchestrator.js";
 import { assertRunQuota } from "../usage/run-quota.js";
 import { submitJob } from "../jobs.js";
 import { WORKFLOW_RUN_JOB_TYPE } from "../agent-runs/workflow-run-job.js";
-import { linkRunToJob } from "../agent-runs/agent-runs.service.js";
+import { linkRunToJob } from "../agent-runs/agent-run-job.js";
 import { getWorkflowTemplate } from "../agent-runs/workflow-templates.js";
 
 function quotaErrorResponse(res, e) {

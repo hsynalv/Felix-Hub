@@ -8,6 +8,8 @@ import {
   getGoldenTrace,
   evalTemplateRegression,
   runRegressionSuite,
+  evalGoldenTraceById,
+  resolveGoldenForEval,
   evalRunAgainstGolden,
   compareWorkflowPlans,
   evalReplayCompare,
@@ -33,6 +35,18 @@ export function registerEvalRoutes(app) {
     res.json({ ok: true, data: golden });
   });
 
+  app.post("/eval/golden/:id/eval", requireScope("read"), (req, res) => {
+    try {
+      const result = evalGoldenTraceById(req.params.id, { parameters: req.body?.parameters || {} });
+      if (result.error?.code === "not_found") {
+        return res.status(404).json({ ok: false, error: result.error });
+      }
+      res.json({ ok: true, data: { ...result, goldenId: req.params.id } });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "golden_eval_failed", message: err.message } });
+    }
+  });
+
   app.post("/eval/regression", requireScope("read"), (_req, res) => {
     try {
       const report = runRegressionSuite();
@@ -46,7 +60,9 @@ export function registerEvalRoutes(app) {
     try {
       const templateId = req.params.templateId;
       const parameters = req.body?.parameters || {};
-      const golden = req.body?.goldenId ? getGoldenTrace(req.body.goldenId) : getGoldenTrace(templateId);
+      const golden =
+        resolveGoldenForEval({ goldenId: req.body?.goldenId, templateId }) ||
+        (req.body?.goldenId ? getGoldenTrace(req.body.goldenId) : null);
       const result = evalTemplateRegression({ templateId, parameters, golden });
       res.json({ ok: true, data: result });
     } catch (err) {

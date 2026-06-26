@@ -42,7 +42,13 @@ const INTENT_MICRO_PLANS = {
     "1. Prefer read-only inspection first",
     "2. `shell_execute` or test runner with explanation",
   ],
-  automation: ["1. Identify n8n/workflow tool", "2. Dry-run or read workflow before write"],
+  automation: ["1. Identify n8n tool (n8n_* only)", "2. Dry-run or read workflow before write"],
+  agent_workflow: [
+    "1. `agent_workflow_templates` — see builtin + saved templates",
+    "2. `agent_workflow_preview` — validate steps before save",
+    "3. `agent_workflow_create` — save new template (show designerUrl)",
+    "4. `agent_run_from_template` — execute with parameters",
+  ],
   external_api: [
     "1. **Never** use `http_request` for vendors with dedicated tools (github_*, notion_*, tavily__*, n8n_*, slack_*, figma__*)",
     "2. Use the matching MCP/plugin tool; http_request is only for generic allowlisted APIs",

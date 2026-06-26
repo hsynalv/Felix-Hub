@@ -185,6 +185,19 @@ export async function createBranch(owner, repo, branch, baseRef) {
   });
 }
 
+export async function listReleases(owner, repo, options = {}) {
+  const perPage = Math.min(options.limit || 10, 100);
+  return githubPaginate(`/repos/${owner}/${repo}/releases?per_page=${perPage}`, options.limit || 10);
+}
+
+export async function createRelease(owner, repo, releaseData) {
+  return githubRequest("POST", `/repos/${owner}/${repo}/releases`, releaseData);
+}
+
+export async function getLatestRelease(owner, repo) {
+  return githubRequest("GET", `/repos/${owner}/${repo}/releases/latest`);
+}
+
 export async function getFileContent(owner, repo, filePath, branch) {
   const ref = branch ? `?ref=${encodeURIComponent(branch)}` : "";
   return githubRequest("GET", `/repos/${owner}/${repo}/contents/${filePath}${ref}`);

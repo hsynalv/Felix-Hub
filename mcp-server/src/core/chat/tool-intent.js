@@ -16,6 +16,7 @@ export const TOOL_INTENTS = [
   "run_command",
   "external_api",
   "automation",
+  "agent_workflow",
   "general",
 ];
 
@@ -73,11 +74,21 @@ const LIVE_LOOKUP_PATTERNS = [
   /\b(?:bugün|güncel|current|today)\b/i,
 ];
 
-const AUTOMATION_PATTERNS = [
-  /\bn8n\b/i,
+const N8N_AUTOMATION_PATTERNS = [/\bn8n\b/i];
+
+/** Hub agent workflow templates (Workflow Designer / runbooks) — not n8n */
+const AGENT_WORKFLOW_PATTERNS = [
   /\bworkflow\b/i,
   /\botomasyon\b/i,
   /\bautomation\b/i,
+  /\b(?:agent\s+run|runbook)\b/i,
+  /\bworkflow\s+(?:oluştur|tasarla|kaydet|template|şablon)/i,
+  /\b(?:oluştur|tasarla|kaydet).{0,40}workflow/i,
+  /\bworkflow\s+designer\b/i,
+  /\badım\s+adım\s+(?:çalıştır|workflow)/i,
+  /\bagent_workflow_/i,
+  /\brepo-ship-feature\b/i,
+  /\brelease-manager\b/i,
 ];
 
 /** Tool name prefixes / exact names per intent */
@@ -137,6 +148,14 @@ export const INTENT_TOOL_MAP = {
     "gmail_",
   ],
   automation: ["n8n_"],
+  agent_workflow: [
+    "agent_workflow_templates",
+    "agent_workflow_preview",
+    "agent_workflow_create",
+    "agent_run_from_template",
+    "agent_run_list",
+    "agent_run_status",
+  ],
   general: [],
 };
 
@@ -160,8 +179,11 @@ export function classifyToolIntentRegex(message) {
     return { intent: "brain_recall", confidence: 0.95, reasons: ["brain_recall_pattern"] };
   }
 
-  if (AUTOMATION_PATTERNS.some((p) => p.test(text))) {
-    return { intent: "automation", confidence: 0.85, reasons: ["automation_pattern"] };
+  if (N8N_AUTOMATION_PATTERNS.some((p) => p.test(text))) {
+    return { intent: "automation", confidence: 0.9, reasons: ["n8n_pattern"] };
+  }
+  if (AGENT_WORKFLOW_PATTERNS.some((p) => p.test(text))) {
+    return { intent: "agent_workflow", confidence: 0.88, reasons: ["agent_workflow_pattern"] };
   }
   if (COMMAND_PATTERNS.some((p) => p.test(text))) {
     return { intent: "run_command", confidence: 0.8, reasons: ["command_pattern"] };
@@ -298,6 +320,15 @@ export function buildToolIntentHint(classification) {
   }
   if (intent === "project_context") {
     lines.push("- Do **not** use n8n_* tools — they are workflow builders, not project/business context.");
+  }
+  if (intent === "agent_workflow") {
+    lines.push(
+      "- Use **agent_workflow_*** / **agent_run_*** tools for Hub Workflow Designer templates — not n8n_* unless user asked for n8n."
+    );
+    lines.push("- Flow: list templates → preview draft → create (if new) → run from template.");
+  }
+  if (intent === "automation") {
+    lines.push("- User asked for **n8n** automation — use n8n_* tools, not Hub agent_workflow_* tools.");
   }
   lines.push("- Use the smallest sufficient tool set. Read before write.");
 

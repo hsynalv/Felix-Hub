@@ -209,12 +209,13 @@ export async function getRun(runId) {
   return row ? rowToRun(row, row.step_count ?? 0) : null;
 }
 
-export async function listRuns({ status, projectId, conversationId, limit = 50, offset = 0 } = {}) {
+export async function listRuns({ status, projectId, conversationId, parentRunId = null, limit = 50, offset = 0 } = {}) {
   if (useMemory()) {
     let runs = [...memoryRuns.values()];
     if (status) runs = runs.filter((r) => r.status === status);
     if (projectId) runs = runs.filter((r) => r.projectId === projectId);
     if (conversationId) runs = runs.filter((r) => r.conversationId === conversationId);
+    if (parentRunId) runs = runs.filter((r) => r.metadata?.parentRunId === parentRunId);
     runs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     return runs.slice(offset, offset + limit).map((r) => ({
       ...r,
@@ -235,6 +236,10 @@ export async function listRuns({ status, projectId, conversationId, limit = 50, 
   if (conversationId) {
     filters.push("r.conversation_id = @conversationId");
     inputs.conversationId = conversationId;
+  }
+  if (parentRunId) {
+    filters.push("r.metadata_json LIKE @parentRunPattern");
+    inputs.parentRunPattern = `%"parentRunId":"${parentRunId}"%`;
   }
   const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 

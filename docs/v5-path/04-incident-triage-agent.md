@@ -1,6 +1,6 @@
 # 04 — Incident Triage Agent
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.9  
 > **Bağımlılık:** [07-sla-escalation.md](./07-sla-escalation.md), [V4 Project Command Center](../v4-path/05-project-command-center.md)
 
@@ -33,20 +33,20 @@ error spike → ilgili commitleri bul → son deploy'u bul → logları oku
 
 ## Kapsam
 
-- [ ] Incident runbook preset
-- [ ] Observability plugin entegrasyonu (error spike signal)
-- [ ] GitHub: son deploy, ilgili PR/commit korelasyonu
-- [ ] Suspected cause ranking (heuristic + LLM özet)
-- [ ] Triage UI: timeline, aksiyon butonları
-- [ ] Postmortem draft → Notion/Obsidian export
-- [ ] SLA escalation entegrasyonu
+- [x] Incident runbook preset
+- [x] Observability plugin entegrasyonu (Sentry/Datadog/generic webhook + audit fallback)
+- [x] GitHub: son deploy, ilgili PR/commit korelasyonu
+- [x] Suspected cause ranking (heuristic + LLM özet)
+- [x] Triage UI: timeline, aksiyon butonları
+- [x] Postmortem draft → Notion/Obsidian export
+- [x] SLA escalation entegrasyonu
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Simüle error spike için timeline + suspected cause listesi üretilir
-- [ ] Onaylı rollback/fix runbook'u tetiklenebilir
+- [x] Simüle error spike için timeline + suspected cause listesi üretilir
+- [x] Onaylı rollback/fix runbook'u tetiklenebilir
 
 ---
 

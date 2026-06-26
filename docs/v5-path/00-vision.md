@@ -1,6 +1,6 @@
 # 00 — V5 Vizyon: Managed Autonomous Operations
 
-> **Status:** not_started  
+> **Status:** done    
 > **Önkoşul:** [V4 path](../v4-path/EXECUTION-ORDER.md) tamamlandı  
 > **Bağımlılık:** —
 

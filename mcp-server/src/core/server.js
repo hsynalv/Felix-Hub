@@ -25,7 +25,7 @@ import { fileURLToPath } from "url";
 import { readFileSync, existsSync } from "fs";
 import { loadPresetsAtStartup, policyGuardrailMiddleware } from "./policy-guard.js";
 import { getApprovalStore } from "./policy-hooks.js";
-import { callTool } from "./tool-registry.js";
+import { callTool, listTools, getTool } from "./tool-registry.js";
 import { createMcpHttpMiddleware } from "../mcp/http-transport.js";
 import { issueUiToken, issueUiTokenWithNotification } from "./ui-tokens.js";
 import { normalizeCorrelationId } from "./audit/audit.standard.js";
@@ -33,8 +33,18 @@ import { registerUiChatRoutes } from "./ui-chat.js";
 import { registerAgentRunRoutes } from "./agent-runs/routes.js";
 import { registerApprovalRoutes } from "./approvals/routes.js";
 import { registerCiHealRoutes } from "./integrations/ci-heal.routes.js";
+import { registerObservabilityWebhookRoutes } from "./integrations/observability-webhook.routes.js";
 import { registerEvalRoutes } from "./eval/eval.routes.js";
 import { registerTeamRoutes } from "./team/team.routes.js";
+import { registerOpsRoutes } from "./ops/routes.js";
+import { startScheduleRunner } from "./ops/schedule-runner.js";
+import { registerAgentRoutes } from "./agents/routes.js";
+import { registerBriefingRoutes } from "./reports/briefing.routes.js";
+import { registerSlaRoutes } from "./sla/sla.routes.js";
+import { registerEnvRoutes } from "./env/env.routes.js";
+import { registerV6Routes } from "./v6/routes.js";
+import { initSandboxHook } from "./v6/sandbox-hook.js";
+import { startSlaRunner } from "./sla/sla-runner.js";
 import {
   canAccessProject,
   isTeamMembershipEnforced,
@@ -582,7 +592,29 @@ export async function createServer() {
     res.json({ job });
   });
 
-  // ── Approval routes ──────────────────────────────────────────────────────
+  // ── Tool registry routes ─────────────────────────────────────────────────
+
+  function serializeToolForApi(tool) {
+    return {
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema || { type: "object" },
+      plugin: tool.plugin,
+      tags: tool.tags,
+      category: tool.category,
+      status: tool.status,
+    };
+  }
+
+  /** GET /tools — list registered MCP tools (optional ?plugin= filter) */
+  app.get("/tools", requireScope("read"), (req, res) => {
+    const { plugin } = req.query;
+    let tools = listTools();
+    if (plugin) {
+      tools = tools.filter((t) => t.plugin === String(plugin));
+    }
+    res.json({ tools: tools.map(serializeToolForApi) });
+  });
 
   /**
    * POST /tools/:name/dry-run
@@ -607,6 +639,17 @@ export async function createServer() {
     }
   });
 
+  /** GET /tools/:name — tool metadata by name */
+  app.get("/tools/:name", requireScope("read"), (req, res) => {
+    const tool = getTool(req.params.name);
+    if (!tool) {
+      return res.status(404).json({
+        ok: false,
+        error: { code: "tool_not_found", message: `Tool not found: ${req.params.name}` },
+      });
+    }
+    res.json({ tool: serializeToolForApi(tool) });
+  });
 
   // ── MCP Gateway ──────────────────────────────────────────────────────────────
 
@@ -684,8 +727,18 @@ export async function createServer() {
   registerAgentRunRoutes(app);
   registerApprovalRoutes(app);
   registerCiHealRoutes(app);
+  registerObservabilityWebhookRoutes(app);
   registerEvalRoutes(app);
   registerTeamRoutes(app);
+  registerOpsRoutes(app);
+  registerAgentRoutes(app);
+  registerBriefingRoutes(app);
+  registerSlaRoutes(app);
+  registerEnvRoutes(app);
+  initSandboxHook();
+  registerV6Routes(app);
+  startScheduleRunner();
+  startSlaRunner();
   registerUsageRoutes(app);
   registerInternalMarketplaceRoutes(app);
   registerMcpConnectorRoutes(app);

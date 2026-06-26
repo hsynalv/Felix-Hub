@@ -1,6 +1,6 @@
 # V6 Execution Order
 
-> **Son güncelleme:** 2026-06-24  
+> **Son güncelleme:** 2026-06-26  
 > **Önkoşul:** [V5 EXECUTION-ORDER](../v5-path/EXECUTION-ORDER.md) tamamlandı  
 > **Kural:** Önce ekosistem omurgası → güven ve simülasyon → kullanıcı/kurum ürünleştirme
 
@@ -39,11 +39,11 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 6.1 | Multi-Agent Collaboration | [01-multi-agent-collaboration.md](./01-multi-agent-collaboration.md) | not_started |
-| 6.2 | Agent Skill Store | [02-agent-skill-store.md](./02-agent-skill-store.md) | not_started |
-| 6.3 | Autonomous Watchers | [03-autonomous-watchers.md](./03-autonomous-watchers.md) | not_started |
-| 6.4 | Sandbox / Simulation Lab | [07-sandbox-simulation-lab.md](./07-sandbox-simulation-lab.md) | not_started |
-| 6.5 | Agent Trust Score | [06-agent-trust-score.md](./06-agent-trust-score.md) | not_started |
+| 6.1 | Multi-Agent Collaboration | [01-multi-agent-collaboration.md](./01-multi-agent-collaboration.md) | mvp_done |
+| 6.2 | Agent Skill Store | [02-agent-skill-store.md](./02-agent-skill-store.md) | mvp_done |
+| 6.3 | Autonomous Watchers | [03-autonomous-watchers.md](./03-autonomous-watchers.md) | mvp_done |
+| 6.4 | Sandbox / Simulation Lab | [07-sandbox-simulation-lab.md](./07-sandbox-simulation-lab.md) | mvp_done |
+| 6.5 | Agent Trust Score | [06-agent-trust-score.md](./06-agent-trust-score.md) | mvp_done |
 
 ### Faz B — Kullanıcı ve operasyon yüzeyi (V6.6 – V6.7)
 

@@ -260,7 +260,7 @@ export function IntentTrainingPage() {
       </OpsPanel>
 
       <Tabs defaultValue="disagreements">
-        <TabsList>
+        <TabsList equalWidth>
           <TabsTrigger value="disagreements">
             Çelişkiler
             {disagreementCount > 0 && (

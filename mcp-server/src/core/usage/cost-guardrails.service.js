@@ -35,7 +35,7 @@ function estimateToolCost(toolName) {
   return 0.005;
 }
 
-function isDestructiveTool(toolName) {
+export function isDestructiveTool(toolName) {
   if (PROTECTED_TOOLS.has(toolName)) return true;
   const tool = getTool(toolName);
   return (tool?.tags || []).some((t) => t === "destructive" || t === "NEEDS_APPROVAL");

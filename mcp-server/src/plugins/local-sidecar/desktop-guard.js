@@ -52,8 +52,8 @@ function isAllowlistEnforced() {
   return process.env.DESKTOP_ALLOWLIST_DISABLED !== "true";
 }
 
-export function detectSensitiveContext({ app = "", title = "" } = {}) {
-  const haystack = `${app} ${title}`;
+export function detectSensitiveContext({ app = "", title = "", ocrText = "" } = {}) {
+  const haystack = `${app} ${title} ${ocrText}`;
   const reasons = [];
 
   if (BLOCKED_APPS.has(app)) {

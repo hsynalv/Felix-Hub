@@ -194,7 +194,11 @@ export async function replayRun(sourceRunId, { dryRun = true, createdBy = "repla
   return getRun(run.id);
 }
 
-export async function createRunFromTemplate(templateId, params, { projectId, createdBy, dryRun = false } = {}) {
+export async function createRunFromTemplate(
+  templateId,
+  params,
+  { projectId, createdBy, dryRun = false, metadataExtra = {} } = {}
+) {
   const template = resolveTemplateForExecution(templateId);
   if (!template) throw new Error(`Unknown template: ${templateId}`);
 
@@ -206,7 +210,7 @@ export async function createRunFromTemplate(templateId, params, { projectId, cre
     projectId: projectId || null,
     createdBy: createdBy || "api",
     plan,
-    metadata: { templateId, parameters: params, dryRun },
+    metadata: { templateId, parameters: params, dryRun, ...metadataExtra },
   });
 }
 

@@ -1,6 +1,6 @@
 # 03 — Release Manager Agent
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.4  
 > **Bağımlılık:** [V4 Self-Healing Dev Agent](../v4-path/07-self-healing-dev-agent.md), [01-runbook-automation.md](./01-runbook-automation.md)
 
@@ -37,19 +37,19 @@ merged PRs since tag → group by area → changelog draft
 
 ## Kapsam
 
-- [ ] Release Manager workflow template / runbook preset
-- [ ] GitHub: PR list, release API, draft release
-- [ ] Migration risk heuristic (DB, breaking API)
-- [ ] Changelog formatları (keep a changelog, conventional)
-- [ ] Approval gate: production release
-- [ ] Rollback note template
+- [x] Release Manager workflow template / runbook preset
+- [x] GitHub: PR list, release API, draft release
+- [x] Migration risk heuristic (DB, breaking API)
+- [x] Changelog formatları (keep a changelog, conventional)
+- [x] Approval gate: production release
+- [x] Rollback note template
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Son tag'den bu yana merge'ler için changelog + semver önerisi üretilir
-- [ ] Onay sonrası draft GitHub release oluşturulur
+- [x] Son tag'den bu yana merge'ler için changelog + semver önerisi üretilir
+- [x] Onay sonrası draft GitHub release oluşturulur
 
 ---
 

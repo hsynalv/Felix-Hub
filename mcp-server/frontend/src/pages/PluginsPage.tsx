@@ -257,7 +257,7 @@ export function PluginsPage() {
       />
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList equalWidth>
           <TabsTrigger value="builtin" className="gap-1.5">
             <Plug className="h-3.5 w-3.5" />
             Yerleşik eklentiler

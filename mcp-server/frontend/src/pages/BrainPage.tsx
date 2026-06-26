@@ -475,7 +475,7 @@ export function BrainPage() {
 
   const viewTabs = (
     <Tabs value={view} onValueChange={(v) => setView(v as "list" | "graph")}>
-      <TabsList>
+      <TabsList equalWidth>
         <TabsTrigger value="list" className="gap-1.5 text-xs">
           <List className="h-3.5 w-3.5" />
           Liste

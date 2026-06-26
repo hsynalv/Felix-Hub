@@ -19,6 +19,7 @@ export interface RegressionResult {
 export interface TemplateEvalResult {
   pass: boolean;
   templateId: string;
+  goldenId?: string;
   plan?: { phaseCount: number; tools: string[] };
   comparison?: { pass: boolean; diffs: unknown[]; expectedCount: number; actualCount: number };
   error?: { code: string; message: string };
@@ -36,8 +37,19 @@ export async function runRegressionSuite() {
   return apiPost<RegressionResult>("/eval/regression", {});
 }
 
-export async function evalTemplate(templateId: string, parameters: Record<string, unknown> = {}) {
-  return apiPost<TemplateEvalResult>(`/eval/template/${encodeURIComponent(templateId)}`, { parameters });
+export async function evalTemplate(
+  templateId: string,
+  parameters: Record<string, unknown> = {},
+  goldenId?: string
+) {
+  return apiPost<TemplateEvalResult>(`/eval/template/${encodeURIComponent(templateId)}`, {
+    parameters,
+    ...(goldenId ? { goldenId } : {}),
+  });
+}
+
+export async function evalGoldenTrace(goldenId: string, parameters: Record<string, unknown> = {}) {
+  return apiPost<TemplateEvalResult>(`/eval/golden/${encodeURIComponent(goldenId)}/eval`, { parameters });
 }
 
 export async function evalRun(runId: string, goldenId?: string) {

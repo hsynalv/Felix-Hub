@@ -1,6 +1,6 @@
 # 09 — Workspace Automation Hygiene
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.6  
 > **Bağımlılık:** [02-scheduled-agent-operations.md](./02-scheduled-agent-operations.md), [V4 Project Command Center](../v4-path/05-project-command-center.md)
 
@@ -37,20 +37,20 @@ Her pazartesi 09:00 → hygiene runbook
 
 ## Kapsam
 
-- [ ] Hygiene runbook preset + checklist
-- [ ] GitHub: stale PR, eski branch
-- [ ] Workspace: TODO/FIXME scan
-- [ ] Notion/Obsidian sync drift
-- [ ] Secrets catalog: unused detection (heuristic)
-- [ ] Dead workflow / failed run cleanup (policy-gated)
-- [ ] Hygiene report → 06 briefings formatı
+- [x] Hygiene runbook preset + checklist
+- [x] GitHub: stale PR, eski branch
+- [x] Workspace: TODO/FIXME scan
+- [x] Notion/Obsidian sync drift (heuristic reachability + hygiene report)
+- [x] Secrets catalog: unused detection (heuristic via audit log)
+- [x] Dead workflow / failed run cleanup (policy-gated)
+- [x] Hygiene report → 06 briefings formatı
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Haftalık hygiene raporu stale PR ve eski branch listesi içerir
-- [ ] Destructive cleanup (branch delete) approval gerektirir
+- [x] Haftalık hygiene raporu stale PR ve eski branch listesi içerir
+- [x] Destructive cleanup (branch delete) approval gerektirir
 
 ---
 

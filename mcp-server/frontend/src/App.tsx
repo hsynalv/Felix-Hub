@@ -27,6 +27,12 @@ const IntentTrainingPage = lazy(() =>
 const EvalStudioPage = lazy(() =>
   import("@/pages/EvalStudioPage").then((m) => ({ default: m.EvalStudioPage }))
 );
+const RunbooksPage = lazy(() =>
+  import("@/pages/RunbooksPage").then((m) => ({ default: m.RunbooksPage }))
+);
+const V6EcosystemPage = lazy(() =>
+  import("@/pages/V6EcosystemPage").then((m) => ({ default: m.V6EcosystemPage }))
+);
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
 
@@ -48,6 +54,8 @@ export default function App() {
             <Route path="observability" element={<ObservabilityPage />} />
             <Route path="usage" element={<UsagePage />} />
             <Route path="eval" element={<EvalStudioPage />} />
+            <Route path="ops" element={<RunbooksPage />} />
+            <Route path="v6" element={<V6EcosystemPage />} />
             <Route path="runs" element={<RunsPage />} />
             <Route path="workflows/designer" element={<WorkflowDesignerPage />} />
             <Route path="workflows/designer/:id" element={<WorkflowDesignerPage />} />

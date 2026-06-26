@@ -54,8 +54,8 @@ export async function executeBeforeHooks(toolName, args, context) {
   for (const hook of beforeExecutionHooks) {
     try {
       const result = await hook(toolName, args, context);
-      if (result && result.ok === false) {
-        return result; // Hook blocked execution
+      if (result && (result.ok === false || result.meta?.mocked)) {
+        return result;
       }
     } catch (err) {
       console.error(`[tool-hooks] Before-hook error for ${toolName}:`, err.message);

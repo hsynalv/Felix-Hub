@@ -4,11 +4,20 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/layout/StatusBadge";
 
-export function OpsPageShell({ children, className }: { children: ReactNode; className?: string }) {
+export function OpsPageShell({
+  children,
+  className,
+  stackClassName,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Vertical gap between stacked page sections (hero, stats, panels, …). */
+  stackClassName?: string;
+}) {
   return (
-    <div className={cn("relative mx-auto min-w-0 max-w-6xl space-y-4 pb-6 sm:space-y-6 sm:pb-8", className)}>
+    <div className={cn("relative mx-auto min-w-0 max-w-6xl pb-6 sm:pb-8", className)}>
       <div className="pointer-events-none absolute inset-x-0 -top-6 h-48 bg-[radial-gradient(ellipse_70%_60%_at_50%_-10%,oklch(0.55_0.14_280/0.14),transparent)]" />
-      <div className="relative">{children}</div>
+      <div className={cn("relative flex flex-col gap-6 sm:gap-8", stackClassName)}>{children}</div>
     </div>
   );
 }
@@ -52,8 +61,8 @@ export function OpsPageHero({
   );
 }
 
-export function OpsStatGrid({ children }: { children: ReactNode }) {
-  return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{children}</div>;
+export function OpsStatGrid({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("grid gap-3 sm:grid-cols-2 lg:grid-cols-4", className)}>{children}</div>;
 }
 
 export function OpsStatCard({
@@ -112,6 +121,7 @@ export function OpsPanel({
   children,
   className,
   noPadding,
+  icon: Icon,
 }: {
   title?: string;
   description?: string;
@@ -119,6 +129,7 @@ export function OpsPanel({
   children: ReactNode;
   className?: string;
   noPadding?: boolean;
+  icon?: LucideIcon;
 }) {
   return (
     <div
@@ -128,15 +139,44 @@ export function OpsPanel({
       )}
     >
       {(title || actions) && (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/50 px-4 py-3 sm:px-5">
-          <div>
-            {title && <h2 className="text-sm font-semibold">{title}</h2>}
-            {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/50 px-5 py-4 sm:px-6">
+          <div className="flex items-start gap-2">
+            {Icon && (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+                <Icon className="h-4 w-4 text-primary" />
+              </div>
+            )}
+            <div>
+              {title && <h2 className="text-sm font-semibold">{title}</h2>}
+              {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+            </div>
           </div>
           {actions}
         </div>
       )}
-      <div className={cn(!noPadding && "p-4 sm:p-5")}>{children}</div>
+      <div className={cn(!noPadding && "space-y-5 p-5 sm:space-y-6 sm:p-6")}>{children}</div>
+    </div>
+  );
+}
+
+export function OpsHelpPanel({
+  title = "Bu sayfa ne işe yarar?",
+  children,
+  className,
+}: {
+  title?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border border-dashed border-border/60 bg-muted/15 p-4 sm:p-5 text-sm leading-relaxed text-muted-foreground",
+        className
+      )}
+    >
+      <h3 className="mb-2 text-sm font-semibold text-foreground">{title}</h3>
+      <div className="space-y-2">{children}</div>
     </div>
   );
 }

@@ -38,9 +38,9 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 5.1 | Runbook Automation | [01-runbook-automation.md](./01-runbook-automation.md) | not_started |
-| 5.2 | Scheduled Agent Operations | [02-scheduled-agent-operations.md](./02-scheduled-agent-operations.md) | not_started |
-| 5.3 | Managed Autonomy Policies | [10-managed-autonomy-policies.md](./10-managed-autonomy-policies.md) | not_started |
+| 5.1 | Runbook Automation | [01-runbook-automation.md](./01-runbook-automation.md) | done |
+| 5.2 | Scheduled Agent Operations | [02-scheduled-agent-operations.md](./02-scheduled-agent-operations.md) | done |
+| 5.3 | Managed Autonomy Policies | [10-managed-autonomy-policies.md](./10-managed-autonomy-policies.md) | done |
 
 > **Not:** 10 numaralı pillar Faz A'da erken gelir — schedule ve runbook'ların policy çerçevesi buna bağlı.
 
@@ -48,18 +48,18 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 5.4 | Release Manager Agent | [03-release-manager-agent.md](./03-release-manager-agent.md) | not_started |
-| 5.5 | Dependency & Security Maintenance | [05-maintenance-agent.md](./05-maintenance-agent.md) | not_started |
-| 5.6 | Workspace Automation Hygiene | [09-workspace-hygiene-agent.md](./09-workspace-hygiene-agent.md) | not_started |
+| 5.4 | Release Manager Agent | [03-release-manager-agent.md](./03-release-manager-agent.md) | done |
+| 5.5 | Dependency & Security Maintenance | [05-maintenance-agent.md](./05-maintenance-agent.md) | done |
+| 5.6 | Workspace Automation Hygiene | [09-workspace-hygiene-agent.md](./09-workspace-hygiene-agent.md) | done |
 
 ### Faz C — SLA, rapor ve ortam (V5.7 – V5.10)
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 5.7 | Agent Reports & Briefings | [06-agent-reports-briefings.md](./06-agent-reports-briefings.md) | not_started |
-| 5.8 | Operational SLAs & Escalation | [07-sla-escalation.md](./07-sla-escalation.md) | not_started |
-| 5.9 | Incident Triage Agent | [04-incident-triage-agent.md](./04-incident-triage-agent.md) | not_started |
-| 5.10 | Environment Promotion & Change Control | [08-environment-promotion-change-control.md](./08-environment-promotion-change-control.md) | not_started |
+| 5.7 | Agent Reports & Briefings | [06-agent-reports-briefings.md](./06-agent-reports-briefings.md) | done |
+| 5.8 | Operational SLAs & Escalation | [07-sla-escalation.md](./07-sla-escalation.md) | done |
+| 5.9 | Incident Triage Agent | [04-incident-triage-agent.md](./04-incident-triage-agent.md) | done |
+| 5.10 | Environment Promotion & Change Control | [08-environment-promotion-change-control.md](./08-environment-promotion-change-control.md) | done |
 
 ---
 

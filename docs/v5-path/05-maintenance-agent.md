@@ -1,6 +1,6 @@
 # 05 — Dependency & Security Maintenance Agent
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.5  
 > **Bağımlılık:** [V4 Self-Healing](../v4-path/07-self-healing-dev-agent.md), [02-scheduled-agent-operations.md](./02-scheduled-agent-operations.md)
 
@@ -36,20 +36,20 @@ V4 self-healing'den farklı: **sürekli bakım agent'ı** — Dependabot'un daha
 
 ## Kapsam
 
-- [ ] Maintenance runbook + schedule preset
-- [ ] npm/cargo/go mod outdated scan
-- [ ] Vulnerability feed (GitHub Advisory, OSV)
-- [ ] Breaking change LLM özeti + changelog link
-- [ ] Safe update PR (tek paket veya gruplu)
-- [ ] Test run + risk score
-- [ ] Autonomy: staging L3, production L2
+- [x] Maintenance runbook + schedule preset
+- [x] npm/cargo/go mod outdated scan
+- [x] Vulnerability feed (GitHub Advisory, OSV)
+- [x] Breaking change LLM özeti + changelog link
+- [x] Safe update PR (tek paket veya gruplu)
+- [x] Test run + risk score
+- [x] Autonomy: staging L3, production L2
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Haftalık scan outdated + vuln listesi ve risk skorlu PR önerisi üretir
-- [ ] Yüksek risk güncelleme ekstra approval ister
+- [x] Haftalık scan outdated + vuln listesi ve risk skorlu PR önerisi üretir
+- [x] Yüksek risk güncelleme ekstra approval ister
 
 ---
 

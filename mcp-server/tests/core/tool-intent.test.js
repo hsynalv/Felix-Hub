@@ -54,4 +54,11 @@ describe("tool-intent", () => {
     expect(hint).toContain("n8n");
     expect(hint).toContain("tavily");
   });
+
+  it("classifies hub workflow intent separately from n8n", () => {
+    expect(classifyToolIntentRegex("workflow oluştur repo analiz et").intent).toBe("agent_workflow");
+    expect(classifyToolIntentRegex("n8n workflow ekle").intent).toBe("automation");
+    expect(toolMatchesIntent("agent_workflow", "agent_workflow_create")).toBe(true);
+    expect(toolMatchesIntent("automation", "n8n_list_workflows")).toBe(true);
+  });
 });

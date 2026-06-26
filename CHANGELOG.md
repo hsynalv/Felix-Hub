@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Hardening — V5 review follow-up
+- Runbook `force` bypass gated to admin scope (`runbook-force-guard.js`)
+- L4/L5 schedule SLA validation on create (`schedule-policy.js`)
+- Incident triage observability signal from audit errors (`observability-signal.js`)
+- SLA dashboard API (`GET /sla/dashboard`)
+- Briefing markdown export (`GET /reports/briefings/:id/export.md`)
+- Maintenance ecosystem detection (npm/cargo/go markers)
+- `docs/v5-path/HARDENING-NOTES.md` — honest partial vs done tracker
+
+### Added — V5 Faz C (`v5.1`)
+- Agent Reports & Briefings: template engine, inbox store, `/reports/*`, daily schedule preset, channel delivery
+- SLA & Escalation: policies, 5m evaluator, approval timeout + failure streak pause, violation log
+- Incident Triage Agent: timeline, suspected causes, postmortem draft, `/agents/incident/*`
+- Environment Promotion: registry, masked config diff, approval chain, staging→prod workflow
+- Ops UI tabs: Briefings, SLA, Promotion + incident triage
+- Tests: `tests/core/faz-c-v5.test.js`
+
+### Added — V5 Faz B (`v5.0-beta`)
+- Release Manager: changelog/semver/migration risk analysis, draft GitHub release API (`/agents/release/*`)
+- Maintenance Agent: npm outdated + audit scan, risk scoring, update PR proposal (`/agents/maintenance/*`)
+- Workspace Hygiene: stale PR/TODO/failed run report, destructive cleanup approval (`/agents/hygiene/*`)
+- Workflow templates: `release-manager`, `dependency-maintenance`, `workspace-hygiene`
+- Runbooks: `rb-release-manager`, `rb-maintenance`, `rb-hygiene` + schedule presets
+- Ops UI **Agents** tab + preset schedule creation
+- Tests: `tests/core/faz-b-v5.test.js`
+
+### Added — V5 Faz A (`v5.0-alpha`)
+- Runbook automation: builtin + custom runbooks (`/ops/runbooks`), preflight, execute, post-run reports, execution audit
+- Scheduled agent operations: cron schedules (`/ops/schedules`), 60s scheduler tick, skip conditions, cost max, test-fire
+- Managed autonomy policies: L0–L5 levels (`/ops/autonomy`), tool/run spawn enforcement, audit trail
+- Ops UI at `/ops` — runbook catalog, schedule management, autonomy matrix
+- Tests: `tests/core/faz-a-v5.test.js`
+
 ### Fixed — V4 hardening
 - Removed dead `buildPlanFromTemplate` call in `workflow-executor.js` (ReferenceError risk)
 - `faz2-v4.test.js` uses `expectedSteps` instead of missing `expectedPhases`

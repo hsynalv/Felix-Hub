@@ -52,9 +52,9 @@ export const CHAT_PROFILES = {
   },
   automation: {
     label: "Otomasyon",
-    description: "n8n ve workflow araçları",
+    description: "Hub workflow + n8n otomasyon",
     allowWriteTools: true,
-    toolIntents: ["automation", "external_api"],
+    toolIntents: ["agent_workflow", "automation", "external_api"],
   },
   personal_assistant: {
     label: "Kişisel asistan",
@@ -73,7 +73,7 @@ export const CHAT_PROFILES = {
     label: "Telegram asistan",
     description: "Telegram kanalı — araştırma, Notion, brain; sınırlı write (policy)",
     allowWriteTools: true,
-    toolIntents: ["brain_recall", "project_context", "external_api", "automation"],
+    toolIntents: ["brain_recall", "project_context", "external_api", "agent_workflow", "automation"],
     maxIterations: 6,
   },
   high_autonomy: {

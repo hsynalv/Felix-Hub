@@ -9,7 +9,7 @@ import { readFile, writeFile, unlink } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { randomUUID } from "crypto";
-import { assertDesktopActionAllowed } from "./desktop-guard.js";
+import { assertDesktopActionAllowed, detectSensitiveContext } from "./desktop-guard.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -175,7 +175,42 @@ export async function ocrScreenRegion({ imageBase64 } = {}) {
   };
 }
 
+async function ocrPreflightCheck() {
+  if (process.env.DESKTOP_OCR_REQUIRED !== "true") return { ok: true };
+
+  const shot = await captureScreenshot();
+  if (!shot.ok || !shot.data?.imageBase64) {
+    return {
+      ok: false,
+      error: {
+        code: "ocr_required_failed",
+        message: "DESKTOP_OCR_REQUIRED=true but screenshot capture failed",
+      },
+    };
+  }
+
+  const ocr = await ocrScreenRegion({ imageBase64: shot.data.imageBase64 });
+  const text = ocr.data?.text || "";
+  const { app, title } = await currentWindowContext();
+  const sensitivity = detectSensitiveContext({ app, title, ocrText: text });
+  if (sensitivity.sensitive) {
+    return {
+      ok: false,
+      error: {
+        code: "ocr_sensitive_context",
+        message: "OCR preflight blocked action on sensitive screen content",
+        reasons: sensitivity.reasons,
+      },
+    };
+  }
+
+  return { ok: true, ocrPreview: text.slice(0, 200) };
+}
+
 export async function desktopClick({ x, y, button = "left" } = {}) {
+  const ocrGate = await ocrPreflightCheck();
+  if (!ocrGate.ok) return ocrGate;
+
   const { app, title } = await currentWindowContext();
   const guard = assertDesktopActionAllowed({ action: "click", app, title, x, y });
   if (!guard.ok) return guard;
@@ -216,6 +251,9 @@ export async function desktopType({ text, delayMs = 0 } = {}) {
   if (!text) {
     return { ok: false, error: { code: "empty_text", message: "text required" } };
   }
+
+  const ocrGate = await ocrPreflightCheck();
+  if (!ocrGate.ok) return ocrGate;
 
   const { app, title } = await currentWindowContext();
   const guard = assertDesktopActionAllowed({ action: "type", app, title });

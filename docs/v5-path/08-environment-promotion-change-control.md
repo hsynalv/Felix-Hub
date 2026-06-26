@@ -1,6 +1,6 @@
 # 08 — Environment Promotion & Change Control
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.10  
 > **Bağımlılık:** [10-managed-autonomy-policies.md](./10-managed-autonomy-policies.md), [01-runbook-automation.md](./01-runbook-automation.md)
 
@@ -37,20 +37,20 @@ Premium B2B özellik: dev/staging/prod ayrımı ve kontrollü promotion — mevc
 
 ## Kapsam
 
-- [ ] Environment registry (dev/staging/prod per project)
-- [ ] Promotion request workflow
-- [ ] Config diff API (masked secrets)
-- [ ] Approval chain (multi-step)
-- [ ] Deployment checklist runbook entegrasyonu
-- [ ] Rollback requirement flag
-- [ ] Policy: production destructive tools blocked by default
+- [x] Environment registry (dev/staging/prod per project)
+- [x] Promotion request workflow
+- [x] Config diff API (masked secrets)
+- [x] Approval chain (multi-step)
+- [x] Deployment checklist runbook entegrasyonu
+- [x] Rollback requirement flag
+- [x] Policy: production destructive tools blocked by default
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Staging → prod promotion change request + approval chain gerektirir
-- [ ] Config diff secret değerlerini göstermeden farkları listeler
+- [x] Staging → prod promotion change request + approval chain gerektirir
+- [x] Config diff secret değerlerini göstermeden farkları listeler
 
 ---
 

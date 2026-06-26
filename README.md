@@ -16,7 +16,7 @@ AI ajanları için plugin-tabanlı HTTP servisi. REST API ve MCP (Model Context 
 cd mcp-server
 npm install
 cp .env.example .env
-# .env dosyasını düzenleyin
+# .env dosyasını düzenleyin — ayrıntılı rehber: ../ENV-SETUP.md
 npm run dev
 ```
 

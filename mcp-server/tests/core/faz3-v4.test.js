@@ -84,6 +84,13 @@ describe("V4 Faz 3", () => {
     expect(res.body.data.count).toBeGreaterThan(0);
   });
 
+  it("POST /eval/golden/:id/eval runs trace-specific regression", async () => {
+    const res = await withRead(request.post("/eval/golden/golden-incident-triage-dry/eval"));
+    expect(res.status).toBe(200);
+    expect(res.body.data.pass).toBe(true);
+    expect(res.body.data.goldenId).toBe("golden-incident-triage-dry");
+  });
+
   it("POST /eval/regression returns suite report", async () => {
     const res = await withRead(request.post("/eval/regression"));
     expect(res.status).toBe(200);

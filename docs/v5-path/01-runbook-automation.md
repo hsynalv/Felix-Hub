@@ -1,6 +1,6 @@
 # 01 — Runbook Automation
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.1  
 > **Bağımlılık:** [V4 Run Designer](../v4-path/03-agent-run-designer.md), [V4 Runtime v2](../v4-path/02-agent-runtime-v2.md)
 
@@ -48,19 +48,19 @@ runbook = workflow_template + ops_metadata
 
 ## Kapsam
 
-- [ ] `runbooks` tablosu + CRUD API
-- [ ] Runbook → workflow template bağlantısı
-- [ ] Preflight check runner (policy, env, cost estimate)
-- [ ] Runbook UI: katalog, versiyon geçmişi, çalıştır
-- [ ] Post-run report otomatik üretimi
-- [ ] Audit: hangi runbook kim tarafından ne zaman
+- [x] `runbooks` tablosu + CRUD API
+- [x] Runbook → workflow template bağlantısı
+- [x] Preflight check runner (policy, env, cost estimate)
+- [x] Runbook UI: katalog, versiyon geçmişi, çalıştır
+- [x] Post-run report otomatik üretimi
+- [x] Audit: hangi runbook kim tarafından ne zaman
 
 ---
 
 ## Başarı kriteri
 
-- [ ] "CI fix runbook" versiyonlu kayıt altında tekrar çalıştırılabilir
-- [ ] Preflight fail olunca run başlamaz, rapor üretilir
+- [x] "CI fix runbook" versiyonlu kayıt altında tekrar çalıştırılabilir
+- [x] Preflight fail olunca run başlamaz, rapor üretilir
 
 ---
 

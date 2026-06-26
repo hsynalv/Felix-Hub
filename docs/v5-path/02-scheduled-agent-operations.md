@@ -1,6 +1,6 @@
 # 02 — Scheduled Agent Operations
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.2  
 > **Bağımlılık:** [01-runbook-automation.md](./01-runbook-automation.md), [10-managed-autonomy-policies.md](./10-managed-autonomy-policies.md)
 
@@ -47,19 +47,19 @@ schedule → runbook_id | workflow_template_id
 
 ## Kapsam
 
-- [ ] `agent_schedules` tablosu + scheduler job
-- [ ] Schedule CRUD API + pause/resume
-- [ ] Cost/quota pre-check before spawn
-- [ ] Schedule UI: oluştur, test fire, geçmiş
-- [ ] Skip condition evaluator
-- [ ] V6 watchers'a migration path (schedule → watcher upgrade)
+- [x] `agent_schedules` tablosu + scheduler job
+- [x] Schedule CRUD API + pause/resume
+- [x] Cost/quota pre-check before spawn
+- [x] Schedule UI: oluştur, test fire, geçmiş
+- [x] Skip condition evaluator
+- [x] V6 watchers'a migration path (schedule → watcher upgrade)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Haftalık dependency scan zamanında run açar, maliyet limiti aşılırsa atlar
-- [ ] Skip condition (ör. "açık incident varsa") çalışır
+- [x] Haftalık dependency scan zamanında run açar, maliyet limiti aşılırsa atlar
+- [x] Skip condition (ör. "açık incident varsa") çalışır
 
 ---
 

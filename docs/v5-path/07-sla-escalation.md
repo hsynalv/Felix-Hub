@@ -1,6 +1,6 @@
 # 07 — Operational SLAs & Escalation
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.8  
 > **Bağımlılık:** [10-managed-autonomy-policies.md](./10-managed-autonomy-policies.md), [02-scheduled-agent-operations.md](./02-scheduled-agent-operations.md)
 
@@ -48,19 +48,19 @@ sla_policy: scope (project, runbook, schedule)
 
 ## Kapsam (implementation)
 
-- [ ] `sla_policies` + evaluator (run/schedule lifecycle hooks)
-- [ ] Escalation action executor
-- [ ] Owner assignment (project metadata)
-- [ ] Paging integration (notifications: Telegram, Slack)
-- [ ] GitHub issue / Notion task auto-create
-- [ ] SLA dashboard: ihlaller, ortalama çözüm süresi
+- [x] `sla_policies` + evaluator (run/schedule lifecycle hooks)
+- [x] Escalation action executor
+- [x] Owner assignment (project metadata)
+- [x] Paging integration (notifications: Telegram, Slack)
+- [x] GitHub issue / Notion task auto-create
+- [x] SLA dashboard: ihlaller, ortalama çözüm süresi (`GET /sla/dashboard` + Ops UI)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Approval 4 saat bekleyince owner'a bildirim + opsiyonel issue açılır
-- [ ] 3 ardışık run failure schedule'ı pause eder
+- [x] Approval 4 saat bekleyince owner'a bildirim + opsiyonel issue açılır
+- [x] 3 ardışık run failure schedule'ı pause eder
 
 ---
 

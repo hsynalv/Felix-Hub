@@ -15,6 +15,7 @@ import { recordToolStep, completeRun } from "./run-orchestrator.js";
 import { emitRunEvent } from "./run-events.js";
 import { expandWorkflowSteps } from "./workflow-expr.js";
 import { resolveTemplateForExecution } from "./workflow-template-store.js";
+import { enforceWorkflowStepSla } from "./workflow-sla-gate.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -176,6 +177,20 @@ export async function executeWorkflowRun({
     await log(`Step ${i + 1}/${phases.length}: ${phase.toolName}`);
 
     const result = await executeToolPhase(runId, phase, { dryRun, context, onLog: log });
+
+    if (!dryRun) {
+      const slaGate = await enforceWorkflowStepSla({
+        ...context,
+        runId,
+        estimatedCostUsd: result?.usage?.estimatedCostUsd || result?.data?.usage?.estimatedCostUsd || 0,
+      });
+      if (!slaGate.ok) {
+        await runCompensations(runId, completedPhases, { dryRun, context, onLog: log });
+        await completeRun(runId, { error: { message: slaGate.message, code: slaGate.code } });
+        emitRunEvent(runId, { type: "status", status: RunStatus.FAILED, sla: slaGate.code });
+        throw new Error(slaGate.message || "SLA gate blocked workflow step");
+      }
+    }
 
     if (result?.ok === false && !dryRun) {
       await runCompensations(runId, completedPhases, { dryRun, context, onLog: log });

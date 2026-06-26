@@ -1,6 +1,6 @@
 # 06 — Agent Reports & Briefings
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V5.7  
 > **Bağımlılık:** [V4 Run Dashboard](../v3-path/04-visual-run-dashboard.md), [01-runbook-automation.md](./01-runbook-automation.md)
 
@@ -36,19 +36,19 @@ V4 run dashboard verisini **yöneticinin okuyacağı rapor**a çevirmek.
 
 ## Kapsam
 
-- [ ] Report template engine (sections, data sources)
-- [ ] Report schedule (02 ile entegre)
-- [ ] Data aggregation: runs, cost, approvals, incidents
-- [ ] Briefing UI: okundu, arşiv, paylaş
-- [ ] Channel delivery (notifications plugin)
-- [ ] Markdown/PDF export
+- [x] Report template engine (sections, data sources)
+- [x] Report schedule (02 ile entegre)
+- [x] Data aggregation: runs, cost, approvals, incidents
+- [x] Briefing UI: okundu, arşiv, paylaş
+- [x] Channel delivery (notifications plugin)
+- [x] Markdown/PDF export (`export.md`, `export.html`, `export.pdf`)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Daily engineering brief sabah schedule ile üretilir ve Inbox/UI'da görünür
-- [ ] En az bir dış kanala (Slack veya Notion) gönderim çalışır
+- [x] Daily engineering brief sabah schedule ile üretilir ve Inbox/UI'da görünür
+- [x] En az bir dış kanala (Slack veya Notion) gönderim çalışır
 
 ---
 

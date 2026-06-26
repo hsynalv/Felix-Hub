@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from "./api-client";
+import { apiDelete, apiGet, apiPost, apiPut } from "./api-client";
 
 export interface WorkflowStep {
   type: "tool" | "checkpoint" | "approval" | "branch";
@@ -33,6 +33,10 @@ export async function saveWorkflowTemplate(draft: WorkflowDraft) {
     return apiPut<WorkflowDraft>(`/runs/templates/${draft.id}`, draft);
   }
   return apiPost<WorkflowDraft>("/runs/templates", draft);
+}
+
+export async function deleteWorkflowTemplate(id: string) {
+  return apiDelete<{ deleted: boolean; id: string }>(`/runs/templates/${encodeURIComponent(id)}`);
 }
 
 export async function previewWorkflowTemplate(id: string, parameters: Record<string, string>, dryRun = true) {
