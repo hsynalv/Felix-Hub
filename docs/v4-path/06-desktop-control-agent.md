@@ -1,6 +1,6 @@
 # 06 — Desktop Control Agent MVP
 
-> **Status:** not_started  
+> **Status:** done (MVP: observe + assisted click/type)  
 > **Faz:** V4.6  
 > **Bağımlılık:** [04-approval-center-pro.md](./04-approval-center-pro.md), sidecar altyapısı (V3 Faz 4)
 
@@ -56,9 +56,9 @@ browser_type_selector
 
 ## Başarı kriteri
 
-- [ ] Agent ekranı okuyabilir
-- [ ] Onaylı şekilde basit UI aksiyonu yapabilir
-- [ ] Tüm aksiyonlar `/runs` timeline'da görünür
+- [x] Agent ekranı okuyabilir
+- [x] Onaylı şekilde basit UI aksiyonu yapabilir
+- [x] Tüm aksiyonlar `/runs` timeline'da görünür
 
 ---
 

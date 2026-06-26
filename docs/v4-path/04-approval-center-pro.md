@@ -1,6 +1,6 @@
 # 04 — Approval Center Pro
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V4.4  
 > **Bağımlılık:** [02-agent-runtime-v2.md](./02-agent-runtime-v2.md)
 
@@ -41,8 +41,8 @@ sidecar_terminal_exec
 
 ## Başarı kriteri
 
-- [ ] Riskli aksiyonlar onaysız çalışmaz
-- [ ] Onay kararları policy önerisine dönüşebilir
+- [x] Riskli aksiyonlar onaysız çalışmaz
+- [x] Onay kararları policy önerisine dönüşebilir
 
 ---
 

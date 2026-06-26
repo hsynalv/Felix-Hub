@@ -101,6 +101,7 @@ export async function queryAuditEvents({
   source,
   plugin,
   operation,
+  actor,
   limit = 100,
   offset = 0,
 } = {}) {
@@ -116,11 +117,14 @@ export async function queryAuditEvents({
     ...(operation && { operation: String(operation) }),
   });
 
-  if (!source) {
-    return entries;
+  let filtered = entries;
+  if (source) {
+    filtered = filtered.filter((e) => e.metadata?.source === source);
   }
-
-  return entries.filter((e) => e.metadata?.source === source);
+  if (actor) {
+    filtered = filtered.filter((e) => e.actor === actor || e.metadata?.user === actor);
+  }
+  return filtered;
 }
 
 /**

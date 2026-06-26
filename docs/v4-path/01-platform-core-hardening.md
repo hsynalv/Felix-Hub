@@ -1,6 +1,6 @@
 # 01 — Platform Çekirdeğini Sertleştir
 
-> **Status:** partial (v3.4 Faz 5)  
+> **Status:** done  
 > **Faz:** V4.1  
 > **Bağımlılık:** V3 Faz 0–5 tamamlandı
 
@@ -38,19 +38,19 @@ Agent'ların güvenli ve stabil koşacağı omurgayı netleştirmek.
 
 ## Kalan işler
 
-- [ ] `job.manager.js` deprecation path + tüm import'lar `jobs.js`'e
-- [ ] Audit tek entrypoint dokümantasyonu + kalan çift çağrılar
-- [ ] `PLUGINS_STRICT_TOOL_SCHEMA=true` CI gate
-- [ ] Startup warning audit — gerçek risk dışı temizlik
-- [ ] Test fixture paylaşımı genişletme (diğer yavaş suite'ler)
+- [x] `job.manager.js` deprecation path + tüm import'lar `jobs.js`'e
+- [x] Audit tek entrypoint dokümantasyonu + kalan çift çağrılar
+- [x] `STRICT_TOOL_SCHEMA=true` CI gate
+- [x] Startup warning audit — gerçek risk dışı temizlik
+- [x] Test fixture paylaşımı genişletme (diğer yavaş suite'ler)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] `npm run test:run` exit 0
-- [ ] Test süresi makul seviyede (jobs-api < 5s hedef)
-- [ ] Startup warning'leri gerçek risk dışında temiz
+- [x] `npm run test:run` exit 0
+- [x] Test süresi makul seviyede (jobs-api < 5s hedef)
+- [x] Startup warning'leri gerçek risk dışında temiz
 
 ---
 

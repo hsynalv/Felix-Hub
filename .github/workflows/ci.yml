@@ -41,6 +41,12 @@ jobs:
         env:
           STRICT_PLUGIN_META: "true"
 
+      - name: Validate tool schemas (strict)
+        working-directory: mcp-server
+        run: pnpm run validate:tools
+        env:
+          STRICT_TOOL_SCHEMA: "true"
+
       - name: Build UI
         working-directory: mcp-server
         run: pnpm run ui:build

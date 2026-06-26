@@ -1,6 +1,6 @@
 # 05 — Project Command Center
 
-> **Status:** partial (context graph, workspace prefs)  
+> **Status:** done  
 > **Faz:** V4.5  
 > **Bağımlılık:** [04-approval-center-pro.md](./04-approval-center-pro.md) (paralel başlanabilir)
 
@@ -50,7 +50,7 @@ audit
 
 ## Başarı kriteri
 
-- [ ] Bir projeye girince kullanıcı sistemin son durumunu tek ekranda görür
+- [x] Bir projeye girince kullanıcı sistemin son durumunu tek ekranda görür
 
 ---
 

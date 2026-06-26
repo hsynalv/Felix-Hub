@@ -12,6 +12,7 @@ import {
   sanitizeAuditEvent,
   validateAuditEvent,
   generateCorrelationId,
+  normalizeCorrelationId,
 } from "./audit.standard.js";
 import { MemoryAuditSink } from "./sinks/memory.audit.js";
 import { FileAuditSink } from "./sinks/file.audit.js";
@@ -119,10 +120,7 @@ export class AuditManager {
       return;
     }
 
-    // Generate correlation ID if not provided
-    if (!event.correlationId) {
-      event.correlationId = generateCorrelationId();
-    }
+    event.correlationId = normalizeCorrelationId(event.correlationId);
 
     // Validate event
     const validationError = validateAuditEvent(event);
@@ -172,7 +170,7 @@ export class AuditManager {
       actor: params.actor || "anonymous",
       workspaceId: params.workspaceId || "global",
       projectId: params.projectId || null,
-      correlationId: params.correlationId || generateCorrelationId(),
+      correlationId: normalizeCorrelationId(params.correlationId),
       allowed: params.allowed,
       durationMs: params.durationMs || 0,
       success: params.success,

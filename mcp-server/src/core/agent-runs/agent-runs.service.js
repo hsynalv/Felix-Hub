@@ -7,7 +7,7 @@ import {
   isPersistenceHealthy,
   randomUUID,
 } from "../persistence/index.js";
-import { maskBody } from "../audit.js";
+import { maskBody } from "../audit/index.js";
 import { emitRunEvent } from "./run-events.js";
 
 export const RunStatus = {

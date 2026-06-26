@@ -31,12 +31,14 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "validate:plugins": "node scripts/validate-plugin-meta.js",
+    "validate:tools": "node scripts/validate-tool-schemas.js",
     "sync:plugin-security": "node scripts/sync-plugin-security-manifest.js",
     "sync:plugin-meta-env": "node scripts/sync-plugin-meta-env.js",
     "scaffold:plugin-meta": "node scripts/scaffold-plugin-meta.js",
     "test:integration": "vitest run --config vitest.integration.config.js",
     "test:integration:stable": "vitest run --config vitest.integration.stable.config.js",
     "eval:smoke": "vitest run tests/eval/trace-regression.test.js",
+    "eval:ci": "vitest run tests/eval/trace-regression.test.js tests/core/faz3-v4.test.js",
     "sidecar:daemon": "node bin/sidecar-daemon.js"
   },
   "keywords": [

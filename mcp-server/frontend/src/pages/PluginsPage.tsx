@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Cable, Plug, Settings2, Zap } from "lucide-react";
+import { Cable, Package, Plug, Settings2, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ import { useToast } from "@/providers/ToastProvider";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { McpConnectorsPanel } from "@/components/mcp/McpConnectorsPanel";
+import { TeamPacksPanel } from "@/components/team/TeamPacksPanel";
 
 function maturityTone(status?: string) {
   switch (status) {
@@ -265,6 +266,10 @@ export function PluginsPage() {
             <Cable className="h-3.5 w-3.5" />
             Dış MCP
           </TabsTrigger>
+          <TabsTrigger value="packs" className="gap-1.5">
+            <Package className="h-3.5 w-3.5" />
+            Entegrasyon paketleri
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="builtin" className="mt-4 space-y-4">
@@ -297,6 +302,10 @@ export function PluginsPage() {
 
         <TabsContent value="external" className="mt-4">
           <McpConnectorsPanel />
+        </TabsContent>
+
+        <TabsContent value="packs" className="mt-4">
+          <TeamPacksPanel />
         </TabsContent>
       </Tabs>
 

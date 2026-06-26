@@ -80,6 +80,29 @@ export async function getRunSteps(runId: string, limit = 100) {
   return apiGet<{ steps: RunStep[]; count: number }>(`/runs/${runId}/steps?limit=${limit}`);
 }
 
+export async function pauseRun(runId: string) {
+  return apiPost<AgentRun>(`/runs/${runId}/pause`, {});
+}
+
+export async function retryRunStep(runId: string, stepIndex?: number) {
+  return apiPost<{ run: AgentRun; jobId?: string; stepIndex: number }>(`/runs/${runId}/retry-step`, {
+    stepIndex,
+  });
+}
+
+export async function rollbackRun(runId: string, dryRun = true) {
+  return apiPost<{ runId: string; compensated: number; dryRun: boolean }>(`/runs/${runId}/rollback`, {
+    dryRun,
+  });
+}
+
+export async function compareRun(runId: string, targetRunId?: string, dryRun = true) {
+  return apiPost<{ comparison?: unknown; replayRunId?: string }>(`/runs/${runId}/compare`, {
+    targetRunId,
+    dryRun,
+  });
+}
+
 export async function cancelRun(runId: string, reason?: string) {
   return apiPost<AgentRun>(`/runs/${runId}/cancel`, { reason });
 }
@@ -90,8 +113,8 @@ export async function resumeRun(runId: string, startFromStep?: number) {
   });
 }
 
-export async function retryRun(runId: string, dryRun = false) {
-  return replayRun(runId, dryRun);
+export async function retryRun(runId: string, stepIndex?: number) {
+  return retryRunStep(runId, stepIndex);
 }
 
 export async function approveRun(runId: string, approvalId: string, approved = true) {

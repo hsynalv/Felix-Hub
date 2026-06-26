@@ -11,6 +11,7 @@ import {
   fetchUsageEvents,
   fetchUsageSummary,
   fetchProjectUsage,
+  fetchCostAnomalies,
   formatCostUsd,
   formatTokenCount,
   usageRangePresets,
@@ -65,6 +66,13 @@ export function UsagePage() {
     staleTime: 30_000,
   });
 
+  const anomaliesQuery = useQuery({
+    queryKey: ["usage-anomalies", projectId],
+    queryFn: () => fetchCostAnomalies(projectId, 7),
+    enabled: filterByProject && !!projectId,
+    staleTime: 60_000,
+  });
+
   const totals = useMemo(() => {
     const groups = summaryQuery.data?.groups ?? [];
     return groups.reduce(
@@ -102,6 +110,19 @@ export function UsagePage() {
           </Badge>
         )}
       </div>
+
+      {anomaliesQuery.data?.hasAnomalies && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-amber-700 dark:text-amber-400">Maliyet anomalisi</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {(anomaliesQuery.data.anomalies as Array<{ message?: string; level?: string }>).map((a, i) => (
+              <p key={i}>{a.message}</p>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {(["d7", "d30", "d90"] as const).map((key) => (

@@ -1,0 +1,24 @@
+{
+  "id": "golden-ci-failure-heal-dry",
+  "templateId": "ci-failure-heal",
+  "parameters": {
+    "repo": "acme/webapp",
+    "branch": "fix/ci-tests",
+    "checkName": "unit-tests",
+    "failureLog": "FAIL src/auth.test.ts — expected true to be false",
+    "workspacePath": ".",
+    "testCommand": "npm test"
+  },
+  "expectedSteps": [
+    { "type": "tool", "toolName": "repo_analyze" },
+    { "type": "tool", "toolName": "repo_recent_commits" },
+    { "type": "tool", "toolName": "workspace_list" },
+    { "type": "tool", "toolName": "git_status" },
+    { "type": "tool", "toolName": "git_diff" },
+    { "type": "tool", "toolName": "code_review_suggest_fix" },
+    { "type": "tool", "toolName": "tests_run" },
+    { "type": "tool", "toolName": "git_add" },
+    { "type": "tool", "toolName": "git_commit" },
+    { "type": "tool", "toolName": "github_pr_create" }
+  ]
+}

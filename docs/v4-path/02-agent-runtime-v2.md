@@ -1,6 +1,6 @@
 # 02 — Agent Runtime v2
 
-> **Status:** partial (v3.4 engine temeli)  
+> **Status:** done  
 > **Faz:** V4.2  
 > **Bağımlılık:** [01-platform-core-hardening.md](./01-platform-core-hardening.md)
 
@@ -51,20 +51,41 @@ POST /runs/:id/compare
 
 ## Kalan işler
 
-- [ ] `POST /runs/:id/pause` — explicit pause API
-- [ ] `POST /runs/:id/retry-step` — tek step retry
-- [ ] `POST /runs/:id/rollback` — compensate chain tetikleme
-- [ ] `POST /runs/:id/compare` — replay diff
-- [ ] Step timeout enforcement
-- [ ] State machine dokümantasyonu + diagram
-- [ ] Destructive step dry-run/replay guard (tüm tool'lar)
+- [x] `POST /runs/:id/pause` — explicit pause API
+- [x] `POST /runs/:id/retry-step` — tek step retry
+- [x] `POST /runs/:id/rollback` — compensate chain tetikleme
+- [x] `POST /runs/:id/compare` — replay diff
+- [x] Step timeout enforcement
+- [x] State machine dokümantasyonu + diagram
+- [x] Destructive step dry-run/replay guard (tüm tool'lar)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Bir workflow başarısız step'ten devam edebilir
-- [ ] Destructive step dry-run/replay'de gerçek aksiyon almaz
+- [x] Bir workflow başarısız step'ten devam edebilir
+- [x] Destructive step dry-run/replay'de gerçek aksiyon almaz
+
+---
+
+## Run state machine (v4.0-alpha)
+
+```mermaid
+stateDiagram-v2
+  [*] --> running
+  running --> paused
+  running --> waiting_approval
+  running --> completed
+  running --> failed
+  running --> cancelled
+  paused --> running
+  paused --> cancelled
+  waiting_approval --> running
+  waiting_approval --> cancelled
+  failed --> running
+  completed --> [*]
+  cancelled --> [*]
+```
 
 ---
 

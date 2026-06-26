@@ -8,20 +8,34 @@ import {
   updateRunStatus,
   createCheckpoint,
   updateRunCurrentStep,
+  listRunSteps,
   RunStatus,
 } from "./agent-runs.service.js";
 import { recordToolStep, completeRun } from "./run-orchestrator.js";
 import { emitRunEvent } from "./run-events.js";
 import { expandWorkflowSteps } from "./workflow-expr.js";
-import { buildPlanFromTemplate, getWorkflowTemplate } from "./workflow-templates.js";
+import { resolveTemplateForExecution } from "./workflow-template-store.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const DEFAULT_STEP_TIMEOUT_MS = Number(process.env.WORKFLOW_STEP_TIMEOUT_MS) || 60_000;
+
+function withTimeout(promise, timeoutMs, label) {
+  if (!timeoutMs || timeoutMs <= 0) return promise;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Step timeout after ${timeoutMs}ms: ${label}`)), timeoutMs);
+    }),
+  ]);
+}
+
 async function executeToolPhase(runId, phase, { dryRun, context, onLog }) {
   const maxRetries = phase.maxRetries ?? 0;
   const backoffMs = phase.backoffMs ?? 500;
+  const timeoutMs = phase.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
   let lastResult;
   let attempt = 0;
 
@@ -33,11 +47,15 @@ async function executeToolPhase(runId, phase, { dryRun, context, onLog }) {
         data: { dryRun: true, tool: phase.toolName, args: phase.args, simulated: true, attempt },
       };
     } else {
-      lastResult = await callTool(phase.toolName, phase.args, {
-        ...context,
-        runId,
-        dryRun: false,
-      });
+      lastResult = await withTimeout(
+        callTool(phase.toolName, phase.args, {
+          ...context,
+          runId,
+          dryRun: false,
+        }),
+        timeoutMs,
+        phase.toolName
+      );
     }
 
     await recordToolStep(runId, {
@@ -64,7 +82,7 @@ async function executeToolPhase(runId, phase, { dryRun, context, onLog }) {
   return lastResult;
 }
 
-async function runCompensations(runId, completedPhases, { dryRun, context, onLog }) {
+export async function runCompensations(runId, completedPhases, { dryRun, context, onLog }) {
   for (const phase of [...completedPhases].reverse()) {
     if (!phase.compensate?.toolName) continue;
     await onLog?.(`Compensating: ${phase.compensate.toolName}`);
@@ -101,6 +119,7 @@ export async function executeWorkflowRun({
   dryRun = false,
   context = {},
   startFromStep = 0,
+  singleStep = false,
   updateProgress = async () => {},
   log = async () => {},
 }) {
@@ -115,16 +134,27 @@ export async function executeWorkflowRun({
     throw new Error("Workflow has no executable phases");
   }
 
-  buildPlanFromTemplate(template, params);
-
   await updateRunStatus(runId, RunStatus.RUNNING);
   await log(`Workflow ${template.id} started (${phases.length} phases, from step ${startFromStep})`);
 
   const completedPhases = [];
+  const endIndex = singleStep ? Math.min(startFromStep + 1, phases.length) : phases.length;
 
-  for (let i = startFromStep; i < phases.length; i++) {
+  for (let i = startFromStep; i < endIndex; i++) {
     const phase = phases[i];
     await updateProgress(Math.round(((i + 1) / phases.length) * 90));
+
+    if (phase.type === "approval") {
+      await createCheckpoint(runId, {
+        type: "approval",
+        payload: { stepIndex: i, name: phase.name || `approval-${i}` },
+      });
+      await updateRunCurrentStep(runId, i);
+      await updateRunStatus(runId, RunStatus.WAITING_APPROVAL);
+      await log(`Approval checkpoint: ${phase.name || i}`);
+      emitRunEvent(runId, { type: "status", status: RunStatus.WAITING_APPROVAL, checkpoint: i });
+      return { paused: true, stepIndex: i, awaitingApproval: true, phases: phases.length };
+    }
 
     if (phase.type === "checkpoint") {
       await createCheckpoint(runId, {
@@ -157,6 +187,13 @@ export async function executeWorkflowRun({
     completedPhases.push(phase);
   }
 
+  if (singleStep) {
+    await updateRunCurrentStep(runId, Math.min(startFromStep, phases.length - 1));
+    emitRunEvent(runId, { type: "status", status: RunStatus.RUNNING, singleStep: true });
+    await log(`Single step ${startFromStep + 1} completed`);
+    return { templateId: template.id, steps: phases.length, singleStep: true, stepIndex: startFromStep };
+  }
+
   await completeRun(runId);
   emitRunEvent(runId, { type: "status", status: RunStatus.COMPLETED });
   await updateProgress(100);
@@ -176,7 +213,7 @@ export async function resumeWorkflowRun({
 }) {
   const run = await getRun(runId);
   if (!run) throw new Error("Run not found");
-  const template = getWorkflowTemplate(templateId);
+  const template = resolveTemplateForExecution(templateId);
   if (!template) throw new Error(`Unknown template: ${templateId}`);
 
   return executeWorkflowRun({
@@ -186,7 +223,36 @@ export async function resumeWorkflowRun({
     dryRun: dryRun ?? run.metadata?.dryRun ?? false,
     context,
     startFromStep: startFromStep ?? run.currentStep ?? 0,
+    singleStep: false,
     updateProgress,
     log,
   });
 }
+
+export function phasesFromRunSteps(template, params, steps) {
+  if (!template?.steps) return [];
+  const expanded = expandWorkflowSteps(template.steps, params);
+  const completed = [];
+  for (const step of steps) {
+    if (step.type !== "tool" || step.status !== "ok" || !step.toolName) continue;
+    const phase = expanded.find((p) => p.toolName === step.toolName);
+    if (phase) completed.push(phase);
+  }
+  return completed;
+}
+
+export async function rollbackWorkflowRun({ runId, template, dryRun = true, context = {}, onLog }) {
+  const run = await getRun(runId);
+  if (!run) throw new Error("Run not found");
+  const steps = await listRunSteps(runId, { limit: 500 });
+  const params = run.metadata?.parameters || {};
+  const completedPhases = template ? phasesFromRunSteps(template, params, steps) : [];
+  await runCompensations(runId, completedPhases, {
+    dryRun,
+    context,
+    onLog: onLog || (async () => {}),
+  });
+  return { runId, compensated: completedPhases.length, dryRun };
+}
+
+export { runCompensations as exportRunCompensations };

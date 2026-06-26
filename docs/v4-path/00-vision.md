@@ -1,6 +1,6 @@
 # 00 — V4 Vizyon: Premium AI Engineering Agent Platform
 
-> **Status:** not_started  
+> **Status:** done  
 > **Önkoşul:** [V3 path](../v3-path/EXECUTION-ORDER.md) Faz 0–5 tamamlandı (v3.4)  
 > **Bağımlılık:** —
 

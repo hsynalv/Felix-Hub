@@ -15,11 +15,8 @@ import {
 } from "./agent-runs.service.js";
 import { recordContextEvent } from "../project-context/project-context.service.js";
 import { queryRunUsage } from "../usage/usage-ledger.service.js";
-import {
-  getWorkflowTemplate,
-  buildPlanFromTemplate,
-  listWorkflowTemplates,
-} from "./workflow-templates.js";
+import { resolveTemplateForExecution } from "./workflow-template-store.js";
+import { buildPlanFromTemplate, listWorkflowTemplates } from "./workflow-templates.js";
 
 /**
  * Get or create an active run for a chat turn.
@@ -198,7 +195,7 @@ export async function replayRun(sourceRunId, { dryRun = true, createdBy = "repla
 }
 
 export async function createRunFromTemplate(templateId, params, { projectId, createdBy, dryRun = false } = {}) {
-  const template = getWorkflowTemplate(templateId);
+  const template = resolveTemplateForExecution(templateId);
   if (!template) throw new Error(`Unknown template: ${templateId}`);
 
   const plan = buildPlanFromTemplate(template, params);

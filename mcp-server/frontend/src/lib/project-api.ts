@@ -96,6 +96,45 @@ export async function fetchProjectChanges(projectKey: string, sinceDays = 14) {
   );
 }
 
+export interface CommandCenterBriefing {
+  date: string;
+  summary: string;
+  bullets: string[];
+  stats: { events: number; runs: number; completedRuns: number; failedRuns: number };
+}
+
+export interface CommandCenterData {
+  project: { key: string; name: string; envs?: string[] };
+  links: ProjectLinks | null;
+  briefing: CommandCenterBriefing;
+  lastChangeSummary?: string;
+  recentRuns: ProjectContext["recentRuns"];
+  recentEvents: ProjectContext["recentEvents"];
+  githubActivity: ProjectContext["recentEvents"];
+  knowledgeActivity: ProjectContext["recentEvents"];
+  integrations: Array<{ id: string; label: string; connected: boolean }>;
+  usage: {
+    last7Days?: { estimatedCostUsd?: number; totalTokens?: number };
+    last30Days?: { estimatedCostUsd?: number; totalTokens?: number };
+  };
+  quota?: { allowed: boolean; warning?: boolean } | null;
+  pendingApprovals: Array<{
+    id: string;
+    toolName?: string | null;
+    riskScore?: number;
+    runId?: string | null;
+    createdAt: string;
+    explanation?: string | null;
+  }>;
+  risks: Array<{ level: string; type: string; message: string; runId?: string; approvalId?: string }>;
+  changesSummary?: Record<string, number | string | null>;
+  graph: ProjectContext["graph"];
+}
+
+export async function fetchProjectCommandCenter(projectKey: string) {
+  return apiGet<CommandCenterData>(`/projects/${encodeURIComponent(projectKey)}/command-center`);
+}
+
 export async function updateProjectLinks(projectKey: string, links: Partial<ProjectLinks>) {
   return apiPut<{ project: string; links: ProjectLinks }>(
     `/projects/${encodeURIComponent(projectKey)}/links`,

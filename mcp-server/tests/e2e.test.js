@@ -1,5 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createServer } from "../src/core/server.js";
+import { describe, it, expect, beforeAll, vi } from "vitest";
+import supertest from "supertest";
+
+vi.mock("../src/core/config.js", async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    config: {
+      ...mod.config,
+      persistence: { ...mod.config.persistence, enabled: false },
+      redis: { ...mod.config.redis, enabled: false, url: undefined },
+    },
+  };
+});
+
+import { getIntegrationServer } from "./framework/test-server.js";
 
 /**
  * E2E Scenario Tests
@@ -7,66 +21,45 @@ import { createServer } from "../src/core/server.js";
  */
 
 describe("E2E Scenario Tests", () => {
-  let app;
-  let server;
-  let port;
+  let request;
 
   beforeAll(async () => {
-    app = await createServer();
-    await new Promise((resolve, reject) => {
-      server = app.listen(0, (err) => {
-        if (err) return reject(err);
-        port = server.address().port;
-        resolve();
-      });
-    });
-  }, 30000);
+    const app = await getIntegrationServer();
+    request = supertest(app);
+  }, 60000);
 
-  afterAll(async () => {
-    if (server) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-  });
-
-  // ── Helper: HTTP request ───────────────────────────────────────────────────
-
-  async function request(path, opts = {}) {
-    const url = `http://localhost:${port}${path}`;
-    const response = await fetch(url, {
-      method: opts.method || "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(opts.headers || {}),
-      },
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-    });
-    return response;
+  async function http(path, opts = {}) {
+    const method = (opts.method || "GET").toLowerCase();
+    let req = request[method](path);
+    if (opts.headers) req = req.set(opts.headers);
+    if (opts.body) req = req.send(opts.body);
+    return req;
   }
 
   // ── Scenario 1: Plugin Discovery Flow ───────────────────────────────────────
 
   describe("Plugin Discovery Flow", () => {
     it("should list all plugins via /plugins", async () => {
-      const response = await request("/plugins");
+      const response = await http("/plugins");
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = response.body;
       expect(data.ok).toBe(true);
       expect(Array.isArray(data.plugins)).toBe(true);
       expect(data.plugins.length).toBeGreaterThan(0);
     });
 
     it("should get plugin details via /plugins/:name", async () => {
-      const response = await request("/plugins/http");
+      const response = await http("/plugins/http");
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = response.body;
       expect(data.ok).toBe(true);
       expect(data.plugin.name).toBe("http");
     });
 
     it("should list tools for a plugin via /tools", async () => {
-      const response = await request("/tools");
+      const response = await http("/tools");
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = response.body;
       expect(data.ok).toBe(true);
       expect(Array.isArray(data.tools)).toBe(true);
     });
@@ -78,7 +71,7 @@ describe("E2E Scenario Tests", () => {
     it("should index file content and search it", async () => {
       // Step 1: Create a file
       const fileContent = "API Documentation: Authentication uses JWT tokens.";
-      const writeRes = await request("/workspace/files", {
+      const writeRes = await http("/workspace/files", {
         method: "POST",
         body: {
           projectId: "test-project",
@@ -89,12 +82,12 @@ describe("E2E Scenario Tests", () => {
       expect([200, 201]).toContain(writeRes.status);
 
       // Step 2: Read file and index in RAG
-      const readRes = await request("/workspace/files?projectId=test-project&path=docs/auth.md");
+      const readRes = await http("/workspace/files?projectId=test-project&path=docs/auth.md");
       expect(readRes.status).toBe(200);
-      const fileData = await readRes.json();
+      const fileData = readRes.body;
 
       // Step 3: Index content
-      const indexRes = await request("/rag/index", {
+      const indexRes = await http("/rag/index", {
         method: "POST",
         body: {
           content: fileData.data.content || fileContent,
@@ -102,23 +95,23 @@ describe("E2E Scenario Tests", () => {
         },
       });
       expect([200, 201]).toContain(indexRes.status);
-      const indexData = await indexRes.json();
+      const indexData = indexRes.body;
       expect(indexData.ok).toBe(true);
       const docId = indexData.data?.id || indexData.document?.id;
 
       // Step 4: Search
-      const searchRes = await request("/rag/search", {
+      const searchRes = await http("/rag/search", {
         method: "POST",
         body: { query: "JWT authentication", limit: 5 },
       });
       expect(searchRes.status).toBe(200);
-      const searchData = await searchRes.json();
+      const searchData = searchRes.body;
       expect(searchData.ok).toBe(true);
       expect(searchData.results?.length).toBeGreaterThan(0);
 
       // Cleanup
-      await request(`/rag/documents/${docId}`, { method: "DELETE" });
-      await request("/workspace/files", {
+      await http(`/rag/documents/${docId}`, { method: "DELETE" });
+      await http("/workspace/files", {
         method: "DELETE",
         body: { projectId: "test-project", path: "docs/auth.md" },
       });
@@ -130,7 +123,7 @@ describe("E2E Scenario Tests", () => {
   describe("Job Queue + Status Polling", () => {
     it("should create job and poll until completion", async () => {
       // Create a job
-      const jobRes = await request("/jobs", {
+      const jobRes = await http("/jobs", {
         method: "POST",
         body: {
           type: "test",
@@ -138,7 +131,7 @@ describe("E2E Scenario Tests", () => {
         },
       });
       expect([200, 201]).toContain(jobRes.status);
-      const jobData = await jobRes.json();
+      const jobData = jobRes.body;
       expect(jobData.ok).toBe(true);
       const jobId = jobData.job?.id || jobData.data?.jobId;
 
@@ -147,8 +140,8 @@ describe("E2E Scenario Tests", () => {
       let finalStatus = null;
       while (attempts < 10) {
         await new Promise(r => setTimeout(r, 100));
-        const statusRes = await request(`/jobs/${jobId}`);
-        const statusData = await statusRes.json();
+        const statusRes = await http(`/jobs/${jobId}`);
+        const statusData = statusRes.body;
         if (["completed", "failed", "done"].includes(statusData.job?.status || statusData.data?.status)) {
           finalStatus = statusData.job?.status || statusData.data?.status;
           break;
@@ -165,7 +158,7 @@ describe("E2E Scenario Tests", () => {
   describe("Policy Enforcement Flow", () => {
     it("should evaluate request against policies", async () => {
       // Add a rule
-      const ruleRes = await request("/policy/rules", {
+      const ruleRes = await http("/policy/rules", {
         method: "POST",
         body: {
           pattern: "POST /rag/clear",
@@ -174,11 +167,11 @@ describe("E2E Scenario Tests", () => {
         },
       });
       expect([200, 201]).toContain(ruleRes.status);
-      const ruleData = await ruleRes.json();
+      const ruleData = ruleRes.body;
       const ruleId = ruleData.rule?.id;
 
       // Evaluate the request
-      const evalRes = await request("/policy/evaluate", {
+      const evalRes = await http("/policy/evaluate", {
         method: "POST",
         body: {
           method: "POST",
@@ -186,20 +179,20 @@ describe("E2E Scenario Tests", () => {
         },
       });
       expect(evalRes.status).toBe(200);
-      const evalData = await evalRes.json();
+      const evalData = evalRes.body;
       expect(evalData.ok).toBe(true);
 
       // Cleanup
       if (ruleId) {
-        await request(`/policy/rules/${ruleId}`, { method: "DELETE" });
+        await http(`/policy/rules/${ruleId}`, { method: "DELETE" });
       }
     });
 
     it("should create and manage approvals", async () => {
       // List approvals
-      const listRes = await request("/policy/approvals?status=pending");
+      const listRes = await http("/policy/approvals?status=pending");
       expect(listRes.status).toBe(200);
-      const listData = await listRes.json();
+      const listData = listRes.body;
       expect(listData.ok).toBe(true);
       expect(Array.isArray(listData.approvals)).toBe(true);
     });
@@ -210,7 +203,7 @@ describe("E2E Scenario Tests", () => {
   describe("HTTP Request + Cache", () => {
     it("should fetch URL and cache response", async () => {
       // This test uses a mockable endpoint - using httpbin for stability
-      const fetchRes = await request("/http/request", {
+      const fetchRes = await http("/http/request", {
         method: "POST",
         body: {
           projectId: "test-cache",
@@ -221,7 +214,7 @@ describe("E2E Scenario Tests", () => {
 
       // May fail without internet or if httpbin is down
       if (fetchRes.status === 200) {
-        const data = await fetchRes.json();
+        const data = fetchRes.body;
         expect(data.ok).toBe(true);
       }
     });
@@ -235,9 +228,9 @@ describe("E2E Scenario Tests", () => {
 
       for (const plugin of plugins) {
         try {
-          const res = await request(`/${plugin}/health`);
+          const res = await http(`/${plugin}/health`);
           if (res.status === 200) {
-            const data = await res.json();
+            const data = res.body;
             expect(data.ok).toBe(true);
           }
         } catch {
@@ -252,7 +245,7 @@ describe("E2E Scenario Tests", () => {
   describe("Full Dev Workflow", () => {
     it("should execute complete development workflow", async () => {
       // Step 1: Create workspace file
-      const writeRes = await request("/workspace/files", {
+      const writeRes = await http("/workspace/files", {
         method: "POST",
         body: {
           projectId: "dev-flow-test",
@@ -263,7 +256,7 @@ describe("E2E Scenario Tests", () => {
       expect([200, 201]).toContain(writeRes.status);
 
       // Step 2: Run tests
-      const testRes = await request("/tests/run", {
+      const testRes = await http("/tests/run", {
         method: "POST",
         body: {
           projectId: "dev-flow-test",
@@ -271,11 +264,11 @@ describe("E2E Scenario Tests", () => {
         },
       });
       expect([200, 201]).toContain(testRes.status);
-      const testData = await testRes.json();
+      const testData = testRes.body;
       expect(testData.ok).toBe(true);
 
       // Step 3: Index documentation in RAG
-      const ragRes = await request("/rag/index", {
+      const ragRes = await http("/rag/index", {
         method: "POST",
         body: {
           content: "Test function documentation: Returns boolean value",
@@ -285,17 +278,17 @@ describe("E2E Scenario Tests", () => {
       expect([200, 201]).toContain(ragRes.status);
 
       // Step 4: Search documentation
-      const searchRes = await request("/rag/search", {
+      const searchRes = await http("/rag/search", {
         method: "POST",
         body: { query: "test function returns", limit: 3 },
       });
       expect(searchRes.status).toBe(200);
-      const searchData = await searchRes.json();
+      const searchData = searchRes.body;
       expect(searchData.ok).toBe(true);
 
       // Cleanup
-      await request("/rag/clear", { method: "POST" });
-      await request("/workspace/files", {
+      await http("/rag/clear", { method: "POST" });
+      await http("/workspace/files", {
         method: "DELETE",
         body: { projectId: "dev-flow-test", path: "src/test.js" },
       });
@@ -306,26 +299,26 @@ describe("E2E Scenario Tests", () => {
 
   describe("Error Handling", () => {
     it("should handle missing resources gracefully", async () => {
-      const res = await request("/rag/documents/nonexistent");
+      const res = await http("/rag/documents/nonexistent");
       expect(res.status).toBe(404);
-      const data = await res.json();
+      const data = res.body;
       expect(data.ok).toBe(false);
     });
 
     it("should validate invalid requests", async () => {
-      const res = await request("/rag/index", {
+      const res = await http("/rag/index", {
         method: "POST",
         body: {}, // missing content
       });
       expect(res.status).toBe(400);
-      const data = await res.json();
+      const data = res.body;
       expect(data.ok).toBe(false);
     });
 
     it("should reject invalid authentication", async () => {
       // Note: This depends on auth being enabled
       // If auth is disabled, this test may behave differently
-      const res = await request("/plugins", {
+      const res = await http("/plugins", {
         headers: { Authorization: "Bearer invalid_token" },
       });
       // Should either fail auth or proceed if auth is disabled
@@ -337,7 +330,7 @@ describe("E2E Scenario Tests", () => {
 
   describe("Batch Operations", () => {
     it("should index multiple documents in batch", async () => {
-      const batchRes = await request("/rag/index-batch", {
+      const batchRes = await http("/rag/index-batch", {
         method: "POST",
         body: {
           documents: [
@@ -348,12 +341,12 @@ describe("E2E Scenario Tests", () => {
         },
       });
       expect([200, 201]).toContain(batchRes.status);
-      const data = await batchRes.json();
+      const data = batchRes.body;
       expect(data.ok).toBe(true);
       expect(data.indexed || data.data?.indexed).toBe(3);
 
       // Cleanup
-      await request("/rag/clear", { method: "POST" });
+      await http("/rag/clear", { method: "POST" });
     });
   });
 
@@ -361,9 +354,9 @@ describe("E2E Scenario Tests", () => {
 
   describe("Tool Registry Integration", () => {
     it("should list all registered tools", async () => {
-      const res = await request("/tools");
+      const res = await http("/tools");
       expect(res.status).toBe(200);
-      const data = await res.json();
+      const data = res.body;
       expect(data.ok).toBe(true);
       expect(Array.isArray(data.tools)).toBe(true);
 
@@ -377,14 +370,14 @@ describe("E2E Scenario Tests", () => {
 
     it("should get tool details by name", async () => {
       // First get list
-      const listRes = await request("/tools");
-      const listData = await listRes.json();
+      const listRes = await http("/tools");
+      const listData = listRes.body;
 
       if (listData.tools?.length > 0) {
         const toolName = listData.tools[0].name;
-        const res = await request(`/tools/${toolName}`);
+        const res = await http(`/tools/${toolName}`);
         expect(res.status).toBe(200);
-        const data = await res.json();
+        const data = res.body;
         expect(data.ok).toBe(true);
       }
     });

@@ -1,6 +1,6 @@
 # 09 — Cost, Quota ve Policy Guardrails
 
-> **Status:** partial (usage ledger, UsagePage v3)  
+> **Status:** done  
 > **Faz:** V4.9  
 > **Bağımlılık:** [04-approval-center-pro.md](./04-approval-center-pro.md), [08-eval-studio.md](./08-eval-studio.md) (paralel başlanabilir)
 
@@ -35,8 +35,8 @@ Production project için destructive tool + estimatedCost > $2 ise admin approva
 
 ## Başarı kriteri
 
-- [ ] Kullanıcı her run'ın maliyetini ve riskini önceden görebilir
-- [ ] Bütçe aşımı otomatik engellenir
+- [x] Kullanıcı her run'ın maliyetini ve riskini önceden görebilir
+- [x] Bütçe aşımı otomatik engellenir
 
 ---
 

@@ -119,4 +119,85 @@ export function registerUsageRoutes(app) {
       res.status(500).json({ ok: false, error: { code: "quota_check_failed", message: err.message } });
     }
   });
+
+  app.get("/usage/preflight", requireScope("read"), async (req, res) => {
+    try {
+      const { preflightRunGuardrails, estimateTemplateCost } = await import("./cost-guardrails.service.js");
+      const templateId = req.query.templateId;
+      if (!templateId) {
+        return res.status(400).json({
+          ok: false,
+          error: { code: "invalid_request", message: "templateId query param required" },
+        });
+      }
+      let parameters = {};
+      if (req.query.parameters) {
+        try {
+          parameters = JSON.parse(req.query.parameters);
+        } catch {
+          parameters = {};
+        }
+      }
+      const projectId = req.query.projectId || req.projectId || null;
+      const projectEnv = req.query.projectEnv || req.projectEnv || "development";
+      const data = await preflightRunGuardrails({ templateId, parameters, projectId, projectEnv });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "preflight_failed", message: err.message } });
+    }
+  });
+
+  app.get("/usage/anomalies", requireScope("read"), async (req, res) => {
+    try {
+      const { detectCostAnomalies } = await import("./cost-guardrails.service.js");
+      const projectId = req.query.projectId || req.projectId || "default";
+      const windowDays = Math.min(parseInt(req.query.windowDays, 10) || 7, 30);
+      const data = await detectCostAnomalies(String(projectId), { windowDays });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "anomalies_failed", message: err.message } });
+    }
+  });
+
+  app.post("/usage/guardrails/evaluate", requireScope("read"), async (req, res) => {
+    try {
+      const { evaluateCostPolicy } = await import("./cost-guardrails.service.js");
+      const { toolName, estimatedCostUsd, projectEnv, projectId, costThresholdUsd } = req.body ?? {};
+      if (!toolName) {
+        return res.status(400).json({
+          ok: false,
+          error: { code: "invalid_request", message: "toolName required" },
+        });
+      }
+      const data = evaluateCostPolicy({
+        toolName,
+        estimatedCostUsd: Number(estimatedCostUsd) || 0,
+        projectEnv: projectEnv || req.projectEnv || "development",
+        projectId: projectId || req.projectId,
+        costThresholdUsd: costThresholdUsd != null ? Number(costThresholdUsd) : 2,
+      });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "guardrail_eval_failed", message: err.message } });
+    }
+  });
+
+  app.get("/usage/estimate/template/:templateId", requireScope("read"), async (req, res) => {
+    try {
+      const { estimateTemplateCost } = await import("./cost-guardrails.service.js");
+      let parameters = {};
+      if (req.query.parameters) {
+        try {
+          parameters = JSON.parse(req.query.parameters);
+        } catch {
+          parameters = {};
+        }
+      }
+      const data = estimateTemplateCost(req.params.templateId, parameters);
+      if (!data.ok) return res.status(404).json({ ok: false, error: data.error });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "estimate_failed", message: err.message } });
+    }
+  });
 }

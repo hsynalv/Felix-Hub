@@ -35,6 +35,9 @@ import {
   listRuns,
   cancelRun,
   replayRun,
+  pauseRun,
+  rollbackRun,
+  compareRun,
   listWorkflowTemplates,
   startWorkflowTemplate,
   approveRun,
@@ -273,11 +276,40 @@ export function RunsPage() {
   });
 
   const retryMutation = useMutation({
-    mutationFn: (runId: string) => retryRun(runId, false),
-    onSuccess: (run) => {
-      toast.show(`Yeniden deneme: ${run.id.slice(0, 8)}…`, "info");
+    mutationFn: (runId: string) => retryRun(runId, detail?.currentStep),
+    onSuccess: () => {
+      toast.show("Adım yeniden deneniyor", "info");
       qc.invalidateQueries({ queryKey: ["runs"] });
-      setSelectedId(run.id);
+      qc.invalidateQueries({ queryKey: ["run", selectedId] });
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
+  const pauseMutation = useMutation({
+    mutationFn: (runId: string) => pauseRun(runId),
+    onSuccess: () => {
+      toast.show("Run duraklatıldı", "info");
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["run", selectedId] });
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
+  const rollbackMutation = useMutation({
+    mutationFn: (runId: string) => rollbackRun(runId, true),
+    onSuccess: () => {
+      toast.show("Rollback tamamlandı", "info");
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["run", selectedId] });
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
+  const compareMutation = useMutation({
+    mutationFn: (runId: string) => compareRun(runId),
+    onSuccess: (data) => {
+      const identical = (data as { comparison?: { identical?: boolean } })?.comparison?.identical;
+      toast.show(identical ? "Replay özdeş" : "Replay farklılıklar var", "info");
     },
     onError: (e: Error) => toast.show(e.message, "error"),
   });
@@ -480,6 +512,17 @@ export function RunsPage() {
                     Devam et
                   </Button>
                 )}
+                {detail?.status === "running" && selectedId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={pauseMutation.isPending}
+                    onClick={() => pauseMutation.mutate(selectedId)}
+                  >
+                    Duraklat
+                  </Button>
+                )}
                 {(detail?.status === "running" || detail?.status === "waiting_approval") && selectedId && (
                   <Button
                     variant="outline"
@@ -489,6 +532,17 @@ export function RunsPage() {
                     onClick={() => cancelMutation.mutate(selectedId)}
                   >
                     İptal
+                  </Button>
+                )}
+                {(detail?.status === "failed" || detail?.status === "cancelled") && selectedId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={rollbackMutation.isPending}
+                    onClick={() => rollbackMutation.mutate(selectedId)}
+                  >
+                    Rollback
                   </Button>
                 )}
                 {detail?.status === "failed" && selectedId && (
@@ -504,6 +558,15 @@ export function RunsPage() {
                 )}
                 {detail?.status === "completed" && selectedId && (
                   <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={compareMutation.isPending}
+                      onClick={() => compareMutation.mutate(selectedId)}
+                    >
+                      Karşılaştır
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

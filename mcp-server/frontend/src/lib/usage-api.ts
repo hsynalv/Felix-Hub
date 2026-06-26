@@ -138,6 +138,34 @@ export async function fetchUsageStats(days = 7) {
   return apiGet<UsageStats>(`/usage/stats?days=${days}`);
 }
 
+export interface PreflightGuardrails {
+  allowed: boolean;
+  blocked: boolean;
+  requiresApproval: boolean;
+  estimate?: { estimatedCostUsd: number; toolCount: number; breakdown: unknown[] };
+  anomalies?: { hasAnomalies: boolean; anomalies: unknown[] };
+  warnings: string[];
+}
+
+export async function fetchRunPreflight(templateId: string, parameters: Record<string, unknown> = {}, projectId?: string) {
+  const params = new URLSearchParams({ templateId, parameters: JSON.stringify(parameters) });
+  if (projectId) params.set("projectId", projectId);
+  return apiGet<PreflightGuardrails>(`/usage/preflight?${params}`);
+}
+
+export async function fetchCostAnomalies(projectId: string, windowDays = 7) {
+  return apiGet<{ hasAnomalies: boolean; anomalies: unknown[]; recent: UsageTotals }>(
+    `/usage/anomalies?projectId=${encodeURIComponent(projectId)}&windowDays=${windowDays}`
+  );
+}
+
+export async function estimateTemplateCost(templateId: string, parameters: Record<string, unknown> = {}) {
+  const params = new URLSearchParams({ parameters: JSON.stringify(parameters) });
+  return apiGet<{ estimatedCostUsd: number; toolCount: number; breakdown: unknown[] }>(
+    `/usage/estimate/template/${encodeURIComponent(templateId)}?${params}`
+  );
+}
+
 function isoDaysAgo(days: number) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }

@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
+import { computeRiskScore } from "../../core/approvals/approval-risk.js";
 
 /** @type {{ rules: object[]; approvals: object[] } | null} */
 let memoryTestStore = null;
@@ -93,9 +94,11 @@ export function getApproval(id) {
   return (data.approvals ?? []).find((a) => a.id === id) ?? null;
 }
 
-export function createApproval({ ruleId, path, method, body, requestedBy, toolName, explanation, runId, stepId, riskLevel }) {
+export function createApproval({ ruleId, path, method, body, requestedBy, toolName, explanation, runId, stepId, riskLevel, tags }) {
   const data = load();
   data.approvals ??= [];
+
+  const riskScore = computeRiskScore({ toolName, riskLevel, tags: tags || [] });
 
   const approval = {
     id:          makeId("approval"),
@@ -109,6 +112,7 @@ export function createApproval({ ruleId, path, method, body, requestedBy, toolNa
     runId:       runId ?? null,
     stepId:      stepId ?? null,
     riskLevel:   riskLevel ?? null,
+    riskScore,
     status:      "pending",
     createdAt:   new Date().toISOString(),
     decidedAt:   null,

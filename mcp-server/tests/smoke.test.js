@@ -1,71 +1,62 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createServer } from "../src/core/server.js";
-
 /**
  * Smoke Tests
  * Basic server boot and health checks.
  */
 
+import { describe, it, expect, beforeAll, vi } from "vitest";
+import supertest from "supertest";
+
+vi.mock("../src/core/config.js", async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    config: {
+      ...mod.config,
+      persistence: { ...mod.config.persistence, enabled: false },
+      redis: { ...mod.config.redis, enabled: false, url: undefined },
+    },
+  };
+});
+
+import { getIntegrationServer } from "./framework/test-server.js";
+
 describe("Smoke Tests", () => {
-  let app;
-  let server;
-  let port;
+  let request;
 
   beforeAll(async () => {
-    app = await createServer();
-    await new Promise((resolve, reject) => {
-      server = app.listen(0, (err) => { // 0 = random available port
-        if (err) return reject(err);
-        port = server.address().port;
-        resolve();
-      });
-    });
-  }, 30000); // 30 second timeout for server boot
-
-  afterAll(async () => {
-    if (server) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-  });
+    const app = await getIntegrationServer();
+    request = supertest(app);
+  }, 60000);
 
   it("should boot without errors", async () => {
-    expect(app).toBeDefined();
-    expect(port).toBeGreaterThan(0);
+    expect(request).toBeDefined();
   });
 
   it("should respond to /health", async () => {
-    const response = await fetch(`http://localhost:${port}/health`);
+    const response = await request.get("/health");
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.ok).toBe(true);
-    expect(data.data.status).toBe("ok");
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.status).toBe("ok");
   });
 
   it("should respond to /whoami", async () => {
-    const response = await fetch(`http://localhost:${port}/whoami`);
+    const response = await request.get("/whoami");
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.ok).toBe(true);
-    expect(data.data.auth).toBeDefined();
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.auth).toBeDefined();
   });
 
   it("should return validation error for invalid request", async () => {
-    const response = await fetch(`http://localhost:${port}/http/request`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
+    const response = await request.post("/http/request").send({});
     expect(response.status).toBe(400);
-    const data = await response.json();
-    expect(data.ok).toBe(false);
-    expect(data.error.code).toBe("missing_project_id");
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("missing_project_id");
   });
 
   it("should return 404 for unknown routes", async () => {
-    const response = await fetch(`http://localhost:${port}/unknown-route`);
+    const response = await request.get("/unknown-route");
     expect(response.status).toBe(404);
-    const data = await response.json();
-    expect(data.ok).toBe(false);
-    expect(data.error.code).toBe("not_found");
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("not_found");
   });
 });

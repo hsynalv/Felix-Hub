@@ -16,6 +16,7 @@ import {
   searchContextForGoal,
   getProjectImpact,
 } from "../../core/project-context/project-context.service.js";
+import { getCommandCenter } from "../../core/project-context/command-center.service.js";
 import { syncProjectIndex } from "../../core/project-context/project-indexer.js";
 import { syncProjectToBrainStore } from "../../core/project-context/project-brain-sync.js";
 import { submitJob } from "../../core/jobs.js";
@@ -35,6 +36,7 @@ export const endpoints = [
   { method: "GET",    path: "/projects/:name/changes", description: "Recent project changes",   scope: "read"   },
   { method: "GET",    path: "/projects/:name/ask", description: "Goal-oriented context search", scope: "read" },
   { method: "GET",    path: "/projects/:name/impact", description: "Path impact analysis", scope: "read" },
+  { method: "GET",    path: "/projects/:name/command-center", description: "Project command center BFF", scope: "read" },
   { method: "PUT",    path: "/projects/:name/links", description: "Update project links",        scope: "write"  },
   { method: "POST",   path: "/projects/:name/sync", description: "Sync project index",         scope: "write"  },
   { method: "GET",    path: "/projects/:name/:env", description: "Get resolved env config",      scope: "read"   },
@@ -206,6 +208,15 @@ export function register(app) {
       res.json({ ok: true, data });
     } catch (err) {
       res.status(500).json({ ok: false, error: "impact_failed", message: err.message });
+    }
+  });
+
+  router.get("/:name/command-center", requireScope("read"), async (req, res) => {
+    try {
+      const data = await getCommandCenter(req.params.name);
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: "command_center_failed", message: err.message });
     }
   });
 

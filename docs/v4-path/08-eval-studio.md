@@ -1,6 +1,6 @@
 # 08 — Eval Studio
 
-> **Status:** partial (eval:smoke trace compare)  
+> **Status:** done  
 > **Faz:** V4.8  
 > **Bağımlılık:** [02-agent-runtime-v2.md](./02-agent-runtime-v2.md), [03-agent-run-designer.md](./03-agent-run-designer.md)
 
@@ -39,8 +39,8 @@ latency regression
 
 ## Başarı kriteri
 
-- [ ] Bir workflow template değişince kalite farkı ölçülebilir
-- [ ] CI'da kritik agent regression yakalanır
+- [x] Bir workflow template değişince kalite farkı ölçülebilir
+- [x] CI'da kritik agent regression yakalanır
 
 ---
 

@@ -396,11 +396,12 @@ export async function callTool(name, args, context = {}) {
     return schemaError;
   }
 
-  if (context.dryRun) {
+  if (context.dryRun || context.replay) {
     return {
       ok: true,
       data: {
         dryRun: true,
+        replay: !!context.replay,
         tool: name,
         args,
         message: "Simulated execution — no side effects",

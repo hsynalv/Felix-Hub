@@ -109,6 +109,17 @@ export async function cancelRunJob(runId, reason = "user_cancelled") {
   return cancelAgentRun(runId, reason);
 }
 
+/** Pause linked job without cancelling the run entity. */
+export async function pauseRunJob(runId) {
+  const jobId = getJobIdForRun(runId);
+  if (jobId) {
+    clearJobTimeout(jobId);
+    await cancelJob(jobId);
+    runJobLinks.delete(runId);
+  }
+  return getRun(runId);
+}
+
 /** Test isolation */
 export function resetAgentRunJobsForTests() {
   for (const t of jobTimeouts.values()) clearTimeout(t);

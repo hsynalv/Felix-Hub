@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { maskBody } from "../src/core/audit.js";
+import { maskBody } from "../src/core/audit/index.js";
 import { evaluate } from "../src/plugins/policy/policy.engine.js";
 
 /**

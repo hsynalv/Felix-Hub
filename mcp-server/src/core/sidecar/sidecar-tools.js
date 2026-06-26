@@ -9,10 +9,22 @@ import {
   delegateTerminalSessionCreate,
   delegateTerminalSessionExec,
   delegateNotify,
+  delegateDesktopScreenshot,
+  delegateDesktopActiveWindow,
+  delegateDesktopOcr,
+  delegateDesktopClick,
+  delegateDesktopType,
   sidecarRequiredError,
 } from "./sidecar-proxy.js";
 import { execTerminalCommand } from "../../plugins/local-sidecar/terminal.core.js";
 import { sendDesktopNotification } from "../../plugins/local-sidecar/notify.core.js";
+import {
+  captureScreenshot,
+  getActiveWindow,
+  ocrScreenRegion,
+  desktopClick,
+  desktopType,
+} from "../../plugins/local-sidecar/desktop.core.js";
 
 export function registerSidecarTools() {
   registerTool({
@@ -103,6 +115,107 @@ export function registerSidecarTools() {
         return (await delegateNotify({ title, message })) || sidecarRequiredError();
       }
       return sendDesktopNotification({ title, message });
+    },
+  });
+
+  registerTool({
+    name: "desktop_screenshot",
+    description: "Capture the local screen via paired sidecar (observe-only)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        format: { type: "string", enum: ["png", "jpg"], description: "Image format" },
+      },
+    },
+    handler: async ({ format }) => {
+      if (!isLocalFsOnServer()) {
+        return (await delegateDesktopScreenshot({ format })) || sidecarRequiredError();
+      }
+      return captureScreenshot({ format });
+    },
+  });
+
+  registerTool({
+    name: "desktop_active_window",
+    description: "Get the frontmost application and window title on the local machine",
+    plugin: "local-sidecar",
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => {
+      if (!isLocalFsOnServer()) {
+        return (await delegateDesktopActiveWindow()) || sidecarRequiredError();
+      }
+      return getActiveWindow();
+    },
+  });
+
+  registerTool({
+    name: "desktop_ocr",
+    description: "OCR text from a screenshot image (base64 from desktop_screenshot)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        imageBase64: { type: "string", description: "PNG/JPEG base64 payload" },
+      },
+      required: ["imageBase64"],
+    },
+    handler: async ({ imageBase64 }) => {
+      if (!isLocalFsOnServer()) {
+        return (await delegateDesktopOcr({ imageBase64 })) || sidecarRequiredError();
+      }
+      return ocrScreenRegion({ imageBase64 });
+    },
+  });
+
+  registerTool({
+    name: "desktop_click",
+    description: "Click at screen coordinates (requires approval; local sidecar only)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        x: { type: "number" },
+        y: { type: "number" },
+        button: { type: "string", enum: ["left", "right", "middle"] },
+        explanation: { type: "string" },
+      },
+      required: ["x", "y", "explanation"],
+    },
+    handler: async ({ x, y, button, explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateDesktopClick({ x, y, button });
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await desktopClick({ x, y, button });
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
+    },
+  });
+
+  registerTool({
+    name: "desktop_type",
+    description: "Type text into the focused window (requires approval; local sidecar only)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["text", "explanation"],
+    },
+    handler: async ({ text, explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateDesktopType({ text });
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await desktopType({ text });
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
     },
   });
 }

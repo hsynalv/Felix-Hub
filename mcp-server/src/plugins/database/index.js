@@ -46,7 +46,8 @@ const CONNECTION_TIMEOUT_MS = dbConfig.connectionTimeoutMs || 10000;  // 10s def
 const MAX_RESULT_SIZE_BYTES = dbConfig.maxResultSizeBytes || 10 * 1024 * 1024;  // 10MB default
 const MAX_RESULT_SIZE_MB = MAX_RESULT_SIZE_BYTES / (1024 * 1024);
 
-// Audit log for database operations
+// Plugin-local query audit ring buffer (deprecated — prefer core audit via auditLog).
+// Kept for GET /database/audit backward compatibility; not the canonical audit write path.
 const dbAuditLog = [];
 const MAX_AUDIT_LOG = 1000;
 

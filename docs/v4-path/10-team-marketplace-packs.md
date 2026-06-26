@@ -1,6 +1,6 @@
 # 10 — Team, Marketplace ve Integration Packs
 
-> **Status:** partial (marketplace v3, plugin meta)  
+> **Status:** done  
 > **Faz:** V4.10  
 > **Bağımlılık:** [04-approval-center-pro.md](./04-approval-center-pro.md), [09-cost-quota-policy-guardrails.md](./09-cost-quota-policy-guardrails.md)
 
@@ -40,8 +40,8 @@ Desktop Pack: sidecar + screen + browser + terminal
 
 ## Başarı kriteri
 
-- [ ] Yeni kullanıcı "Developer Pack kur" diyerek gerekli entegrasyonları wizard ile bağlar
-- [ ] Ekipte kim ne yaptı audit'lenir
+- [x] Yeni kullanıcı "Developer Pack kur" diyerek gerekli entegrasyonları wizard ile bağlar
+- [x] Ekipte kim ne yaptı audit'lenir
 
 ---
 

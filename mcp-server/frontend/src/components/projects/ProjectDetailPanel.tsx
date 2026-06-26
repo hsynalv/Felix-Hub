@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProjectContextGraph } from "@/components/settings/ProjectContextGraph";
+import { ProjectCommandCenterPanel } from "@/components/projects/ProjectCommandCenterPanel";
 import { UsageQuotaPanel } from "@/components/settings/UsageQuotaPanel";
 import {
   deleteProject,
@@ -170,6 +171,8 @@ export function ProjectDetailPanel({
 
   return (
     <div className="space-y-4">
+      <ProjectCommandCenterPanel projectKey={projectKey} />
+
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-start justify-between gap-3">

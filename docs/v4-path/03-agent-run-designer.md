@@ -1,6 +1,6 @@
 # 03 — Agent Run Designer
 
-> **Status:** not_started  
+> **Status:** done  
 > **Faz:** V4.3  
 > **Bağımlılık:** [02-agent-runtime-v2.md](./02-agent-runtime-v2.md)
 
@@ -34,8 +34,8 @@ Workflow template yazmayı kod/dokümandan çıkarıp UI'a taşımak.
 
 ## Başarı kriteri
 
-- [ ] Kullanıcı UI'dan "repo-ship-feature" benzeri workflow oluşturup çalıştırabilir
-- [ ] Template JSON elle yazmak gerekmez
+- [x] Kullanıcı UI'dan "repo-ship-feature" benzeri workflow oluşturup çalıştırabilir
+- [x] Template JSON elle yazmak gerekmez
 
 ---
 

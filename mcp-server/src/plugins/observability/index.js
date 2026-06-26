@@ -3,7 +3,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { Router } from "express";
 import { requireScope } from "../../core/auth.js";
-import { getLogs, getStats } from "../../core/audit.js";
+import { getLogs, getStats } from "../../core/audit/index.js";
 import { getPlugins } from "../../core/plugins.js";
 import { getHealthService, HealthStatus } from "../../core/health/index.js";
 import { ToolTags } from "../../core/tool-registry.js";

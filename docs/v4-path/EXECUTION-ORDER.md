@@ -1,6 +1,6 @@
 # V4 Execution Order
 
-> **Son güncelleme:** 2026-06-24  
+> **Son güncelleme:** 2026-06-26  
 > **Önkoşul:** [V3 EXECUTION-ORDER](../v3-path/EXECUTION-ORDER.md) Faz 5 (v3.4) tamamlandı  
 > **Kural:** Önce güvenli temel → ürünleştirme → premium otomasyon
 
@@ -37,26 +37,26 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 4.1 | Platform çekirdeği sertleştir | [01-platform-core-hardening.md](./01-platform-core-hardening.md) | partial (v3.4) |
-| 4.2 | Agent Runtime v2 | [02-agent-runtime-v2.md](./02-agent-runtime-v2.md) | partial (v3.4) |
-| 4.3 | Agent Run Designer | [03-agent-run-designer.md](./03-agent-run-designer.md) | not_started |
-| 4.4 | Approval Center Pro | [04-approval-center-pro.md](./04-approval-center-pro.md) | not_started |
+| 4.1 | Platform çekirdeği sertleştir | [01-platform-core-hardening.md](./01-platform-core-hardening.md) | done |
+| 4.2 | Agent Runtime v2 | [02-agent-runtime-v2.md](./02-agent-runtime-v2.md) | done |
+| 4.3 | Agent Run Designer | [03-agent-run-designer.md](./03-agent-run-designer.md) | done |
+| 4.4 | Approval Center Pro | [04-approval-center-pro.md](./04-approval-center-pro.md) | done |
 
 ### Orta vade (V4.5 – V4.7)
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 4.5 | Project Command Center | [05-project-command-center.md](./05-project-command-center.md) | partial (context graph) |
-| 4.6 | Desktop Control Agent MVP | [06-desktop-control-agent.md](./06-desktop-control-agent.md) | not_started |
-| 4.7 | Self-Healing Dev Agent | [07-self-healing-dev-agent.md](./07-self-healing-dev-agent.md) | not_started |
+| 4.5 | Project Command Center | [05-project-command-center.md](./05-project-command-center.md) | done |
+| 4.6 | Desktop Control Agent MVP | [06-desktop-control-agent.md](./06-desktop-control-agent.md) | done |
+| 4.7 | Self-Healing Dev Agent | [07-self-healing-dev-agent.md](./07-self-healing-dev-agent.md) | done |
 
 ### Uzun vade (V4.8 – V4.10)
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 4.8 | Eval Studio | [08-eval-studio.md](./08-eval-studio.md) | partial (eval smoke) |
-| 4.9 | Cost, Quota ve Policy Guardrails | [09-cost-quota-policy-guardrails.md](./09-cost-quota-policy-guardrails.md) | partial (usage v3) |
-| 4.10 | Team, Marketplace ve Integration Packs | [10-team-marketplace-packs.md](./10-team-marketplace-packs.md) | partial (marketplace v3) |
+| 4.8 | Eval Studio | [08-eval-studio.md](./08-eval-studio.md) | done |
+| 4.9 | Cost, Quota ve Policy Guardrails | [09-cost-quota-policy-guardrails.md](./09-cost-quota-policy-guardrails.md) | done |
+| 4.10 | Team, Marketplace ve Integration Packs | [10-team-marketplace-packs.md](./10-team-marketplace-packs.md) | done |
 
 ---
 

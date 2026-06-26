@@ -87,6 +87,35 @@ function toolProgressLabel(toolName) {
   return "İşlem yapıyorum…";
 }
 
+/** Only show "Bakıyorum…" if the turn is still running after this delay (ms). */
+export const TELEGRAM_WORKING_ACK_DELAY_MS = 2800;
+
+function parseAckDelayMs() {
+  const raw = parseInt(getEnvValue("TELEGRAM_WORKING_ACK_DELAY_MS") || "", 10);
+  return Number.isFinite(raw) && raw >= 0 ? raw : TELEGRAM_WORKING_ACK_DELAY_MS;
+}
+
+/**
+ * @param {object} opts
+ * @param {() => void | Promise<void>} opts.onAck
+ * @param {number} [opts.delayMs]
+ */
+export function scheduleTelegramWorkingAck({ onAck, delayMs = TELEGRAM_WORKING_ACK_DELAY_MS }) {
+  if (delayMs <= 0) {
+    return { cancel() {} };
+  }
+  let cancelled = false;
+  const timer = setTimeout(() => {
+    if (!cancelled) void onAck();
+  }, delayMs);
+  return {
+    cancel() {
+      cancelled = true;
+      clearTimeout(timer);
+    },
+  };
+}
+
 function helpText() {
   return [
     "Asistan — MCP Hub kişisel yardımcı bot",
@@ -152,9 +181,17 @@ async function processAgentMessage(chatId, text) {
   const chatProfile = resolveTelegramChatProfile();
 
   await sendChatAction(chatId, "typing");
-  await replyToChat(chatId, "Bakıyorum, birazdan yazacağım…");
 
-  let progressSent = false;
+  let statusSent = false;
+  const workingAck = scheduleTelegramWorkingAck({
+    delayMs: parseAckDelayMs(),
+    onAck: async () => {
+      if (statusSent) return;
+      statusSent = true;
+      await sendChatAction(chatId, "typing");
+      await replyToChat(chatId, "Bakıyorum, birazdan yazacağım…");
+    },
+  });
 
   try {
     const result = await runChatTurn({
@@ -175,14 +212,16 @@ async function processAgentMessage(chatId, text) {
         void auditTelegramTurn(chatId, `tool_${payload.name || "unknown"}`, true, {
           phase: payload.phase,
         });
-        if (payload.phase === "start" && !progressSent) {
-          progressSent = true;
+        if (payload.phase === "start" && !statusSent) {
+          workingAck.cancel();
+          statusSent = true;
           await sendChatAction(chatId, "typing");
           await replyToChat(chatId, toolProgressLabel(payload.name));
         }
       },
     });
 
+    workingAck.cancel();
     const answer =
       result.text ||
       (result.maxIterations
@@ -198,6 +237,7 @@ async function processAgentMessage(chatId, text) {
       chatProfile,
     });
   } catch (err) {
+    workingAck.cancel();
     await replyToChat(chatId, `Hata: ${err.message}`);
     await auditTelegramTurn(chatId, "telegram_chat_turn", false, { error: err.message });
   }

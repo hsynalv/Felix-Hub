@@ -17,6 +17,13 @@ import {
   listTerminalSessions,
 } from "../src/plugins/local-sidecar/terminal.core.js";
 import { sendDesktopNotification } from "../src/plugins/local-sidecar/notify.core.js";
+import {
+  captureScreenshot,
+  getActiveWindow,
+  ocrScreenRegion,
+  desktopClick,
+  desktopType,
+} from "../src/plugins/local-sidecar/desktop.core.js";
 import { validateSidecarRequest } from "../src/core/sidecar/sidecar-auth.js";
 
 const port = Number(process.env.SIDECAR_PORT || 9477);
@@ -38,7 +45,7 @@ app.get("/health", (_req, res) => {
     status: "healthy",
     service: "mcp-hub-sidecar",
     authRequired: Boolean(authToken),
-    capabilities: ["fs", "terminal", "notify"],
+    capabilities: ["fs", "terminal", "notify", "desktop"],
   });
 });
 
@@ -95,6 +102,27 @@ app.post("/terminal/exec", async (req, res) => {
 
 app.post("/notify", async (req, res) => {
   res.json(await sendDesktopNotification(req.body || {}));
+});
+
+app.get("/desktop/screenshot", async (req, res) => {
+  res.json(await captureScreenshot({ format: req.query.format || "png" }));
+});
+
+app.get("/desktop/active-window", async (_req, res) => {
+  res.json(await getActiveWindow());
+});
+
+app.post("/desktop/ocr", async (req, res) => {
+  res.json(await ocrScreenRegion(req.body || {}));
+});
+
+app.post("/desktop/click", async (req, res) => {
+  const { x, y, button } = req.body || {};
+  res.json(await desktopClick({ x, y, button }));
+});
+
+app.post("/desktop/type", async (req, res) => {
+  res.json(await desktopType(req.body || {}));
 });
 
 app.listen(port, "127.0.0.1", () => {

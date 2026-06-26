@@ -6,8 +6,13 @@ import { AppError, NotFoundError } from "./errors.js";
 import { config } from "./config.js";
 import { loadPlugins, getPlugins } from "./plugins.js";
 import { initializeToolHooks } from "./tool-registry.js";
-import { auditMiddleware, getLogs, getStats } from "./audit.js";
-import { getAuditManager, initAuditManager } from "./audit/index.js";
+import {
+  auditMiddleware,
+  getLogs,
+  getStats,
+  getAuditManager,
+  initAuditManager,
+} from "./audit/index.js";
 import { requireScope, isAuthEnabled, optionalAuthMiddleware, authEnabled, refreshAuthEnabledState } from "./auth.js";
 import { sessionMiddleware } from "./auth/session-middleware.js";
 import { requestContextMiddleware } from "./auth/request-context.js";
@@ -26,6 +31,15 @@ import { issueUiToken, issueUiTokenWithNotification } from "./ui-tokens.js";
 import { normalizeCorrelationId } from "./audit/audit.standard.js";
 import { registerUiChatRoutes } from "./ui-chat.js";
 import { registerAgentRunRoutes } from "./agent-runs/routes.js";
+import { registerApprovalRoutes } from "./approvals/routes.js";
+import { registerCiHealRoutes } from "./integrations/ci-heal.routes.js";
+import { registerEvalRoutes } from "./eval/eval.routes.js";
+import { registerTeamRoutes } from "./team/team.routes.js";
+import {
+  canAccessProject,
+  isTeamMembershipEnforced,
+  projectHasMembershipPolicy,
+} from "./team/team-membership.service.js";
 import { registerAgentRunJobRunner } from "./agent-runs/agent-run-job.js";
 import { registerWorkflowRunJobRunner } from "./agent-runs/workflow-run-job.js";
 import { registerProjectIndexJobRunner } from "./project-context/project-index-job.js";
@@ -39,7 +53,6 @@ import { ensureNlpLoaded } from "./chat/tool-intent-nlp.js";
 import { registerAgentRunTools } from "./agent-runs/agent-runs.tools.js";
 import { registerProjectContextTools } from "./project-context/project-context.tools.js";
 import { registerSidecarTools } from "./sidecar/sidecar-tools.js";
-import { resolvePendingApproval } from "./agent-runs/approval-bridge.js";
 import { registerUsageRoutes } from "./usage/routes.js";
 import { registerInternalMarketplaceRoutes } from "./marketplace/internal-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connectors/routes.js";
@@ -227,6 +240,27 @@ function projectContextMiddleware(req, res, next) {
   next();
 }
 
+/** Deny project access when membership policy is active or TEAM_MEMBERSHIP_ENFORCE is set. */
+function teamMembershipMiddleware(req, res, next) {
+  const projectId = req.projectId;
+  if (!projectId) return next();
+  if (!isTeamMembershipEnforced() && !projectHasMembershipPolicy(projectId)) {
+    return next();
+  }
+
+  const userId = req.user?.id || req.actor?.id || null;
+  if (!canAccessProject(projectId, userId)) {
+    return res.status(403).json({
+      ok: false,
+      error: {
+        code: "project_access_denied",
+        message: "Project membership required for this resource",
+      },
+    });
+  }
+  next();
+}
+
 export async function createServer() {
   const app = express();
 
@@ -272,6 +306,7 @@ export async function createServer() {
   app.use(responseEnvelopeMiddleware);
   app.use(sessionMiddleware);
   app.use(optionalAuthMiddleware);
+  app.use(teamMembershipMiddleware);
   app.use(requestContextMiddleware);
   app.use(tenantOverlayMiddleware);
   app.use(policyGuardrailMiddleware);
@@ -420,12 +455,13 @@ export async function createServer() {
 
   /** GET /audit/events — unified audit query (http | tool | plugin) */
   app.get("/audit/events", requireScope("read"), async (req, res) => {
-    const { source, plugin, operation, limit = 100, offset = 0 } = req.query;
+    const { source, plugin, operation, actor, limit = 100, offset = 0 } = req.query;
     const { queryAuditEvents } = await import("./audit/audit.service.js");
     const entries = await queryAuditEvents({
       source: source ? String(source) : undefined,
       plugin: plugin ? String(plugin) : undefined,
       operation: operation ? String(operation) : undefined,
+      actor: actor ? String(actor) : req.actor?.id ? String(req.actor.id) : undefined,
       limit: Math.min(Number(limit) || 100, 500),
       offset: Number(offset) || 0,
     });
@@ -571,108 +607,6 @@ export async function createServer() {
     }
   });
 
-  /**
-   * GET /approvals/pending
-   * Return all pending approval requests
-   */
-  app.get("/approvals/pending", requireScope("read"), (req, res) => {
-    const approvalStore = getApprovalStore();
-    if (!approvalStore?.listApprovals) {
-      return res.status(503).json({
-        ok: false,
-        error: { code: "policy_unavailable", message: "Policy system not available" }
-      });
-    }
-    const approvals = approvalStore.listApprovals({ status: "pending" });
-    res.json({
-      ok: true,
-      data: {
-        count: approvals.length,
-        approvals,
-      },
-    });
-  });
-
-  /**
-   * POST /approve
-   * Approve a pending tool execution and execute it
-   */
-  app.post("/approve", requireScope("write"), async (req, res) => {
-    const { approval_id } = req.body ?? {};
-
-    if (!approval_id) {
-      return res.status(400).json({
-        ok: false,
-        error: {
-          code: "missing_approval_id",
-          message: "approval_id is required",
-        },
-      });
-    }
-
-    const approvalStore = getApprovalStore();
-    if (!approvalStore?.getApproval || !approvalStore?.updateApprovalStatus) {
-      return res.status(503).json({
-        ok: false,
-        error: { code: "policy_unavailable", message: "Policy system not available" }
-      });
-    }
-
-    // Retrieve the approval request
-    const approval = approvalStore.getApproval(approval_id);
-    if (!approval) {
-      return res.status(404).json({
-        ok: false,
-        error: {
-          code: "approval_not_found",
-          message: `Approval request not found: ${approval_id}`,
-        },
-      });
-    }
-
-    if (approval.status !== "pending") {
-      return res.status(400).json({
-        ok: false,
-        error: {
-          code: "approval_already_processed",
-          message: `Approval already ${approval.status}`,
-          approval: {
-            id: approval.id,
-            status: approval.status,
-          },
-        },
-      });
-    }
-
-    const runId = approval.runId || null;
-    const outcome = await resolvePendingApproval(approval_id, true, {
-      actor: req.user || req.actor?.type || "manual",
-      runId,
-      scopes: req.authScopes,
-    });
-
-    if (!outcome) {
-      return res.status(404).json({
-        ok: false,
-        error: { code: "approval_not_found", message: `Approval request not found: ${approval_id}` },
-      });
-    }
-
-    console.log(`[APPROVAL] Resolved ${approval_id} via ${outcome.via}`);
-
-    res.json({
-      ok: true,
-      data: {
-        approval: {
-          id: approval_id,
-          status: outcome.status,
-          executedAt: new Date().toISOString(),
-        },
-        result: outcome.result,
-        via: outcome.via,
-      },
-    });
-  });
 
   // ── MCP Gateway ──────────────────────────────────────────────────────────────
 
@@ -748,6 +682,10 @@ export async function createServer() {
   scheduleIntentTrainPipeline();
   registerIntentTrainingRoutes(app);
   registerAgentRunRoutes(app);
+  registerApprovalRoutes(app);
+  registerCiHealRoutes(app);
+  registerEvalRoutes(app);
+  registerTeamRoutes(app);
   registerUsageRoutes(app);
   registerInternalMarketplaceRoutes(app);
   registerMcpConnectorRoutes(app);

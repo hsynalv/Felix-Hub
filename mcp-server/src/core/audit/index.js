@@ -55,3 +55,6 @@ export {
   getHttpRequestLogs,
   getAuditEventStats,
 } from "./audit.service.js";
+
+// HTTP middleware + request log readers (single import surface)
+export { auditMiddleware, maskBody, getLogs, getStats } from "../audit.js";

@@ -109,3 +109,24 @@ export async function delegateTerminalSessionExec(sessionId, command, opts = {})
 export async function delegateNotify({ title, message }) {
   return fetchSidecar("/notify", { method: "POST", body: { title, message }, op: "desktop_notify" });
 }
+
+export async function delegateDesktopScreenshot(opts = {}) {
+  const q = opts.format ? `?format=${encodeURIComponent(opts.format)}` : "";
+  return fetchSidecar(`/desktop/screenshot${q}`, { op: "desktop_screenshot" });
+}
+
+export async function delegateDesktopActiveWindow() {
+  return fetchSidecar("/desktop/active-window", { op: "desktop_active_window" });
+}
+
+export async function delegateDesktopOcr(body) {
+  return fetchSidecar("/desktop/ocr", { method: "POST", body, op: "desktop_ocr" });
+}
+
+export async function delegateDesktopClick(body) {
+  return fetchSidecar("/desktop/click", { method: "POST", body, op: "desktop_click" });
+}
+
+export async function delegateDesktopType(body) {
+  return fetchSidecar("/desktop/type", { method: "POST", body, op: "desktop_type" });
+}

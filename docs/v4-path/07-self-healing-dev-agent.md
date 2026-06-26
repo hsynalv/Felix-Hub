@@ -1,6 +1,6 @@
 # 07 — Self-Healing Dev Agent
 
-> **Status:** not_started  
+> **Status:** done (template + CI webhook trigger)  
 > **Faz:** V4.7  
 > **Bağımlılık:** [02-agent-runtime-v2.md](./02-agent-runtime-v2.md), [03-agent-run-designer.md](./03-agent-run-designer.md), [04-approval-center-pro.md](./04-approval-center-pro.md)
 
@@ -47,7 +47,7 @@ test failure → analyze logs → inspect files → patch → run tests → summ
 
 ## Başarı kriteri
 
-- [ ] Basit failing test'i end-to-end düzeltebilen agent run
+- [x] Basit failing test'i end-to-end düzeltebilen agent run
 
 ---
 

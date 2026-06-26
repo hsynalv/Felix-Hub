@@ -18,8 +18,22 @@ import { subscribeRunEvents } from "./run-events.js";
 import { submitJob } from "../jobs.js";
 import { AGENT_RUN_JOB_TYPE } from "./agent-run-job.js";
 import { WORKFLOW_RUN_JOB_TYPE } from "./workflow-run-job.js";
-import { listWorkflowTemplates } from "./workflow-templates.js";
+import { listAllWorkflowTemplates,
+  getWorkflowTemplateById,
+  createWorkflowTemplate,
+  updateWorkflowTemplate,
+  deleteWorkflowTemplate,
+  resolveTemplateForExecution,
+} from "./workflow-template-store.js";
+import { buildPlanFromTemplate } from "./workflow-templates.js";
 import { createRunFromTemplate, replayRun } from "./run-orchestrator.js";
+import {
+  pauseRun,
+  retryRunStep,
+  rollbackRun,
+  compareRuns,
+  compareRunWithReplay,
+} from "./run-control.js";
 import { queryRunUsage } from "../usage/usage-ledger.service.js";
 import { assertRunQuota } from "../usage/run-quota.js";
 import { skipForHtmlNavigation } from "../http/html-navigation.js";
@@ -291,7 +305,81 @@ export function registerAgentRunRoutes(app) {
   });
 
   app.get("/runs/templates/list", requireScope("read"), (_req, res) => {
-    res.json({ ok: true, data: { templates: listWorkflowTemplates() } });
+    res.json({ ok: true, data: { templates: listAllWorkflowTemplates() } });
+  });
+
+  app.get("/runs/templates/:id", requireScope("read"), (req, res) => {
+    const template = getWorkflowTemplateById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ ok: false, error: { code: "not_found", message: "Template not found" } });
+    }
+    res.json({ ok: true, data: template });
+  });
+
+  app.post("/runs/templates", requireScope("write"), (req, res) => {
+    try {
+      const template = createWorkflowTemplate(req.body ?? {}, {
+        createdBy: req.actor?.type || "api",
+        projectId: req.projectId || req.body?.projectId || null,
+      });
+      res.status(201).json({ ok: true, data: template });
+    } catch (err) {
+      const status = err.code === "duplicate_id" ? 409 : 400;
+      res.status(status).json({ ok: false, error: { code: err.code || "create_failed", message: err.message } });
+    }
+  });
+
+  app.put("/runs/templates/:id", requireScope("write"), (req, res) => {
+    try {
+      const template = updateWorkflowTemplate(req.params.id, req.body ?? {});
+      if (!template) {
+        return res.status(404).json({ ok: false, error: { code: "not_found", message: "Template not found" } });
+      }
+      res.json({ ok: true, data: template });
+    } catch (err) {
+      const status = err.code === "readonly" ? 403 : 400;
+      res.status(status).json({ ok: false, error: { code: err.code || "update_failed", message: err.message } });
+    }
+  });
+
+  app.delete("/runs/templates/:id", requireScope("write"), (req, res) => {
+    try {
+      const ok = deleteWorkflowTemplate(req.params.id);
+      if (!ok) {
+        return res.status(404).json({ ok: false, error: { code: "not_found", message: "Template not found" } });
+      }
+      res.json({ ok: true, data: { deleted: true, id: req.params.id } });
+    } catch (err) {
+      const status = err.code === "readonly" ? 403 : 400;
+      res.status(status).json({ ok: false, error: { code: err.code || "delete_failed", message: err.message } });
+    }
+  });
+
+  app.post("/runs/templates/:id/preview", requireScope("read"), async (req, res) => {
+    const template = resolveTemplateForExecution(req.params.id);
+    if (!template) {
+      return res.status(404).json({ ok: false, error: { code: "not_found", message: "Template not found" } });
+    }
+    const parameters = req.body?.parameters || {};
+    const dryRun = req.body?.dryRun !== false;
+    try {
+      const plan = buildPlanFromTemplate(template, parameters);
+      let preflight = null;
+      try {
+        const { preflightRunGuardrails } = await import("../usage/cost-guardrails.service.js");
+        preflight = await preflightRunGuardrails({
+          templateId: template.id,
+          parameters,
+          projectId: req.projectId,
+          projectEnv: req.projectEnv,
+        });
+      } catch {
+        preflight = null;
+      }
+      res.json({ ok: true, data: { plan, dryRun, templateId: template.id, preflight } });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: { code: "preview_failed", message: err.message } });
+    }
   });
 
   app.post("/runs/from-template/:templateId", requireScope("write"), async (req, res) => {
@@ -352,6 +440,104 @@ export function registerAgentRunRoutes(app) {
       res.status(201).json({ ok: true, data: replayed });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "replay_failed", message: err.message } });
+    }
+  });
+
+  app.post("/runs/:id/pause", requireScope("write"), async (req, res) => {
+    try {
+      const run = await pauseRun(req.params.id);
+      if (!run) {
+        return res.status(404).json({ ok: false, error: { code: "not_found", message: "Run not found" } });
+      }
+      res.json({ ok: true, data: run });
+    } catch (err) {
+      const status = err.code === "invalid_transition" ? 400 : 500;
+      res.status(status).json({
+        ok: false,
+        error: { code: err.code || "pause_failed", message: err.message },
+      });
+    }
+  });
+
+  app.post("/runs/:id/retry-step", requireScope("write"), async (req, res) => {
+    try {
+      const result = await retryRunStep(req.params.id, {
+        stepIndex: req.body?.stepIndex,
+        context: {
+          projectId: req.projectId,
+          projectEnv: req.projectEnv,
+          scopes: req.authScopes,
+          user: req.actor?.type || "api",
+          requestId: req.requestId,
+        },
+      });
+      if (!result) {
+        return res.status(404).json({ ok: false, error: { code: "not_found", message: "Run not found" } });
+      }
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      const status =
+        err.code === "invalid_transition" || err.code === "not_workflow_run" || err.code === "invalid_step"
+          ? 400
+          : 500;
+      res.status(status).json({
+        ok: false,
+        error: { code: err.code || "retry_failed", message: err.message },
+      });
+    }
+  });
+
+  app.post("/runs/:id/rollback", requireScope("write"), async (req, res) => {
+    try {
+      const dryRun = req.body?.dryRun !== false;
+      const result = await rollbackRun(req.params.id, {
+        dryRun,
+        context: {
+          projectId: req.projectId,
+          projectEnv: req.projectEnv,
+          scopes: req.authScopes,
+          user: req.actor?.type || "api",
+          requestId: req.requestId,
+          dryRun,
+          replay: true,
+        },
+      });
+      if (!result) {
+        return res.status(404).json({ ok: false, error: { code: "not_found", message: "Run not found" } });
+      }
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      const status = err.code === "invalid_state" ? 400 : 500;
+      res.status(status).json({
+        ok: false,
+        error: { code: err.code || "rollback_failed", message: err.message },
+      });
+    }
+  });
+
+  app.post("/runs/:id/compare", requireScope("read"), async (req, res) => {
+    try {
+      const targetRunId = req.body?.targetRunId;
+      let comparison;
+      if (targetRunId) {
+        comparison = await compareRuns(req.params.id, targetRunId);
+      } else {
+        const dryRun = req.body?.dryRun !== false;
+        const result = await compareRunWithReplay(req.params.id, {
+          dryRun,
+          createdBy: req.actor?.type || "api",
+        });
+        if (!result) {
+          return res.status(404).json({ ok: false, error: { code: "not_found", message: "Source run not found" } });
+        }
+        return res.json({ ok: true, data: result });
+      }
+      if (!comparison) {
+        return res.status(404).json({ ok: false, error: { code: "not_found", message: "Run not found" } });
+      }
+      res.json({ ok: true, data: { comparison } });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "compare_failed", message: err.message } });
     }
   });
 }

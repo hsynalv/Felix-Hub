@@ -13,10 +13,19 @@ const ObservabilityPage = lazy(() => import("@/pages/ObservabilityPage").then((m
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const UsagePage = lazy(() => import("@/pages/UsagePage").then((m) => ({ default: m.UsagePage })));
 const RunsPage = lazy(() => import("@/pages/RunsPage").then((m) => ({ default: m.RunsPage })));
+const WorkflowDesignerPage = lazy(() =>
+  import("@/pages/WorkflowDesignerPage").then((m) => ({ default: m.WorkflowDesignerPage }))
+);
+const ApprovalCenterPage = lazy(() =>
+  import("@/pages/ApprovalCenterPage").then((m) => ({ default: m.ApprovalCenterPage }))
+);
 const ProjectsPage = lazy(() => import("@/pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
 const BrainPage = lazy(() => import("@/pages/BrainPage").then((m) => ({ default: m.BrainPage })));
 const IntentTrainingPage = lazy(() =>
   import("@/pages/IntentTrainingPage").then((m) => ({ default: m.IntentTrainingPage }))
+);
+const EvalStudioPage = lazy(() =>
+  import("@/pages/EvalStudioPage").then((m) => ({ default: m.EvalStudioPage }))
 );
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
@@ -35,10 +44,13 @@ export default function App() {
             <Route path="plugins" element={<PluginsPage />} />
             <Route path="audit" element={<AuditPage />} />
             <Route path="admin" element={<AdminPage />} />
-            <Route path="approvals" element={<AdminPage defaultTab="approvals" />} />
+            <Route path="approvals" element={<ApprovalCenterPage />} />
             <Route path="observability" element={<ObservabilityPage />} />
             <Route path="usage" element={<UsagePage />} />
+            <Route path="eval" element={<EvalStudioPage />} />
             <Route path="runs" element={<RunsPage />} />
+            <Route path="workflows/designer" element={<WorkflowDesignerPage />} />
+            <Route path="workflows/designer/:id" element={<WorkflowDesignerPage />} />
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="projects/:projectKey" element={<ProjectsPage />} />
             <Route path="brain" element={<BrainPage />} />
