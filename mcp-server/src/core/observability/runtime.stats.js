@@ -1,12 +1,14 @@
 /**
  * Runtime Stats
  *
- * Process and runtime statistics for observability.
+ * Process/plugin/tool/job snapshots for JSON health APIs. Prometheus scrape uses
+ * `/observability/metrics` → `exportMetricsRegistryPrometheus()` (hub registry) plus process/legacy lines;
+ * this module is not the Prometheus source of truth.
  */
 
 import { getPlugins, getFailedPlugins } from "../plugins.js";
-import { listTools } from "../tool-registry.js";
-import { getJobStats as getLegacyJobStats } from "../jobs.js";
+import { getToolStats as getToolRegistryStats } from "../tool-registry.js";
+import { getJobStats as getCoreQueueJobStats } from "../jobs.js";
 
 /**
  * Process stats
@@ -157,25 +159,25 @@ function formatUptime(seconds) {
  * @returns {Object}
  */
 export function getPluginStats() {
-  const plugins = getPlugins();
+  const loaded = getPlugins();
   const failed = getFailedPlugins();
 
   return {
-    total: plugins.length + failed.length,
-    enabled: plugins.length,
-    loaded: plugins.length,
-    healthy: plugins.length,
+    total: loaded.length + failed.length,
+    enabled: loaded.length,
+    loaded: loaded.length,
+    healthy: loaded.length,
     failed: failed.length,
-    pluginNames: plugins.map((p) => p.name),
+    pluginNames: loaded.map((p) => p.name),
   };
 }
 
 /**
- * Get job stats
+ * Job counts by state — always core/jobs.js (production queue); not the legacy JobManager store.
  * @returns {Promise<Object>}
  */
 export async function getJobStats() {
-  return getLegacyJobStats();
+  return getCoreQueueJobStats();
 }
 
 /**
@@ -183,23 +185,7 @@ export async function getJobStats() {
  * @returns {Object}
  */
 export function getToolStats() {
-  const tools = listTools();
-  const byPlugin = {};
-  const categories = new Set();
-
-  for (const tool of tools) {
-    const plugin = tool.plugin || "unknown";
-    byPlugin[plugin] = (byPlugin[plugin] || 0) + 1;
-    for (const tag of tool.tags || []) {
-      categories.add(tag);
-    }
-  }
-
-  return {
-    total: tools.length,
-    byPlugin,
-    categories: [...categories],
-  };
+  return getToolRegistryStats();
 }
 
 /**
@@ -221,22 +207,21 @@ export async function getSystemSnapshot() {
  * @returns {Object}
  */
 export function getHealthStatus() {
-  const plugins = getPlugins();
-  const failed = getFailedPlugins();
-  const total = plugins.length + failed.length;
+  const pluginStats = getPluginStats();
 
+  // Determine overall health
   let status_code = "healthy";
   const checks = {
     runtime: true,
-    plugins: failed.length === 0,
-    registry: total > 0,
+    plugins: pluginStats.failed === 0,
+    registry: pluginStats.total > 0,
   };
 
-  if (failed.length > 0) {
+  if (pluginStats.failed > 0) {
     status_code = "degraded";
   }
 
-  if (total === 0) {
+  if (pluginStats.total === 0) {
     status_code = "unhealthy";
   }
 

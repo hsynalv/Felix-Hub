@@ -1,91 +1,61 @@
 /**
- * Jobs Metrics
+ * Job queue gauges — sourced from core/jobs.js `getJobStats` (Redis HASH/set/zset or in-memory Map).
  *
- * Metrics collection for jobs/queue system.
- * Uses canonical jobs.js (not deprecated jobs/job.manager.js).
+ * Counters/histograms for lifecycle phases are derived only from hub audit events
+ * (emitJobLifecycleHubEvent → recordMetricFromHubEvent). Gauges here intentionally mirror
+ * store state only — do not re-emit or duplicate lifecycle counters in this module.
  */
 
-import { getJobStats } from "../jobs.js";
+import { getJobStats as getCoreQueueJobStats } from "../jobs.js";
 import { Metrics, getMetricsRegistry } from "./metrics.js";
 
 /**
- * Record job event
- * @param {string} jobType
- * @param {string} status - "queued" | "started" | "completed" | "failed" | "cancelled"
- * @param {string} [plugin]
+ * @deprecated Dead no-op — lifecycle counters/histograms use hub events only
+ * (`recordMetricFromHubEvent` → `job_lifecycle_events_total` / `job_duration_ms`). Do not call.
  */
-export function recordJobEvent(jobType, status, plugin) {
-  const registry = getMetricsRegistry();
-
-  registry.increment(Metrics.JOB_EVENTS_TOTAL, 1, {
-    jobType,
-    status,
-    plugin: plugin || "unknown",
-  });
-
-  if (status === "completed") {
-    registry.increment("job_completed_total", 1, { jobType });
-  } else if (status === "failed") {
-    registry.increment("job_failed_total", 1, { jobType });
-  } else if (status === "cancelled") {
-    registry.increment("job_cancelled_total", 1, { jobType });
-  }
-}
+export function recordJobEvent(_jobType, _status, _plugin) {}
 
 /**
- * Record job duration
- * @param {string} jobType
- * @param {number} durationMs
- * @param {string} [plugin]
+ * @deprecated Dead no-op — durations recorded via hub `job_duration_ms`. Do not call.
  */
-export function recordJobDuration(jobType, durationMs, plugin) {
-  const registry = getMetricsRegistry();
-
-  registry.observe(Metrics.JOB_DURATION_MS, durationMs, {
-    jobType,
-    plugin: plugin || "unknown",
-  });
-}
+export function recordJobDuration(_jobType, _durationMs, _plugin) {}
 
 /**
- * Update job gauges
  * @param {number} running
  * @param {number} queued
  */
 export function updateJobGauges(running, queued) {
   const registry = getMetricsRegistry();
-
   registry.set(Metrics.JOBS_RUNNING, running);
   registry.set(Metrics.JOBS_QUEUED, queued);
 }
 
 /**
- * Get job metrics snapshot
+ * Snapshot of job queue state (core jobs.js — production path).
  * @returns {Promise<Object>}
  */
 export async function getJobMetrics() {
-  const counts = await getJobStats();
-
+  const stats = await getCoreQueueJobStats();
   return {
-    jobs_running: counts.running ?? 0,
-    jobs_queued: counts.queued ?? 0,
-    jobs_completed: counts.completed ?? 0,
-    jobs_failed: counts.failed ?? 0,
-    jobs_cancelled: counts.cancelled ?? 0,
-    jobs_total: counts.total ?? 0,
+    jobs_running: stats.running,
+    jobs_queued: stats.queued,
+    jobs_completed: stats.completed,
+    jobs_failed: stats.failed,
+    jobs_cancelled: stats.cancelled ?? 0,
+    jobs_total: stats.total,
   };
 }
 
 /**
- * Sync job metrics with canonical job store
+ * Refresh running/queued gauges from the core job store.
  */
 export async function syncJobMetrics() {
-  const counts = await getJobStats();
-  updateJobGauges(counts.running ?? 0, counts.queued ?? 0);
+  const stats = await getCoreQueueJobStats();
+  updateJobGauges(stats.running, stats.queued);
 }
 
 /**
- * Initialize job metrics
+ * Initialize job gauges
  */
 export function initializeJobMetrics() {
   const registry = getMetricsRegistry();

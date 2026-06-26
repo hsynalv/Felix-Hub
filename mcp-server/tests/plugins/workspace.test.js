@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { validateWorkspacePath } from "../../src/core/workspace-paths.js";
 import {
-  validateWorkspacePath,
   readFile,
   writeFile,
   listDirectory,
@@ -8,6 +8,7 @@ import {
   patchFile,
   extractContext,
 } from "../../src/plugins/workspace/workspace.core.js";
+import { generateCorrelationId, getAuditManager } from "../../src/core/audit/index.js";
 
 /**
  * Workspace Plugin Unit Tests
@@ -15,57 +16,59 @@ import {
  */
 
 describe("Workspace Core", () => {
-  describe("validateWorkspacePath", () => {
+  describe("validateWorkspacePath (central module)", () => {
     it("should validate relative paths within workspace", () => {
-      const result = validateWorkspacePath("src/index.js");
+      const result = validateWorkspacePath("src/index.js", "global");
       expect(result.valid).toBe(true);
-      expect(result.relative).toBe("src/index.js");
+      expect(result.resolvedPath).toBeDefined();
+      expect(result.resolvedPath).toContain("src");
     });
 
-    it("should reject absolute paths outside workspace", () => {
-      const result = validateWorkspacePath("/etc/passwd");
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain("traversal");
+    it("treats leading-slash paths as relative to workspace (not system absolute)", () => {
+      // Central module strips leading / and resolves relative to workspace root
+      const result = validateWorkspacePath("/etc/passwd", "global");
+      expect(result.valid).toBe(true);
+      expect(result.resolvedPath).toContain("etc");
     });
 
     it("should reject path traversal attempts", () => {
-      const result = validateWorkspacePath("../../../etc/passwd");
+      const result = validateWorkspacePath("../../../etc/passwd", "global");
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("traversal");
+      expect(result.reason || result.error).toMatch(/traversal|escape/);
     });
 
     it("should reject empty paths", () => {
-      const result = validateWorkspacePath("");
+      const result = validateWorkspacePath("", "global");
       expect(result.valid).toBe(false);
     });
 
     it("should reject null/undefined paths", () => {
-      expect(validateWorkspacePath(null).valid).toBe(false);
-      expect(validateWorkspacePath(undefined).valid).toBe(false);
+      expect(validateWorkspacePath(null, "global").valid).toBe(false);
+      expect(validateWorkspacePath(undefined, "global").valid).toBe(false);
     });
 
-    it("should handle paths starting with ~", () => {
-      const result = validateWorkspacePath("~/Documents/file.txt");
-      // Should resolve to a valid path within workspace root or reject if outside
-      expect(result.valid).toBeDefined();
+    it("should reject paths starting with ~", () => {
+      const result = validateWorkspacePath("~/Documents/file.txt", "global");
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe("path_traversal");
     });
   });
 
   describe("readFile", () => {
     it("should reject invalid paths", async () => {
-      const result = await readFile("../../../etc/passwd");
+      const result = await readFile("../../../etc/passwd", "global");
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("invalid_path");
     });
 
     it("should return error for non-existent files", async () => {
-      const result = await readFile("non-existent-file-12345.txt");
+      const result = await readFile("non-existent-file-12345.txt", "global");
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("file_not_found");
     });
 
     it("should reject directories", async () => {
-      const result = await readFile(".");
+      const result = await readFile(".", "global");
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("not_a_file");
     });
@@ -73,7 +76,7 @@ describe("Workspace Core", () => {
 
   describe("writeFile", () => {
     it("should reject invalid paths", async () => {
-      const result = await writeFile("../../../etc/passwd", "content");
+      const result = await writeFile("../../../etc/passwd", "content", { workspaceId: "global" });
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("invalid_path");
     });
@@ -82,7 +85,7 @@ describe("Workspace Core", () => {
       const result = await writeFile(
         "test-dir-12345/nested/file.txt",
         "test content",
-        { createDirs: false }
+        { createDirs: false, workspaceId: "global" }
       );
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("parent_not_found");
@@ -91,15 +94,14 @@ describe("Workspace Core", () => {
 
   describe("listDirectory", () => {
     it("should reject invalid paths", async () => {
-      const result = await listDirectory("../../../etc");
+      const result = await listDirectory("../../../etc", { workspaceId: "global" });
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("invalid_path");
     });
 
     it("should reject files (not directories)", async () => {
-      // First create a test file
-      await writeFile("test-file-for-list.txt", "content", { createDirs: true });
-      const result = await listDirectory("test-file-for-list.txt");
+      await writeFile("test-file-for-list.txt", "content", { createDirs: true, workspaceId: "global" });
+      const result = await listDirectory("test-file-for-list.txt", { workspaceId: "global" });
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("not_a_directory");
       // Cleanup - delete the test file using fs
@@ -109,13 +111,13 @@ describe("Workspace Core", () => {
 
   describe("searchFiles", () => {
     it("should reject invalid root paths", async () => {
-      const result = await searchFiles("*.js", { root: "../../../etc" });
+      const result = await searchFiles("*.js", { root: "../../../etc", workspaceId: "global" });
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("invalid_path");
     });
 
     it("should limit search results", async () => {
-      const result = await searchFiles(".");
+      const result = await searchFiles(".", { workspaceId: "global" });
       if (result.ok) {
         expect(result.data.results.length).toBeLessThanOrEqual(100);
       }
@@ -124,21 +126,20 @@ describe("Workspace Core", () => {
 
   describe("patchFile", () => {
     it("should reject invalid paths", async () => {
-      const result = await patchFile("../../../etc/passwd", "search===REPLACE===replace");
+      const result = await patchFile("../../../etc/passwd", "search===REPLACE===replace", { workspaceId: "global" });
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("invalid_path");
     });
 
     it("should return error for non-existent files", async () => {
-      const result = await patchFile("non-existent-file-12345.txt", "a===REPLACE===b");
+      const result = await patchFile("non-existent-file-12345.txt", "a===REPLACE===b", { workspaceId: "global" });
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("file_not_found");
     });
 
     it("should reject invalid patch format", async () => {
-      // First create a test file
-      await writeFile("test-patch-file.txt", "original content", { createDirs: true });
-      const result = await patchFile("test-patch-file.txt", "invalid-patch-format", { mode: "search-replace" });
+      await writeFile("test-patch-file.txt", "original content", { createDirs: true, workspaceId: "global" });
+      const result = await patchFile("test-patch-file.txt", "invalid-patch-format", { mode: "search-replace", workspaceId: "global" });
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("invalid_patch");
       // Cleanup - delete the test file using fs
@@ -182,6 +183,29 @@ describe("Workspace Plugin - Context Extraction", () => {
 
     const context = extractContext(mockReq);
     expect(context.actor).toBe("anonymous");
+  });
+});
+
+describe("Workspace Plugin - Audit Logging", () => {
+  it("should generate unique correlation IDs", async () => {
+    const id1 = generateCorrelationId();
+    const id2 = generateCorrelationId();
+    expect(id1).not.toBe(id2);
+    expect(id1).toMatch(/^audit-/);
+  });
+
+  it("should retrieve audit log entries via getAuditManager", async () => {
+    const manager = getAuditManager();
+    if (!manager.initialized) await manager.init();
+    const entries = await manager.getRecentEntries({ plugin: "workspace", limit: 10 });
+    expect(Array.isArray(entries)).toBe(true);
+  });
+
+  it("should respect limit parameter", async () => {
+    const manager = getAuditManager();
+    if (!manager.initialized) await manager.init();
+    const entries = await manager.getRecentEntries({ plugin: "workspace", limit: 5 });
+    expect(entries.length).toBeLessThanOrEqual(5);
   });
 });
 

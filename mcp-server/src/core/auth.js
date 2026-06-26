@@ -12,6 +12,8 @@ import { getCookie, SESSION_COOKIE } from "./auth/cookies.js";
 import { buildUserFromSession } from "./auth/session-middleware.js";
 import { validateSessionToken } from "./auth/sessions.service.js";
 import { hasAnyUsers } from "./auth/users.service.js";
+import { getSecurityRuntime, hubKeysConfigured } from "./security/resolve-runtime-security.js";
+import { emitHttpDenyHubEvent } from "./audit/emit-http-events.js";
 
 const SCOPE_HIERARCHY = ["read", "write", "admin"];
 
@@ -212,56 +214,71 @@ export function optionalAuthMiddleware(req, res, next) {
     .catch(next);
 }
 
-function authorizeScope(scopes, requiredScope) {
-  const required = normalizeScope(requiredScope);
-  const requiredIndex = SCOPE_HIERARCHY.indexOf(required);
-  return scopes.some((s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex);
+export async function resolveSessionAuthPrincipal(req) {
+  const sessionAuth = await authenticateSession(req);
+  if (!sessionAuth) return null;
+  return {
+    authenticated: true,
+    scopes: sessionAuth.scopes,
+    actor: sessionAuth.actor,
+    user: sessionAuth.actor?.email || sessionAuth.actor?.userId || "session",
+    authType: "session",
+  };
 }
 
 export function requireScope(scope = "read") {
-  return async (req, res, next) => {
-    const enabled = await authEnabled();
-    if (!enabled) {
-      if (process.env.NODE_ENV === "production") {
-        return res.status(503).json({
-          ok: false,
-          error: {
-            code: "auth_not_configured",
-            message: "Server auth is not configured.",
-          },
-        });
-      }
-      return next();
-    }
-
-    const requiredScope = normalizeScope(scope);
-    const auth = await authenticateRequest(req);
-
-    if (!auth.authenticated) {
+  return (req, res, next) => {
+    if (!req.securityContext?.authenticated) {
+      void emitHttpDenyHubEvent(req, {
+        source: "require_scope",
+        statusCode: 401,
+        errorCode: "unauthorized",
+        requiredScope: scope,
+      }).catch(() => {});
       return res.status(401).json({
         ok: false,
         error: {
           code: "unauthorized",
-          message: "Giriş gerekli veya Authorization: Bearer <API_KEY>",
+          message:
+            "Security context missing. Ensure enforceSecurityContext runs before protected routes.",
         },
+        meta: { requestId: req.requestId ?? null },
       });
     }
 
-    req.authScopes = auth.scopes;
-    req.actor = auth.actor;
+    const requiredScope = normalizeScope(scope);
+    const scopes = req.securityContext.scopes || req.authScopes || [];
+    const requiredIndex = SCOPE_HIERARCHY.indexOf(requiredScope);
+    const hasScope = Array.isArray(scopes) && scopes.some(
+      (s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex
+    );
 
-    if (!authorizeScope(auth.scopes, requiredScope)) {
+    if (!hasScope) {
+      void emitHttpDenyHubEvent(req, {
+        source: "require_scope",
+        statusCode: 403,
+        errorCode: "forbidden",
+        requiredScope: scope,
+      }).catch(() => {});
       return res.status(403).json({
         ok: false,
         error: {
           code: "forbidden",
-          message: `This endpoint requires '${scope}' scope.`,
+          message: `This endpoint requires '${scope}' scope. Your credentials do not have sufficient permissions.`,
         },
+        meta: { requestId: req.requestId ?? null },
       });
     }
 
     next();
   };
+}
+
+function authorizeScope(scopes, requiredScope) {
+  if (!Array.isArray(scopes)) return false;
+  const required = normalizeScope(requiredScope);
+  const requiredIndex = SCOPE_HIERARCHY.indexOf(required);
+  return scopes.some((s) => SCOPE_HIERARCHY.indexOf(normalizeScope(s)) >= requiredIndex);
 }
 
 export function isAuthEnabled() {

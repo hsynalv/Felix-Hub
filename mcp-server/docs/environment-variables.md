@@ -1,6 +1,8 @@
 # Environment Variables
 
-Copy `.env.example` to `.env` and configure:
+Copy `.env.example` to `.env` and configure.
+
+> **Security**: Never commit `.env` or real credentials. All values below are placeholders. Replace with your own keys from the respective service dashboards.
 
 ## Server
 
@@ -74,6 +76,19 @@ S3_BUCKET_NAME=my-bucket
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+## RAG (Document indexing)
+
+```env
+RAG_VECTOR_STORE_TYPE=memory
+RAG_EMBEDDING_MODEL=text-embedding-3-small
+# Optional: OCR for scanned PDFs. Set to "tesseract" to enable.
+RAG_OCR_PROVIDER=
+# Tesseract language (default: eng)
+RAG_OCR_TESSERACT_LANG=eng
+```
+
+**OCR prerequisites:** When `RAG_OCR_PROVIDER=tesseract`, install `tesseract.js` and `pdf2pic` (npm), plus GraphicsMagick or ImageMagick (system).
 
 ## Redis (Optional)
 

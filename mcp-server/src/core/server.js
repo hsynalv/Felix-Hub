@@ -7,19 +7,19 @@ import { config } from "./config.js";
 import { loadPlugins, getPlugins } from "./plugins.js";
 import { initializeToolHooks } from "./tool-registry.js";
 import {
-  auditMiddleware,
-  getLogs,
-  getStats,
   getAuditManager,
   initAuditManager,
 } from "./audit/index.js";
+import { auditMiddleware, getLogs, getStats } from "./audit.js";
 import { requireScope, isAuthEnabled, optionalAuthMiddleware, authEnabled, refreshAuthEnabledState } from "./auth.js";
 import { sessionMiddleware } from "./auth/session-middleware.js";
 import { requestContextMiddleware } from "./auth/request-context.js";
 import { tenantOverlayMiddleware } from "./auth/tenant-middleware.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { seedOwnerAndMigrateSettings } from "./auth/seed.js";
-import { submitJob, getJob, listJobs, getJobStats } from "./jobs.js";
+import { submitJob, getJob, listJobs, getJobStats, cancelJob } from "./jobs.js";
+import { validateSecurityConfigOrExit } from "./security/validate-security-config.js";
+import { enforceSecurityContext } from "./security/enforce-security-context.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { readFileSync, existsSync } from "fs";
@@ -84,6 +84,34 @@ import { rateLimitMiddleware } from "./ratelimit.js";
 import { skipForHtmlNavigation } from "./http/html-navigation.js";
 
 import { workspaceContextMiddleware } from "./workspace.js";
+import {
+  discoveryVisibilityContextFromRequest,
+  filterPluginsForDiscovery,
+} from "./authorization/filter-visible-surfaces.js";
+import { httpTelemetryContextMiddleware } from "./observability/telemetry-context.js";
+import { httpHubAuditLifecycleMiddleware } from "./audit/emit-http-events.js";
+import {
+  emitRestDiscoveryRequested,
+  emitRestDiscoveryFiltered,
+  emitRestDiscoveryDenied,
+} from "./audit/emit-discovery-http-event.js";
+import { DiscoverySurfaces } from "./audit/discovery-surfaces.js";
+
+function countPluginEndpoints(plugins) {
+  let n = 0;
+  for (const p of plugins) {
+    if (Array.isArray(p.endpoints)) n += p.endpoints.length;
+  }
+  return n;
+}
+
+function countManifestTools(plugins) {
+  let n = 0;
+  for (const p of plugins) {
+    if (Array.isArray(p.tools)) n += p.tools.length;
+  }
+  return n;
+}
 
 function isPlainObject(value) {
   return value != null && typeof value === "object" && !Array.isArray(value);
@@ -275,6 +303,8 @@ function teamMembershipMiddleware(req, res, next) {
 }
 
 export async function createServer() {
+  validateSecurityConfigOrExit();
+
   const app = express();
 
   if (process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "true") {
@@ -316,9 +346,12 @@ export async function createServer() {
   app.use(projectContextMiddleware);
   app.use(workspaceContextMiddleware);
   app.use(auditMiddleware);
-  app.use(responseEnvelopeMiddleware);
+  app.use(httpHubAuditLifecycleMiddleware);
   app.use(sessionMiddleware);
   app.use(optionalAuthMiddleware);
+  app.use(enforceSecurityContext);
+  app.use(httpTelemetryContextMiddleware);
+  app.use(responseEnvelopeMiddleware);
   app.use(teamMembershipMiddleware);
   app.use(requestContextMiddleware);
   app.use(tenantOverlayMiddleware);
@@ -361,19 +394,50 @@ export async function createServer() {
     });
   });
 
-  app.get("/plugins", skipForHtmlNavigation, requireScope("read"), async (_req, res) => {
+  app.get("/plugins", skipForHtmlNavigation, requireScope("read"), async (req, res) => {
+    void emitRestDiscoveryRequested(req, DiscoverySurfaces.REST_PLUGINS_LIST).catch(() => {});
+    const vis = discoveryVisibilityContextFromRequest(req);
+    const allPlugins = getPlugins();
+    let connectors = [];
     try {
-      const connectors = await getConnectorPluginManifests();
-      res.json([...getPlugins(), ...connectors]);
-    } catch (err) {
-      res.json(getPlugins());
+      connectors = await getConnectorPluginManifests();
+    } catch {
+      // connector manifests optional
     }
+    const combined = [...allPlugins, ...connectors];
+    const plugins = filterPluginsForDiscovery(combined, vis);
+    const totalCandidates = listTools().length;
+    const visibleCount = countManifestTools(plugins);
+    void emitRestDiscoveryFiltered(req, DiscoverySurfaces.REST_PLUGINS_LIST, {
+      totalCandidates,
+      visibleCount,
+    }).catch(() => {});
+    res.json(plugins);
   });
 
-  app.get("/plugins/:name/manifest", requireScope("read"), (req, res) => {
-    const plugins = getPlugins();
-    const plugin  = plugins.find((p) => p.name === req.params.name);
-    if (!plugin) return res.status(404).json({ ok: false, error: { code: "plugin_not_found", message: "Plugin not found" } });
+  app.get("/plugins/:name/manifest", requireScope("read"), async (req, res) => {
+    void emitRestDiscoveryRequested(req, DiscoverySurfaces.REST_PLUGIN_MANIFEST).catch(() => {});
+    const vis = discoveryVisibilityContextFromRequest(req);
+    let connectors = [];
+    try {
+      connectors = await getConnectorPluginManifests();
+    } catch {
+      // connector manifests optional
+    }
+    const plugins = filterPluginsForDiscovery([...getPlugins(), ...connectors], vis);
+    const plugin = plugins.find((p) => p.name === req.params.name);
+    if (!plugin) {
+      void emitRestDiscoveryDenied(req, DiscoverySurfaces.REST_PLUGIN_MANIFEST, {
+        httpStatus: 404,
+        errorCode: "plugin_not_found",
+        denyKind: "plugin_not_found",
+      }).catch(() => {});
+      return res.status(404).json({ ok: false, error: { code: "plugin_not_found", message: "Plugin not found" } });
+    }
+    void emitRestDiscoveryFiltered(req, DiscoverySurfaces.REST_PLUGIN_MANIFEST, {
+      totalCandidates: 1,
+      visibleCount: 1,
+    }).catch(() => {});
     res.json(plugin);
   });
 
@@ -381,8 +445,17 @@ export async function createServer() {
    * GET /openapi.json
    * Auto-generated OpenAPI spec from all plugin manifests.
    */
-  app.get("/openapi.json", requireScope("read"), (_req, res) => {
-    const plugins = getPlugins();
+  app.get("/openapi.json", requireScope("read"), async (req, res) => {
+    void emitRestDiscoveryRequested(req, DiscoverySurfaces.REST_OPENAPI_AGGREGATE).catch(() => {});
+    const vis = discoveryVisibilityContextFromRequest(req);
+    const allPlugins = getPlugins();
+    const plugins = filterPluginsForDiscovery(allPlugins, vis);
+    const totalCandidates = countPluginEndpoints(allPlugins);
+    const visibleCount = countPluginEndpoints(plugins);
+    void emitRestDiscoveryFiltered(req, DiscoverySurfaces.REST_OPENAPI_AGGREGATE, {
+      totalCandidates,
+      visibleCount,
+    }).catch(() => {});
     const paths = {};
 
     for (const plugin of plugins) {
@@ -593,6 +666,25 @@ export async function createServer() {
     const job = await getJob(req.params.id);
     if (!job) return res.status(404).json({ ok: false, error: { code: "job_not_found", message: "Job not found" } });
     res.json({ job });
+  });
+
+  app.delete("/jobs/:id", requireScope("write"), async (req, res) => {
+    const ok = await cancelJob(req.params.id, { cancelSource: "user" });
+    if (!ok) {
+      return res.status(409).json({
+        ok: false,
+        error: {
+          code: "job_not_cancellable",
+          message: "Job not found or not in a cancellable state (queued/running only)",
+        },
+        meta: { requestId: req.requestId },
+      });
+    }
+    res.status(202).json({
+      ok: true,
+      data: { cancelled: true },
+      meta: { requestId: req.requestId },
+    });
   });
 
   // ── Tool registry routes ─────────────────────────────────────────────────

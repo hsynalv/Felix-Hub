@@ -6,15 +6,21 @@
  *
  * Redis Schema:
  *   mcp-hub:job:<id>       -> Job data (HASH)
- *   mcp-hub:jobs:queue     -> Pending job IDs (LIST)
- *   mcp-hub:jobs:running   -> Running job IDs (SET with timestamp score)
+ *   mcp-hub:jobs:queue     -> Pending job IDs (LIST) — IDs removed when a worker claims the job (running) or terminal
+ *   mcp-hub:jobs:running   -> Running job IDs (SET)
  *   mcp-hub:jobs:completed -> Completed job IDs (Sorted Set by completion time)
- *   mcp-hub:jobs:failed    -> Failed job IDs (Sorted Set by failure time)
+ *   mcp-hub:jobs:failed    -> Terminal non-success index (Sorted Set): both `failed` and `cancelled` jobs
+ *   mcp-hub:jobs:cancelled -> Cancelled job IDs (SET); getStats: cancelled=|SET|, failed=|Z failed|-|SET|
  *   mcp-hub:progress:<id>  -> Job progress channel for pub/sub
  */
 
 import Redis from "ioredis";
-import { randomUUID } from "crypto";
+import { emitJobLifecycleHubEvent } from "./audit/emit-job-event.js";
+
+function terminalJobDurationMs(job) {
+  if (!job?.startedAt || !job?.finishedAt) return 0;
+  return Math.max(0, new Date(job.finishedAt).getTime() - new Date(job.startedAt).getTime());
+}
 
 const DEFAULT_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 const JOB_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
@@ -46,6 +52,10 @@ export class RedisJobStore {
     return `${this.keyPrefix}progress:${id}`;
   }
 
+  _cancelledSetKey() {
+    return `${this.keyPrefix}jobs:cancelled`;
+  }
+
   // Core operations
   async get(id) {
     const data = await this.redis.hgetall(this._jobKey(id));
@@ -68,6 +78,7 @@ export class RedisJobStore {
       this.redis.srem(`${this.keyPrefix}jobs:running`, id),
       this.redis.zrem(`${this.keyPrefix}jobs:completed`, id),
       this.redis.zrem(`${this.keyPrefix}jobs:failed`, id),
+      this.redis.srem(this._cancelledSetKey(), id),
     ]);
   }
 
@@ -75,6 +86,11 @@ export class RedisJobStore {
   async enqueue(job) {
     await this.set(job.id, { ...job, state: "queued" });
     await this.redis.rpush(`${this.keyPrefix}jobs:queue`, job.id);
+  }
+
+  /** Remove all list entries for id (claim/stop/terminal). */
+  async removeFromQueue(id) {
+    await this.redis.lrem(`${this.keyPrefix}jobs:queue`, 0, id);
   }
 
   async dequeue() {
@@ -93,7 +109,9 @@ export class RedisJobStore {
   async markCompleted(id, result) {
     const now = Date.now();
     await Promise.all([
+      this.redis.lrem(`${this.keyPrefix}jobs:queue`, 0, id),
       this.redis.srem(`${this.keyPrefix}jobs:running`, id),
+      this.redis.srem(this._cancelledSetKey(), id),
       this.redis.zadd(`${this.keyPrefix}jobs:completed`, now, id),
       this.redis.hset(this._jobKey(id), "state", "completed", "result", JSON.stringify(result), "finishedAt", new Date().toISOString(), "progress", "100"),
     ]);
@@ -104,8 +122,10 @@ export class RedisJobStore {
   async markFailed(id, error) {
     const now = Date.now();
     await Promise.all([
+      this.redis.lrem(`${this.keyPrefix}jobs:queue`, 0, id),
       this.redis.srem(`${this.keyPrefix}jobs:running`, id),
       this.redis.zadd(`${this.keyPrefix}jobs:failed`, now, id),
+      this.redis.srem(this._cancelledSetKey(), id),
       this.redis.hset(this._jobKey(id), "state", "failed", "error", typeof error === "string" ? error : JSON.stringify(error), "finishedAt", new Date().toISOString()),
     ]);
     // Set shorter TTL for failed jobs (6 hours)
@@ -115,8 +135,10 @@ export class RedisJobStore {
   async markCancelled(id) {
     const now = Date.now();
     await Promise.all([
+      this.redis.lrem(`${this.keyPrefix}jobs:queue`, 0, id),
       this.redis.srem(`${this.keyPrefix}jobs:running`, id),
       this.redis.zadd(`${this.keyPrefix}jobs:failed`, now, id),
+      this.redis.sadd(this._cancelledSetKey(), id),
       this.redis.hset(this._jobKey(id), "state", "cancelled", "finishedAt", new Date().toISOString()),
     ]);
   }
@@ -181,28 +203,38 @@ export class RedisJobStore {
     const jobs = await Promise.all(jobIds.map((id) => this.get(id)));
     const validJobs = jobs.filter(Boolean);
 
-    // Filter by type if specified
-    if (type) {
-      return validJobs.filter((j) => j.type === type);
+    let out = validJobs;
+    if (state === "failed") {
+      out = out.filter((j) => j.state === "failed");
+    } else if (state === "cancelled") {
+      out = out.filter((j) => j.state === "cancelled");
     }
 
-    return validJobs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (type) {
+      out = out.filter((j) => j.type === type);
+    }
+
+    return out.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   async getStats() {
-    const [queued, running, completed, failed] = await Promise.all([
+    const [queued, running, completed, terminalNonSuccess, cancelled] = await Promise.all([
       this.redis.llen(`${this.keyPrefix}jobs:queue`),
       this.redis.scard(`${this.keyPrefix}jobs:running`),
       this.redis.zcard(`${this.keyPrefix}jobs:completed`),
       this.redis.zcard(`${this.keyPrefix}jobs:failed`),
+      this.redis.scard(this._cancelledSetKey()),
     ]);
 
+    const failed = Math.max(0, terminalNonSuccess - cancelled);
+
     return {
-      total: queued + running + completed + failed,
+      total: queued + running + completed + terminalNonSuccess,
       queued,
       running,
       completed,
       failed,
+      cancelled,
     };
   }
 
@@ -222,10 +254,18 @@ export class RedisJobStore {
       }
     }
 
-    // Mark orphaned jobs as failed
     for (const id of orphaned) {
       await this.markFailed(id, "Job timed out (orphaned after restart)");
       console.log(`[redis-jobs] Recovered orphaned job ${id}`);
+      const failedJob = await this.get(id);
+      if (failedJob) {
+        await emitJobLifecycleHubEvent(failedJob, "failed", {
+          queueBackend: "redis",
+          durationMs: terminalJobDurationMs(failedJob),
+          failureReason: "orphan_timeout",
+          error: "Job timed out (orphaned after restart)",
+        });
+      }
     }
 
     return orphaned.length;
@@ -234,6 +274,15 @@ export class RedisJobStore {
   // Cleanup: Remove old completed/failed job references
   async cleanupOldJobs(maxAgeHours = 24) {
     const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
+
+    const staleFailedIds = await this.redis.zrangebyscore(
+      `${this.keyPrefix}jobs:failed`,
+      0,
+      cutoff
+    );
+    if (staleFailedIds.length > 0) {
+      await this.redis.srem(this._cancelledSetKey(), ...staleFailedIds);
+    }
 
     const [completedRemoved, failedRemoved] = await Promise.all([
       this.redis.zremrangebyscore(`${this.keyPrefix}jobs:completed`, 0, cutoff),

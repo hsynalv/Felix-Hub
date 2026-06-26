@@ -12,6 +12,9 @@ export {
   setMetricsRegistry,
   Metrics,
   MetricType,
+  exportMetricsRegistryPrometheus,
+  prometheusFamilyName,
+  formatLabelsForPrometheus,
 } from "./metrics.js";
 
 // Tracing
@@ -77,3 +80,12 @@ export {
   getObservabilityManager,
   setObservabilityManager,
 } from "./observability.manager.js";
+
+// Telemetry context + metrics from hub events
+export {
+  httpTelemetryContextMiddleware,
+  runWithTelemetryContext,
+  getTelemetryContext,
+  getTelemetryContextAsHubMeta,
+} from "./telemetry-context.js";
+export { recordMetricFromHubEvent } from "./record-metric-from-hub-event.js";

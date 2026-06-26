@@ -51,3 +51,5 @@ node bin/mcp-hub-stdio.js
 Environment variables:
 - `MCP_SERVER_URL` - HTTP server URL
 - `MCP_LOG_LEVEL` - debug, info, warn, error
+- `HUB_WORKSPACE_ID` - Workspace for tool execution (see [mcp-context.md](mcp-context.md))
+- `HUB_PROJECT_ID` - Project identifier

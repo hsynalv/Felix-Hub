@@ -67,7 +67,7 @@ Aynı Bearer token (read scope) ile erişilir.
 | secrets | 🟢 stable | ✅ | ✅ (4) | `{{secret:NAME}}` ref system |
 | workspace | 🟢 stable | ✅ | ✅ (8) | Safe file CRUD, path traversal blocked |
 | git | 🟢 stable | ✅ | ✅ (11) | Full git ops, path validation |
-| prompt-registry | 🟡 beta | ⚠️ partial | ❌ | Sync I/O, race conditions |
+| prompt-registry | 🟢 stable | ✅ | ✅ (9) | Section-based composition, {{slots}}, version history |
 | observability | 🟢 stable | ✅ | ✅ (3) | Aggregate health, Prometheus, error log |
 | tech-detector | 🟢 stable | ✅ | ✅ (3) | ~50 tech patterns, path validation |
 | n8n-workflows | 🟢 stable | ✅ | ✅ (5) | Cached list, audit, graceful n8n-credentials |
@@ -127,11 +127,14 @@ PORT=8787
 NODE_ENV=development
 ```
 
-## Dökümantasyon
+## Documentation
 
-- [Server Detayları](mcp-server/README.md)
-- [Mimari](mcp-server/ARCHITECTURE.md)
-- [Plugin Geliştirme](mcp-server/docs/plugin-development.md)
+- [Documentation Index](docs/README.md) — Full docs with architecture, plugin SDK, examples
+- [Server Details](mcp-server/README.md)
+- [Architecture](mcp-server/ARCHITECTURE.md)
+- [Plugin Development](mcp-server/docs/plugin-development.md)
+- [Plugin SDK](mcp-server/docs/plugin-sdk.md)
+- [Example Setups](docs/examples/minimal-local-setup.md)
 
 ## Lisans
 

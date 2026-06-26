@@ -10,18 +10,26 @@
 import { randomUUID } from "crypto";
 import { config } from "./config.js";
 import { RedisJobStore } from "./jobs.redis.js";
-import { recordJobEvent, recordJobDuration } from "./observability/jobs.metrics.js";
-import logger from "./logger.js";
+import {
+  emitJobLifecycleHubEvent,
+  normalizeSubmitJobInvokeSource,
+} from "./audit/emit-job-event.js";
+
+function jobDurationMs(j) {
+  if (!j?.startedAt || !j?.finishedAt) return 0;
+  return Math.max(0, new Date(j.finishedAt).getTime() - new Date(j.startedAt).getTime());
+}
 
 // Initialize store (Redis or in-memory fallback)
 let store = null;
 let useRedis = false;
 
 function initStore() {
-  if (config.redis.enabled && !store) {
+  const redisUrl = process.env.REDIS_URL !== undefined ? process.env.REDIS_URL : (config.redis?.url ?? "");
+  if (redisUrl && !store) {
     try {
       store = new RedisJobStore({
-        url: config.redis.url,
+        url: redisUrl,
         keyPrefix: config.redis.keyPrefix,
         ttlSeconds: config.redis.ttlSeconds,
       });
@@ -53,8 +61,7 @@ export const JobState = {
   QUEUED: "queued",
   RUNNING: "running",
   COMPLETED: "completed",
-  /** @deprecated Use COMPLETED — kept for backward compatibility */
-  DONE: "completed",
+  DONE: "done",
   FAILED: "failed",
   CANCELLED: "cancelled",
 };
@@ -62,32 +69,48 @@ export const JobState = {
 /**
  * Register a job runner for a specific job type
  * @param {string} type - Job type identifier
- * @param {Function} handler - Async handler function(job, updateProgress, log)
+ * @param {Function} handler - Async handler(payload, context, updateProgress, log)
+ *   - payload: Job input data
+ *   - context: { workspaceId, projectId, userId } (workspaceId defaults to "global")
+ *   - updateProgress: (percent) => Promise<void>
+ *   - log: (message) => Promise<void>
  */
 export function registerJobRunner(type, handler) {
   jobRunners.set(type, handler);
   console.log(`[jobs] registered runner for type: ${type}`);
 }
 
+/** Clear all job runners (for tests) */
+export function clearHooks() {
+  jobRunners.clear();
+}
+
+/** Reset job store and memory (for tests). Use with clearHooks. */
+export function resetForTesting() {
+  store = null;
+  useRedis = false;
+  jobs.clear();
+}
+
 /**
  * Legacy: Create a job directly with inline runner
  * @param {string} type - Job type
  * @param {object} payload - Input data
- * @param {Function} runner - Async runner function
+ * @param {Function} runner - Async runner(payload, context, updateProgress, log)
+ * @param {object} [context] - Execution context
  * @returns {object} Job descriptor
  */
-export function createJob(type, payload, runner) {
-  // Register temporary runner
+export function createJob(type, payload, runner, context = {}) {
   const tempType = `${type}_${randomUUID().slice(0, 8)}`;
   registerJobRunner(tempType, runner);
-  return submitJob(tempType, payload);
+  return submitJob(tempType, payload, context);
 }
 
 /**
  * Submit a job for execution
  * @param {string} type - Job type (must have registered runner)
  * @param {object} payload - Job input data
- * @param {object} context - Execution context
+ * @param {object} context - Execution context { workspaceId?, projectId?, userId?, ... }
  * @returns {object} Job descriptor
  */
 export function submitJob(type, payload = {}, context = {}) {
@@ -98,16 +121,30 @@ export function submitJob(type, payload = {}, context = {}) {
   const id = randomUUID();
   const now = new Date().toISOString();
 
+  const correlationIdRaw = context.correlationId ?? context.requestId ?? null;
+  const invokeSource = normalizeSubmitJobInvokeSource(context);
+
+  const jobContext = {
+    workspaceId: context.workspaceId ?? context.workspace ?? "global",
+    projectId: context.projectId ?? context.project?.id ?? null,
+    userId: context.userId ?? context.user ?? context.actor ?? null,
+    env: context.env ?? context.projectEnv ?? "development",
+    invokeSource,
+    ...(correlationIdRaw != null && String(correlationIdRaw).length > 0 && {
+      correlationId: String(correlationIdRaw),
+    }),
+    ...(context.tenantId != null &&
+      context.tenantId !== "" && { tenantId: String(context.tenantId) }),
+    ...(context.actorId != null &&
+      String(context.actorId).length > 0 && { actorId: String(context.actorId) }),
+  };
+
   const job = {
     id,
     type,
     state: JobState.QUEUED,
     payload,
-    context: {
-      projectId: context.projectId || context.project?.id || null,
-      env: context.env || context.projectEnv || "development",
-      user: context.user || null,
-    },
+    context: jobContext,
     progress: 0,
     logs: [],
     result: null,
@@ -115,33 +152,29 @@ export function submitJob(type, payload = {}, context = {}) {
     createdAt: now,
     startedAt: null,
     finishedAt: null,
-    useMemoryStore: false,
   };
 
   // Initialize store if needed
   initStore();
 
   // Store in Redis or memory
-  const startJob = () => setImmediate(() => runJob(id));
-
   if (useRedis && store) {
-    store
-      .enqueue(job)
-      .then(() => startJob())
-      .catch((err) => {
-        console.error("[jobs] Failed to enqueue job in Redis, using memory store:", err.message);
-        job.useMemoryStore = true;
-        jobs.set(id, job);
-        startJob();
-      });
+    store.enqueue(job).catch((err) => {
+      console.error("[jobs] Failed to enqueue job in Redis:", err);
+      // Fallback to memory
+      jobs.set(id, job);
+    });
   } else {
     jobs.set(id, job);
-    startJob();
   }
 
+  const queueBackend = useRedis && store ? "redis" : "memory";
+  void emitJobLifecycleHubEvent(job, "submitted", { queueBackend });
+
+  // Start job execution asynchronously
+  setImmediate(() => runJob(id));
+
   console.log(`[jobs] submitted ${type} job ${id}`);
-  logger.info("job.submitted", { jobId: id, type, plugin: context.plugin });
-  recordJobEvent(type, "queued", context.plugin);
   return publicView(job);
 }
 
@@ -149,117 +182,103 @@ export function submitJob(type, payload = {}, context = {}) {
  * Internal: Execute a job
  */
 async function runJob(id) {
-  // Get job from appropriate store (memory fallback when Redis enqueue failed)
   let job;
-  const memoryJob = jobs.get(id);
   if (useRedis && store) {
-    job = await store.get(id);
-    if (!job && memoryJob) {
-      job = memoryJob;
+    try {
+      job = await store.get(id);
+    } catch {
+      job = jobs.get(id);
     }
+    if (!job) job = jobs.get(id);
   } else {
-    job = memoryJob;
+    job = jobs.get(id);
   }
 
   if (!job || job.state !== JobState.QUEUED) return;
 
-  const persistInRedis = useRedis && store && !job.useMemoryStore;
-
+  const queueBackend = useRedis && store ? "redis" : "memory";
   const runner = jobRunners.get(job.type);
   if (!runner) {
     const error = "Runner not found";
-    if (persistInRedis) {
+    if (useRedis && store) {
       await store.markFailed(id, error);
+      const failedJob = await store.get(id);
+      if (failedJob) {
+        await emitJobLifecycleHubEvent(failedJob, "failed", {
+          queueBackend,
+          durationMs: 0,
+          failureReason: "runner_not_found",
+          error,
+        });
+      }
     } else {
       job.state = JobState.FAILED;
       job.error = error;
       job.finishedAt = new Date().toISOString();
-      jobs.set(id, job);
+      await emitJobLifecycleHubEvent(job, "failed", {
+        queueBackend,
+        durationMs: 0,
+        error,
+      });
     }
     return;
   }
 
   // Update state to running
-  if (persistInRedis) {
-    await store.set(id, { ...job, state: JobState.RUNNING, startedAt: new Date().toISOString() });
+  const startedAt = new Date().toISOString();
+  if (useRedis && store) {
+    await store.set(id, { ...job, state: JobState.RUNNING, startedAt });
     await store.redis.sadd(`${store.keyPrefix}jobs:running`, id);
+    await store.removeFromQueue(id);
   } else {
     job.state = JobState.RUNNING;
-    job.startedAt = new Date().toISOString();
-    jobs.set(id, job);
+    job.startedAt = startedAt;
+  }
+
+  const runningJob = useRedis && store ? await store.get(id) : job;
+  if (runningJob) {
+    await emitJobLifecycleHubEvent(runningJob, "started", { queueBackend });
   }
 
   // Helper functions for runner with Redis persistence
   const updateProgress = async (percent) => {
     const progress = Math.min(100, Math.max(0, Math.round(percent)));
-    if (persistInRedis) {
+    if (useRedis && store) {
       await store.updateProgress(id, progress);
     } else {
       job.progress = progress;
-      jobs.set(id, job);
     }
   };
 
   const log = async (message) => {
     const timestamp = new Date().toISOString();
     const entry = `[${timestamp}] ${message}`;
-    if (persistInRedis) {
+    if (useRedis && store) {
       await store.addLog(id, message);
     } else {
       job.logs.push(entry);
       if (job.logs.length > 1000) job.logs.shift();
-      jobs.set(id, job);
     }
   };
 
-  // Legacy compatibility wrapper
-  const legacyJob = {
-    ...job,
-    succeed: async (result) => {
-      if (persistInRedis) {
-        const current = await store.get(id);
-        if (current && current.state === JobState.RUNNING) {
-          await store.markCompleted(id, result ?? null);
-        }
-      } else {
-        if (job.state === JobState.RUNNING) {
-          job.state = JobState.COMPLETED;
-          job.result = result ?? null;
-          job.finishedAt = new Date().toISOString();
-          jobs.set(id, job);
-        }
-      }
-    },
-    fail: async (err) => {
-      const errorMsg = err?.message ?? String(err);
-      if (persistInRedis) {
-        const current = await store.get(id);
-        if (current && current.state === JobState.RUNNING) {
-          await store.markFailed(id, errorMsg);
-        }
-      } else {
-        if (job.state === JobState.RUNNING) {
-          job.state = JobState.FAILED;
-          job.error = errorMsg;
-          job.finishedAt = new Date().toISOString();
-          jobs.set(id, job);
-        }
-      }
-    },
-  };
-
-  const runStartedAt = Date.now();
-  recordJobEvent(job.type, "started", job.context?.plugin);
+  const ctx = { ...job.context, workspaceId: job.context.workspaceId ?? "global" };
 
   try {
     await log(`Starting ${job.type} job`);
-    const result = await runner(legacyJob, updateProgress, log);
+    const result = await runner(job.payload, ctx, updateProgress, log);
 
     // If runner didn't call succeed/fail, mark as done
-    if (persistInRedis) {
+    if (useRedis && store) {
       const current = await store.get(id);
       if (current && current.state === JobState.RUNNING) {
         await store.markCompleted(id, result ?? null);
+      }
+      const doneJob = await store.get(id);
+      if (doneJob && (doneJob.state === JobState.COMPLETED || doneJob.state === JobState.DONE)) {
+        await emitJobLifecycleHubEvent(doneJob, "completed", {
+          queueBackend,
+          durationMs: jobDurationMs(doneJob),
+        });
       }
     } else {
       if (job.state === JobState.RUNNING) {
@@ -267,31 +286,48 @@ async function runJob(id) {
         job.result = result ?? null;
         job.finishedAt = new Date().toISOString();
         job.progress = 100;
-        jobs.set(id, job);
+      }
+      if (job.state === JobState.COMPLETED || job.state === JobState.DONE) {
+        await emitJobLifecycleHubEvent(job, "completed", {
+          queueBackend,
+          durationMs: jobDurationMs(job),
+        });
       }
     }
 
     await log(`Job completed`);
-    recordJobEvent(job.type, "completed", job.context?.plugin);
-    recordJobDuration(job.type, Date.now() - runStartedAt, job.context?.plugin);
   } catch (err) {
     const errorMsg = err?.message ?? String(err);
-    if (persistInRedis) {
+    if (useRedis && store) {
       const current = await store.get(id);
       if (current && current.state === JobState.RUNNING) {
         await store.markFailed(id, errorMsg);
+      }
+      const failedJob = await store.get(id);
+      if (failedJob && failedJob.state === JobState.FAILED) {
+        await emitJobLifecycleHubEvent(failedJob, "failed", {
+          queueBackend,
+          durationMs: jobDurationMs(failedJob),
+          failureReason: "runner_error",
+          error: errorMsg,
+        });
       }
     } else {
       if (job.state === JobState.RUNNING) {
         job.state = JobState.FAILED;
         job.error = errorMsg;
         job.finishedAt = new Date().toISOString();
-        jobs.set(id, job);
+      }
+      if (job.state === JobState.FAILED) {
+        await emitJobLifecycleHubEvent(job, "failed", {
+          queueBackend,
+          durationMs: jobDurationMs(job),
+          failureReason: "runner_error",
+          error: errorMsg,
+        });
       }
     }
     await log(`Job failed: ${errorMsg}`);
-    recordJobEvent(job.type, "failed", job.context?.plugin);
-    recordJobDuration(job.type, Date.now() - runStartedAt, job.context?.plugin);
   }
 }
 
@@ -312,13 +348,10 @@ export async function listJobs({ state, type, limit = 50 } = {}) {
 export async function getJob(id) {
   if (useRedis && store) {
     const job = await store.get(id);
-    if (job) {
-      return publicView(job);
-    }
+    return job ? publicView(job) : null;
   }
-
-  const memoryJob = jobs.get(id);
-  return memoryJob ? publicView(memoryJob) : null;
+  const job = jobs.get(id);
+  return job ? publicView(job) : null;
 }
 
 export async function getJobLogs(id) {
@@ -329,13 +362,31 @@ export async function getJobLogs(id) {
   return job ? job.logs : null;
 }
 
-export async function cancelJob(id) {
+/**
+ * @param {string} id
+ * @param {object} [options]
+ * @param {"user"|"system"|"timeout"} [options.cancelSource]
+ */
+export async function cancelJob(id, options = {}) {
+  const cancelSource = options.cancelSource ?? "user";
+  const queueBackend = useRedis && store ? "redis" : "memory";
+
   if (useRedis && store) {
     const job = await store.get(id);
     if (!job) return false;
     if (job.state === JobState.QUEUED || job.state === JobState.RUNNING) {
+      const preCancelState = job.state === JobState.QUEUED ? "queued" : "running";
       await store.markCancelled(id);
       await store.addLog(id, "Job cancelled");
+      const cancelled = await store.get(id);
+      if (cancelled) {
+        await emitJobLifecycleHubEvent(cancelled, "cancelled", {
+          queueBackend,
+          cancelSource,
+          durationMs: jobDurationMs(cancelled),
+          preCancelState,
+        });
+      }
       return true;
     }
     return false;
@@ -345,9 +396,16 @@ export async function cancelJob(id) {
   if (!job) return false;
 
   if (job.state === JobState.QUEUED || job.state === JobState.RUNNING) {
+    const preCancelState = job.state === JobState.QUEUED ? "queued" : "running";
     job.state = JobState.CANCELLED;
     job.finishedAt = new Date().toISOString();
     job.logs.push(`[${new Date().toISOString()}] Job cancelled`);
+    await emitJobLifecycleHubEvent(job, "cancelled", {
+      queueBackend,
+      cancelSource,
+      durationMs: jobDurationMs(job),
+      preCancelState,
+    });
     return true;
   }
 
@@ -372,15 +430,10 @@ export async function getJobStats() {
 
 /** Strip internal methods before sending to client. */
 function publicView(job) {
-  const state =
-    job.state === "done" || job.state === JobState.DONE
-      ? JobState.COMPLETED
-      : job.state;
-
   return {
     id: job.id,
     type: job.type,
-    state,
+    state: job.state,
     context: job.context,
     progress: job.progress || 0,
     logCount: job.logs?.length || 0,
@@ -404,10 +457,3 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
-
-/** Clear in-memory job state (test isolation). */
-export function resetJobsForTests() {
-  jobs.clear();
-  store = null;
-  useRedis = false;
-}

@@ -4,7 +4,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}"],
+    setupFiles: ["./tests/vitest.setup.js", "tests/setup.js"],
+    include: [
+      "tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}",
+      "src/core/legacy/**/*.test.js",
+    ],
     exclude: [
       "**/node_modules/**",
       "tests/e2e.test.js",
@@ -48,6 +52,5 @@ export default defineConfig({
       },
     },
     pool: "forks",
-    setupFiles: ["tests/setup.js"],
   },
 });

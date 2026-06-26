@@ -6,7 +6,8 @@
  */
 
 import { Router } from "express";
-import { ToolTags } from "../../core/tool-registry.js";
+import { toolContextFromRequest } from "../../core/authorization/http-tool-context.js";
+import { ToolTags, callTool } from "../../core/tool-registry.js";
 import { fsList, fsRead, fsWrite, fsHash, checkPathAllowed } from "./sidecar.core.js";
 import { delegateToSidecar } from "../../core/sidecar/sidecar-proxy.js";
 import { spawn } from "child_process";
@@ -345,18 +346,16 @@ export function register(app) {
       return res.status(400).json({ ok: false, error: "path is required" });
     }
 
-    // Find the drive_upload tool handler
-    const uploadTool = tools.find(t => t.name === "drive_upload");
-    if (!uploadTool) {
-      return res.status(500).json({ ok: false, error: "Tool not found" });
-    }
-
-    const result = await uploadTool.handler({
-      path,
-      remote,
-      destination,
-      explanation: "REST API upload request",
-    });
+    const result = await callTool(
+      "drive_upload",
+      {
+        path,
+        remote,
+        destination,
+        explanation: "REST API upload request",
+      },
+      toolContextFromRequest(req)
+    );
 
     res.json(result);
   });

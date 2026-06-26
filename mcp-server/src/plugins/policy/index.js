@@ -4,22 +4,21 @@ import { fileURLToPath } from "url";
 import { Router } from "express";
 import { z } from "zod";
 import { requireScope } from "../../core/auth.js";
+import { toolContextFromRequest } from "../../core/authorization/http-tool-context.js";
 import { ToolTags } from "../../core/tool-registry.js";
 import { registerPolicyHooks } from "../../core/policy-hooks.js";
 import { registerBeforeExecutionHook } from "../../core/tool-hooks.js";
-import { getPolicyEvaluator, getEvaluateTool, getApprovalStore } from "../../core/policy-hooks.js";
+import { getApprovalStore } from "../../core/policy-hooks.js";
 import {
   listRules,
   addRule,
   removeRule,
   listApprovals,
-  listApprovalHistory,
-  getPolicySuggestions,
   updateApprovalStatus,
   createApproval,
   getApproval,
 } from "./policy.store.js";
-import { evaluate, evaluateTool } from "./policy.engine.js";
+import { evaluate } from "./policy.engine.js";
 import { loadPolicyConfig } from "./policy.config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -137,27 +136,19 @@ export const tools = [
 
 const ruleSchema = z.object({
   id:          z.string().optional(),
-  pattern:     z.string().optional(),
-  toolPattern: z.string().optional(),
-  environment: z.string().optional(),
-  projectId:   z.string().optional(),
+  pattern:     z.string().min(1, "Pattern is required (e.g. 'POST /notion/rows/archive')"),
   action:      z.enum(["require_approval", "dry_run_first", "rate_limit", "block"]),
   scope:       z.enum(["read", "write", "danger"]).optional(),
   description: z.string().optional(),
   limit:       z.number().int().positive().optional(),
   window:      z.string().optional(),
   enabled:     z.boolean().optional(),
-}).refine((d) => !!(d.pattern || d.toolPattern), {
-  message: "Either pattern or toolPattern is required",
 });
 
 const evaluateSchema = z.object({
-  method:      z.string().min(1).optional(),
-  path:        z.string().min(1).optional(),
-  toolName:    z.string().optional(),
-  body:        z.any().optional(),
-  environment: z.string().optional(),
-  projectId:   z.string().optional(),
+  method: z.string().min(1),
+  path:   z.string().min(1),
+  body:   z.any().optional(),
 });
 
 function validate(schema, body, res) {
@@ -172,62 +163,18 @@ function validate(schema, body, res) {
 export function register(app) {
   // Register policy system hooks with core
   registerPolicyHooks({
-    evaluate: (method, path, body, user, ctx) => evaluate(method, path, body, user, ctx),
-    evaluateTool,
+    evaluate,
     createApproval,
     updateApprovalStatus,
     getApproval,
     listApprovals,
     loadPolicyConfig,
+    listRules,
+    addRule,
   });
 
-  // Register tool execution hook for policy enforcement
+  // Tool policy pattern matching runs in core authorization (execute-tool) before this hook.
   registerBeforeExecutionHook(async (toolName, args, context) => {
-    const policyContext = {
-      environment: context.projectEnv || process.env.HUB_ENV || process.env.NODE_ENV || "development",
-      projectId: context.projectId,
-      toolName,
-      runId: context.runId,
-      user: context.user,
-    };
-
-    const evaluateToolFn = getEvaluateTool();
-    if (evaluateToolFn) {
-      const toolPolicy = evaluateToolFn(toolName, args, { ...context, ...policyContext });
-      if (!toolPolicy.allowed) {
-        return {
-          ok: false,
-          error: {
-            code: toolPolicy.action || "policy_denied",
-            message: toolPolicy.explanation || "Request denied by policy",
-            ...(toolPolicy.approval ? { approval: toolPolicy.approval } : {}),
-            ...(toolPolicy.preview ? { preview: toolPolicy.preview } : {}),
-          },
-          meta: { requestId: context.requestId },
-        };
-      }
-    }
-
-    const policyEvaluator = getPolicyEvaluator();
-    if (policyEvaluator) {
-      const path = `/tools/${toolName}`;
-      const method = context.method || "POST";
-      const policy = policyEvaluator(method, path, args, context.user, policyContext);
-
-      if (!policy.allowed) {
-        return {
-          ok: false,
-          error: {
-            code: policy.action || "policy_denied",
-            message: policy.explanation || "Request denied by policy",
-            ...(policy.approval ? { approval: policy.approval } : {}),
-            ...(policy.preview ? { preview: policy.preview } : {}),
-          },
-          meta: { requestId: context.requestId },
-        };
-      }
-    }
-
     // Tag-based approval workflow
     const approvalStore = getApprovalStore();
     const policyConfig = approvalStore?.loadPolicyConfig
@@ -249,12 +196,6 @@ export function register(app) {
         policyConfig.write_requires_approval);
 
     if (needsApproval && !context.approvalId && approvalStore?.createApproval) {
-      const riskLevel = toolTags.includes(ToolTags.DESTRUCTIVE)
-        ? "destructive"
-        : toolTags.includes(ToolTags.WRITE)
-          ? "write"
-          : "read";
-
       const approval = approvalStore.createApproval({
         ruleId: "tool_tag_policy",
         path: `/tools/${toolName}`,
@@ -263,8 +204,6 @@ export function register(app) {
         requestedBy: context.user || "agent",
         toolName: toolName,
         explanation: args.explanation || "No explanation provided",
-        runId: context.runId || null,
-        riskLevel,
       });
 
       return {
@@ -373,16 +312,6 @@ export function register(app) {
     res.json({ ok: true, count: approvals.length, approvals });
   });
 
-  router.get("/approvals/history", requireScope("read"), (req, res) => {
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const approvals = listApprovalHistory({ limit });
-    res.json({ ok: true, count: approvals.length, approvals });
-  });
-
-  router.get("/suggestions", requireScope("read"), (_req, res) => {
-    res.json({ ok: true, suggestions: getPolicySuggestions() });
-  });
-
   /**
    * POST /policy/approvals/:id/approve
    */
@@ -413,7 +342,10 @@ export function register(app) {
     
     // Import approveTool from tool-registry dynamically to avoid circular deps
     const { approveTool } = await import("../../core/tool-registry.js");
-    const result = await approveTool(id, { user: req.user || "manual" });
+    const result = await approveTool(id, {
+      ...toolContextFromRequest(req),
+      user: req.user || "manual",
+    });
     
     if (!result.ok) {
       return res.status(404).json(result);
@@ -453,8 +385,6 @@ export function register(app) {
       }
       const rule = addRule({
         pattern:     preset.pattern,
-        toolPattern: preset.toolPattern,
-        environment: preset.environment,
         action:      preset.action,
         description: preset.description ?? "",
       });
@@ -472,15 +402,7 @@ export function register(app) {
     const data = validate(evaluateSchema, req.body, res);
     if (!data) return;
 
-    const ctx = {
-      environment: data.environment || req.projectEnv,
-      projectId: data.projectId || req.projectId,
-      toolName: data.toolName,
-    };
-
-    const result = data.toolName
-      ? evaluateTool(data.toolName, data.body, { ...ctx, user: "manual-test" })
-      : evaluate(data.method || "POST", data.path || `/tools/${data.toolName || "unknown"}`, data.body, "manual-test", ctx);
+    const result = evaluate(data.method, data.path, data.body, "manual-test");
     res.json({ ok: true, result });
   });
 

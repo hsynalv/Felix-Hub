@@ -15,42 +15,17 @@
  *   }
  */
 
-import { getPolicyEvaluator, getApprovalStore, isPolicySystemAvailable } from "./policy-hooks.js";
-import {
-  registerBeforeExecutionHook,
-  executeBeforeHooks,
-  executeAfterHooks,
-} from "./tool-hooks.js";
-import { logToolExecution } from "./audit/audit.service.js";
-import logger from "./logger.js";
-import { withToolSpan } from "./otel.js";
-import { isStrictToolSchema } from "./plugin-strict.js";
-import { sanitizeToolArgs, hasToolScope } from "./security-guard.js";
-import { isAuthEnabled } from "./auth.js";
-import { ensureWriteToolExplanation } from "./tool-schema.js";
+import { getApprovalStore } from "./policy-hooks.js";
+import { executeRegisteredTool } from "./tool-execution/execute-tool.js";
+import { ToolTags, VALID_TAGS as TOOL_TAG_VALUES } from "./tool-tags.js";
+import { emitHubAuditEvent } from "./audit/emit-hub-event.js";
+import { HubEventTypes, HubOutcomes } from "./audit/event-types.js";
+import { resolveActorString } from "./audit/base-envelope.js";
 
 const tools = new Map();
 
-/** Standard tool tags for policy and UX */
-export const ToolTags = {
-  // Primary policy tags
-  READ_ONLY: "read_only",
-  /** @deprecated alias — use READ_ONLY */
-  READ: "read_only",
-  WRITE: "write",
-  DESTRUCTIVE: "destructive",
-  NEEDS_APPROVAL: "needs_approval",
-  // Capability tags
-  BULK: "BULK",
-  NETWORK: "NETWORK",
-  LOCAL_FS: "LOCAL_FS",
-  GIT: "GIT",
-  EXTERNAL_API: "EXTERNAL_API",
-  DATABASE: "DATABASE",
-};
-
-/** All valid tags */
-export const VALID_TAGS = Object.values(ToolTags);
+export { ToolTags } from "./tool-tags.js";
+export const VALID_TAGS = TOOL_TAG_VALUES;
 
 /**
  * Validate tool according to MCP contract
@@ -69,13 +44,6 @@ export function validateTool(tool) {
     errors.push("Tool must have a 'description' (string)");
   }
 
-  // Map legacy 'parameters' to 'inputSchema' before validation
-  if (tool.parameters && !tool.inputSchema) {
-    console.warn(`[tool-registry] Tool '${tool.name}' uses deprecated 'parameters'. Mapping to 'inputSchema'.`);
-    tool.inputSchema = tool.parameters;
-    delete tool.parameters;
-  }
-
   if (!tool.inputSchema || typeof tool.inputSchema !== "object") {
     errors.push("Tool must have an 'inputSchema' (JSON Schema object)");
   } else {
@@ -89,14 +57,15 @@ export function validateTool(tool) {
       ["write", "destructive", "DESTRUCTIVE", "WRITE"].includes(tag)
     );
     if (isWriteTool && !hasExplanation) {
-      if (isStrictToolSchema()) {
-        errors.push(
-          "Write/destructive tool must define inputSchema.properties.explanation (STRICT_TOOL_SCHEMA=true)"
-        );
-      } else {
-        console.warn(`[tool-registry] Warning: Tool '${tool.name}' is a write/destructive tool but lacks 'explanation' field in inputSchema. Consider adding it so LLM can explain why it runs this tool.`);
-      }
+      console.warn(`[tool-registry] Warning: Tool '${tool.name}' is a write/destructive tool but lacks 'explanation' field in inputSchema. Consider adding it so LLM can explain why it runs this tool.`);
     }
+  }
+
+  // Map legacy 'parameters' to 'inputSchema' if present
+  if (tool.parameters && !tool.inputSchema) {
+    console.warn(`[tool-registry] Tool '${tool.name}' uses deprecated 'parameters'. Mapping to 'inputSchema'.`);
+    tool.inputSchema = tool.parameters;
+    delete tool.parameters;
   }
 
   if (errors.length > 0) {
@@ -110,23 +79,8 @@ export function validateTool(tool) {
  * @returns {string[]} Validated tags
  */
 export function validateTags(tags) {
-  if (!tags || !Array.isArray(tags)) {
-    return { tags: [], unknown: [] };
-  }
-
-  const filtered = tags.filter((tag) => typeof tag === "string" && tag.length > 0);
-  const unknown = filtered.filter((tag) => !VALID_TAGS.includes(tag));
-  const valid = filtered.filter((tag) => VALID_TAGS.includes(tag));
-
-  if (unknown.length > 0) {
-    const message = `Unknown tool tags ignored: ${unknown.join(", ")} (valid: ${VALID_TAGS.join(", ")})`;
-    if (isStrictToolSchema()) {
-      throw new Error(message);
-    }
-    console.warn(`[tool-registry] ${message}`);
-  }
-
-  return { tags: valid, unknown };
+  if (!tags || !Array.isArray(tags)) return [];
+  return tags.filter((tag) => VALID_TAGS.includes(tag));
 }
 
 /**
@@ -164,72 +118,6 @@ export function listToolsByTags(includeTags = [], excludeTags = []) {
   return result;
 }
 
-function resolveAuthScopes(context) {
-  return context.scopes || context.authScopes || [];
-}
-
-function toolRequiresWriteScope(tool) {
-  const tags = tool.tags || [];
-  return tags.includes(ToolTags.WRITE) || tags.includes(ToolTags.DESTRUCTIVE);
-}
-
-function hasWriteOrAdminScope(scopes) {
-  return scopes.some((scope) => scope === "write" || scope === "admin");
-}
-
-function validateRequiredArgs(tool, args) {
-  const schema = tool.inputSchema;
-  if (!schema || schema.type !== "object") {
-    return null;
-  }
-
-  for (const field of schema.required || []) {
-    if (args[field] === undefined) {
-      return {
-        ok: false,
-        error: {
-          code: "invalid_args",
-          message: `Missing required argument: ${field}`,
-        },
-      };
-    }
-  }
-
-  return null;
-}
-
-function checkToolAuthorization(tool, name, context) {
-  if (!isAuthEnabled()) {
-    return null;
-  }
-
-  const scopes = resolveAuthScopes(context);
-
-  if (toolRequiresWriteScope(tool) && !hasWriteOrAdminScope(scopes)) {
-    return {
-      ok: false,
-      error: {
-        code: "insufficient_scope",
-        message: `Tool '${name}' requires write or admin scope`,
-      },
-      meta: { requestId: context.requestId },
-    };
-  }
-
-  if (!hasToolScope(name, scopes)) {
-    return {
-      ok: false,
-      error: {
-        code: "insufficient_scope",
-        message: `Insufficient scope for tool '${name}'`,
-      },
-      meta: { requestId: context.requestId },
-    };
-  }
-
-  return null;
-}
-
 /**
  * Register a tool in the registry.
  * @param {Object} tool
@@ -240,8 +128,6 @@ function checkToolAuthorization(tool, name, context) {
  * @param {string} tool.plugin - Plugin name that owns this tool
  */
 export function registerTool(tool) {
-  tool = ensureWriteToolExplanation(tool);
-
   // Validate according to MCP contract
   validateTool(tool);
 
@@ -249,11 +135,7 @@ export function registerTool(tool) {
     throw new Error(`Tool '${tool.name}' must have a handler function`);
   }
 
-  const { tags: validatedTags } = validateTags(tool.tags);
-
-  if (tools.has(tool.name)) {
-    throw new Error(`Tool '${tool.name}' is already registered`);
-  }
+  const validatedTags = validateTags(tool.tags);
 
   tools.set(tool.name, {
     name: tool.name,
@@ -262,6 +144,7 @@ export function registerTool(tool) {
     handler: tool.handler,
     plugin: tool.plugin || "unknown",
     tags: validatedTags,
+    ...(tool.timeoutMs != null ? { timeoutMs: tool.timeoutMs } : {}),
   });
 
   console.log(`[tool-registry] registered ${tool.name} [${validatedTags.join(", ") || "no tags"}]`);
@@ -276,7 +159,7 @@ export function unregisterTool(name) {
 }
 
 /**
- * Remove all tools registered for a plugin.
+ * Unregister all tools owned by a plugin.
  * @param {string} pluginName
  */
 export function unregisterToolsForPlugin(pluginName) {
@@ -305,44 +188,30 @@ export function listTools() {
 }
 
 /**
- * Aggregate statistics for observability (canonical registry).
- * @returns {{ total: number, byPlugin: Record<string, number>, byCategory: Record<string, number>, productionReady: number }}
+ * Get tool statistics for observability.
+ * @returns {{ total: number, byPlugin: Object, categories: string[], byCategory: Object }}
  */
-export function getToolRegistryStats() {
-  const all = listTools();
-  const stats = {
-    total: all.length,
-    byPlugin: {},
-    byCategory: {},
-    productionReady: 0,
+export function getToolStats() {
+  const toolList = listTools();
+  const byPlugin = {};
+  const byCategory = {};
+
+  for (const t of toolList) {
+    const plugin = t.plugin || "unknown";
+    byPlugin[plugin] = (byPlugin[plugin] || 0) + 1;
+    if (t.tags?.length) {
+      for (const tag of t.tags) {
+        byCategory[tag] = (byCategory[tag] || 0) + 1;
+      }
+    }
+  }
+
+  return {
+    total: toolList.length,
+    byPlugin,
+    categories: Object.keys(byCategory).sort(),
+    byCategory,
   };
-
-  for (const tool of all) {
-    const plugin = tool.plugin || "unknown";
-    stats.byPlugin[plugin] = (stats.byPlugin[plugin] || 0) + 1;
-
-    const category = tool.category || "uncategorized";
-    stats.byCategory[category] = (stats.byCategory[category] || 0) + 1;
-
-    if (tool.status === "production" || tool.tags?.includes(ToolTags.READ_ONLY)) {
-      stats.productionReady++;
-    }
-  }
-
-  return stats;
-}
-
-/**
- * Assert all registered tool names are unique (throws on duplicate).
- */
-export function assertUniqueToolNames() {
-  const seen = new Set();
-  for (const tool of listTools()) {
-    if (seen.has(tool.name)) {
-      throw new Error(`Duplicate tool name registered: ${tool.name}`);
-    }
-    seen.add(tool.name);
-  }
 }
 
 /**
@@ -362,119 +231,54 @@ export function clearTools() {
 export async function callTool(name, args, context = {}) {
   const tool = tools.get(name);
   if (!tool) {
+    try {
+      await emitHubAuditEvent({
+        eventType: HubEventTypes.TOOL_EXECUTION_FAILED,
+        outcome: HubOutcomes.FAILURE,
+        plugin: "core",
+        actor: resolveActorString(context.actor ?? context.user),
+        workspaceId: context.workspaceId != null ? String(context.workspaceId) : "global",
+        projectId: context.projectId ?? null,
+        correlationId:
+          context.correlationId != null
+            ? String(context.correlationId)
+            : context.requestId != null
+              ? String(context.requestId)
+              : undefined,
+        durationMs: 0,
+        allowed: false,
+        success: false,
+        reason: `Tool not found: ${name}`,
+        error: "tool_not_found",
+        toolContext: context,
+        metadata: {
+          hubToolName: name,
+          hubErrorCode: "tool_not_found",
+          hubPlugin: "core",
+        },
+      });
+    } catch {
+      /* best-effort */
+    }
     return {
       ok: false,
       error: {
         code: "tool_not_found",
         message: `Tool not found: ${name}`,
       },
-    };
-  }
-
-  const authError = checkToolAuthorization(tool, name, context);
-  if (authError) {
-    return authError;
-  }
-
-  const argCheck = sanitizeToolArgs(name, args);
-  if (argCheck.blocked) {
-    return {
-      ok: false,
-      error: {
-        code: "security_blocked",
-        message: "Tool arguments blocked by security policy",
-        details: { issues: argCheck.issues },
+      meta: {
+        ...(context.requestId != null ? { requestId: context.requestId } : {}),
+        durationMs: 0,
       },
-      meta: { requestId: context.requestId },
-    };
-  }
-  args = argCheck.sanitized;
-
-  const schemaError = validateRequiredArgs(tool, args);
-  if (schemaError) {
-    schemaError.meta = { requestId: context.requestId };
-    return schemaError;
-  }
-
-  if (context.dryRun || context.replay) {
-    return {
-      ok: true,
-      data: {
-        dryRun: true,
-        replay: !!context.replay,
-        tool: name,
-        args,
-        message: "Simulated execution — no side effects",
-      },
-      meta: { requestId: context.requestId },
     };
   }
 
-  // Execute before-hooks (policy checks, validation, etc.)
-  const hookResult = await executeBeforeHooks(name, args, context);
-  if (hookResult) {
-    return hookResult; // Hook blocked execution
-  }
-
-  // Execute the tool
-  const startTime = Date.now();
-  let result;
-  try {
-    logger.info("tool.call.start", {
-      tool: name,
-      plugin: tool.plugin,
-      requestId: context.requestId,
-      runId: context.runId,
-    });
-    result = await withToolSpan(name, { plugin: tool.plugin, requestId: context.requestId }, () =>
-      tool.handler(args, context)
-    );
-
-    // Normalize result to standard envelope if not already
-    if (result && typeof result === "object") {
-      if (result.ok === true || result.ok === false) {
-        // Already normalized
-      } else {
-        result = {
-          ok: true,
-          data: result,
-          meta: { requestId: context.requestId },
-        };
-      }
-    } else {
-      result = {
-        ok: true,
-        data: result,
-        meta: { requestId: context.requestId },
-      };
-    }
-  } catch (err) {
-    result = {
-      ok: false,
-      error: {
-        code: err.code || "tool_execution_error",
-        message: err.message || "Tool execution failed",
-        ...(err.details ? { details: err.details } : {}),
-      },
-      meta: { requestId: context.requestId },
-    };
-  }
-
-  // Audit logging
-  logToolExecutionToAudit({
-    toolName: name,
-    projectId: context.projectId,
-    duration: Date.now() - startTime,
-    user: context.user,
-    requestId: context.requestId,
-    runId: context.runId,
-    failed: !result.ok,
+  return executeRegisteredTool({
+    name,
+    tool,
+    args,
+    context,
   });
-
-  // Execute after-hooks (auditing, metrics, etc.)
-  await executeAfterHooks(name, args, context, result);
-
-  return result;
 }
 
 /**
@@ -550,37 +354,10 @@ export async function approveTool(approvalId, context = {}) {
 }
 
 /**
- * Initialize tool registry hooks.
- * Called once during server startup.
- * Note: Hooks are now registered by plugins themselves (e.g., policy plugin).
- * This function is kept for backward compatibility but is currently a no-op.
+ * Process startup hook slot (e.g. registerAfterExecutionHook from plugins).
+ * Metrics and masked audit run inside executeRegisteredTool before plugin after-hooks.
  */
-export function initializeToolHooks() {
-  // Plugins register their own hooks via registerBeforeExecutionHook()
-  // and registerAfterExecutionHook() from tool-hooks.js
-}
-
-/**
- * Audit logging for tool executions.
- * @param {Object} logEntry
- */
-function logToolExecutionToAudit(logEntry) {
-  const tool = tools.get(logEntry.toolName);
-  const pluginName = tool?.plugin || "core";
-
-  void logToolExecution({
-    toolName: logEntry.toolName,
-    plugin: pluginName,
-    user: logEntry.user,
-    projectId: logEntry.projectId,
-    requestId: logEntry.requestId,
-    runId: logEntry.runId,
-    failed: logEntry.failed,
-    duration: logEntry.duration || 0,
-  }).catch((err) => {
-    console.error("[tool-registry] audit log failed:", err.message);
-  });
-}
+export function initializeToolHooks() {}
 
 /**
  * Convert Zod schema to JSON Schema (basic implementation).

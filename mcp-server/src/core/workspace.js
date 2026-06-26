@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { config } from "./config.js";
+import { getRuntimeSecurityMode } from "./auth/get-runtime-security-mode.js";
 
 // In-memory storage (replace with Redis/DB in production)
 const workspaces = new Map();
@@ -17,6 +18,13 @@ const conversations = new Map();
 
 /**
  * Workspace entity
+ * @property {string} id - Workspace identifier
+ * @property {string} name - Display name
+ * @property {string} owner - Owner identifier
+ * @property {Object} settings - Workspace settings
+ * @property {string} [settings.workspace_root] - Per-workspace root path (overrides base)
+ * @property {string[]} [settings.allowed_operations] - Allowed operation types (read, write, index, git, etc.)
+ * @property {Object} [settings.plugin_permission_scope] - Per-plugin permission scope
  */
 export class Workspace {
   constructor(id, name, owner, options = {}) {
@@ -31,6 +39,10 @@ export class Workspace {
       allowedPlugins: options.allowedPlugins || [], // empty = all
       maxProjects: options.maxProjects || 10,
       retentionDays: options.retentionDays || 90,
+      workspace_root: options.workspace_root || null,
+      allowed_operations: options.allowed_operations || [],
+      plugin_permission_scope: options.plugin_permission_scope || {},
+      readOnly: options.readOnly || false,
       ...options,
     };
     this.metadata = {
@@ -284,19 +296,43 @@ export function resolveWorkspaceContext(projectId) {
 }
 
 /**
- * Middleware to attach workspace context to request
+ * Middleware to attach workspace context to request.
+ *
+ * Resolution order (workspaceId):
+ * 1. x-workspace-id header (explicit) → req.workspaceId
+ * 2. x-project-id → resolveWorkspaceContext → req.workspaceId
+ * 3. neither → req.workspaceId = "global"
+ *
+ * Downstream code can rely on req.workspaceId being set.
  */
 export function workspaceContextMiddleware(req, res, next) {
-  const projectId = req.headers["x-project-id"] || req.projectId;
-  
+  const headerWorkspaceId = req.headers["x-workspace-id"]?.trim();
+  const projectId = req.headers["x-project-id"]?.trim() || req.projectId;
+
+  // Priority 1: x-workspace-id explicitly provided
+  if (headerWorkspaceId) {
+    req.workspaceId = headerWorkspaceId;
+    if (projectId) {
+      req.projectId = req.projectId ?? projectId;
+    }
+    return next();
+  }
+
+  // Priority 2: x-project-id → resolve workspace from project
   if (projectId) {
     const context = resolveWorkspaceContext(projectId);
     if (context) {
       req.workspaceContext = context;
       req.workspaceId = context.workspaceId;
+      req.projectId = req.projectId ?? context.projectId;
+    } else {
+      req.workspaceId = "global";
     }
+    return next();
   }
 
+  // Fallback: no headers
+  req.workspaceId = "global";
   next();
 }
 
@@ -311,6 +347,16 @@ export function getWorkspaceKey(workspaceId, type, id) {
  * Check if plugin is allowed in workspace
  */
 export function isPluginAllowed(workspaceId, pluginName) {
+  const mode = getRuntimeSecurityMode();
+  if (
+    mode.strictWorkspaceRegistration &&
+    workspaceId &&
+    workspaceId !== "global" &&
+    !workspaces.get(workspaceId)
+  ) {
+    return false;
+  }
+
   const workspace = workspaces.get(workspaceId);
   if (!workspace) return true;
 

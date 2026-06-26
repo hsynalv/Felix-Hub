@@ -11,7 +11,7 @@ import { createMcpHttpMiddleware } from "../../src/mcp/http-transport.js";
 import { registerTool, clearTools } from "../../src/core/tool-registry.js";
 
 // Mock policy engine to allow all requests
-vi.mock("../../src/plugins/policy/policy.engine.js", () => ({
+vi.mock("../src/plugins/policy/policy.engine.js", () => ({
   evaluate: vi.fn(() => ({ allowed: true })),
 }));
 
@@ -26,10 +26,12 @@ describe("MCP Security Tests", () => {
   beforeEach(() => {
     // Reset environment
     process.env = { ...originalEnv };
+    delete process.env.HUB_AUTH_ENABLED;
     delete process.env.HUB_READ_KEY;
     delete process.env.HUB_WRITE_KEY;
     delete process.env.HUB_ADMIN_KEY;
     delete process.env.OAUTH_INTROSPECTION_ENDPOINT;
+    delete process.env.HUB_ALLOW_OPEN_HUB;
 
     app = express();
     app.use(express.json());
@@ -42,13 +44,31 @@ describe("MCP Security Tests", () => {
     process.env = originalEnv;
   });
 
-  describe("Authentication disabled", () => {
-    it("should allow requests without auth when disabled", async () => {
+  describe("Fail-closed default", () => {
+    it("returns 401 when no credential and HUB_ALLOW_OPEN_HUB is off", async () => {
+      const res = await request(app)
+        .post("/mcp")
+        .send({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/list",
+          params: {},
+        });
+
+      expect(res.status).toBe(401);
+      expect(res.body.ok).toBe(false);
+      expect(res.body.error.code).toBe("unauthorized");
+    });
+  });
+
+  describe("Open hub (HUB_ALLOW_OPEN_HUB)", () => {
+    it("should allow requests without auth when explicitly allowed", async () => {
+      process.env.HUB_ALLOW_OPEN_HUB = "true";
       registerTool({
         name: "public_tool",
         description: "A public tool",
         inputSchema: { type: "object", properties: {} },
-        handler: async () => "success",
+        handler: async () => ({ ok: true, data: "success" }),
       });
 
       const res = await request(app)
@@ -61,12 +81,14 @@ describe("MCP Security Tests", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.result.isError).toBe(false);
+      const payload = res.body.result ?? res.body;
+      expect(payload.isError).toBe(false);
     });
   });
 
   describe("API Key authentication", () => {
     beforeEach(() => {
+      process.env.HUB_AUTH_ENABLED = "true";
       process.env.HUB_READ_KEY = "read-secret-key";
       process.env.HUB_WRITE_KEY = "write-secret-key";
       process.env.HUB_ADMIN_KEY = "admin-secret-key";
@@ -115,7 +137,8 @@ describe("MCP Security Tests", () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.result.tools).toBeDefined();
+      const listPayload = res.body.result ?? res.body;
+      expect(listPayload.tools).toBeDefined();
     });
 
     it("should accept valid write key", async () => {
@@ -123,7 +146,7 @@ describe("MCP Security Tests", () => {
         name: "write_tool",
         description: "A write tool",
         inputSchema: { type: "object", properties: {} },
-        handler: async () => "written",
+        handler: async () => ({ ok: true, data: "written" }),
       });
 
       const res = await request(app)
@@ -171,6 +194,7 @@ describe("MCP Security Tests", () => {
     });
 
     it("should allow localhost origins", async () => {
+      process.env.HUB_ALLOW_OPEN_HUB = "true";
       const res = await request(app)
         .post("/mcp")
         .set("Origin", "http://localhost:3000")
@@ -186,6 +210,7 @@ describe("MCP Security Tests", () => {
 
     it("should allow configured origins via env var", async () => {
       process.env.MCP_ALLOWED_ORIGINS = "https://trusted.com,https://app.example.com";
+      process.env.HUB_ALLOW_OPEN_HUB = "true";
 
       const res = await request(app)
         .post("/mcp")
@@ -202,6 +227,10 @@ describe("MCP Security Tests", () => {
   });
 
   describe("Method validation", () => {
+    beforeEach(() => {
+      process.env.HUB_ALLOW_OPEN_HUB = "true";
+    });
+
     it("should reject unsupported HTTP methods", async () => {
       const res = await request(app)
         .put("/mcp")

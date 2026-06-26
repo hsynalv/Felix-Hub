@@ -3,65 +3,131 @@
  *
  * Express middleware for MCP Streamable HTTP endpoint.
  * Handles GET/POST /mcp requests.
+ * Propagates workspace context (x-workspace-id, x-project-id) to tool handlers.
  */
 
-import { handleMcpHttpMessage } from "./gateway.js";
-import { validateBearerToken, isAuthEnabled } from "../core/auth.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createMcpServer } from "./gateway.js";
+import { resolveHubPrincipalFromRequest } from "../core/security/resolve-principal.js";
+import { runWithMcpRequestContext } from "../core/authorization/mcp-request-context.js";
+import { emitHttpDenyHubEvent } from "../core/audit/emit-http-events.js";
+
+function normalizeHubScopes(scopes) {
+  if (!Array.isArray(scopes)) return [];
+  return [
+    ...new Set(
+      scopes
+        .map((s) => (String(s).toLowerCase() === "danger" ? "admin" : String(s).toLowerCase()))
+        .filter((s) => s === "read" || s === "write" || s === "admin")
+    ),
+  ];
+}
 
 /**
  * Create Express middleware for MCP HTTP endpoint
  * @returns {Function} Express middleware
  */
 export function createMcpHttpMiddleware() {
+  let initPromise = null;
+
+  const ensureInit = async () => {
+    if (!initPromise) {
+      initPromise = (async () => {
+        const server = createMcpServer();
+        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+        await server.connect(serverTransport);
+        const pending = new Map();
+        clientTransport.onmessage = (message) => {
+          const id = message?.id;
+          if (id !== undefined && pending.has(id)) {
+            const { resolve } = pending.get(id);
+            pending.delete(id);
+            resolve(message);
+          }
+        };
+        return { server, clientTransport, pending };
+      })();
+    }
+    return initPromise;
+  };
+
   return async (req, res, next) => {
-    // Mounted via app.all("/mcp", ...) → req.baseUrl is "/mcp", req.path is "/"
-    const onMcpRoute = req.baseUrl === "/mcp" || req.path === "/mcp";
-    if (!onMcpRoute) {
+    // Only handle /mcp path
+    if (req.path !== "/mcp") {
       return next();
     }
 
     // Security: Check origin for DNS rebinding protection
     const origin = req.headers.origin;
     if (origin && !isValidOrigin(origin)) {
+      void emitHttpDenyHubEvent(req, {
+        source: "mcp_http_transport",
+        statusCode: 403,
+        errorCode: "invalid_origin",
+        hubTransport: "mcp_http",
+      }).catch(() => {});
       return res.status(403).json({
         ok: false,
         error: {
           code: "invalid_origin",
           message: "Origin not allowed",
         },
+        meta: { requestId: req.requestId ?? null },
       });
     }
 
-    // Authenticate request
-    const token = extractBearerToken(req);
-    let authContext = { user: null, scopes: [] };
+    let principal;
+    if (req.securityContext?.authenticated) {
+      principal = {
+        authenticated: true,
+        scopes: req.securityContext.scopes,
+        actor: req.securityContext.actor,
+        user: req.securityContext.user,
+        authType: req.securityContext.authType,
+      };
+    } else {
+      principal = await resolveHubPrincipalFromRequest(req);
+    }
 
-    if (token) {
-      const validation = await validateBearerToken(token);
-      if (validation.valid) {
-        authContext = {
-          user: validation.claims?.sub || "authenticated",
-          scopes: validation.scopes || [],
-          type: validation.type,
-        };
-      } else if (isAuthEnabled() || process.env.OAUTH_INTROSPECTION_ENDPOINT) {
+    if (!principal.authenticated) {
+      if (principal.reason === "invalid_token") {
+        void emitHttpDenyHubEvent(req, {
+          source: "mcp_http_transport",
+          statusCode: 401,
+          errorCode: "invalid_token",
+          hubTransport: "mcp_http",
+        }).catch(() => {});
         return res.status(401).json({
           ok: false,
           error: {
             code: "invalid_token",
             message: "Invalid or expired token.",
           },
+          meta: { requestId: req.requestId ?? null },
         });
       }
-    } else if (isAuthEnabled() || process.env.OAUTH_INTROSPECTION_ENDPOINT) {
+      void emitHttpDenyHubEvent(req, {
+        source: "mcp_http_transport",
+        statusCode: 401,
+        errorCode: "unauthorized",
+        hubTransport: "mcp_http",
+      }).catch(() => {});
       return res.status(401).json({
         ok: false,
         error: {
           code: "unauthorized",
-          message: "Authorization header required. Use: Authorization: Bearer <token>",
+          message: "Authorization required. Use: Authorization: Bearer <HUB_API_KEY>",
         },
+        meta: { requestId: req.requestId ?? null },
       });
     }
+
+    const authContext = {
+      user: principal.user,
+      scopes: principal.scopes,
+      type: principal.authType,
+      actor: principal.actor,
+    };
 
     try {
       // Handle GET request (SSE stream setup - simplified)
@@ -99,23 +165,65 @@ export function createMcpHttpMiddleware() {
           });
         }
 
-        const result = await handleMcpHttpMessage(message, {
-          user: authContext.user,
-          scopes: authContext.scopes,
-          projectId: req.projectId,
-          projectEnv: req.projectEnv,
-          requestId: req.requestId,
-        });
-
-        if (result === null) {
-          return res.status(204).end();
+        if (message.jsonrpc !== "2.0") {
+          return res.status(200).json({
+            jsonrpc: "2.0",
+            id: message.id ?? null,
+            error: { code: -32600, message: "Invalid Request" },
+          });
         }
 
-        return res.json({
-          jsonrpc: "2.0",
-          id: message.id ?? null,
-          result,
+        // Prefer workspaceContextMiddleware; fall back to headers (e.g. minimal Express apps / tests)
+        const workspaceId =
+          req.workspaceId ?? req.headers["x-workspace-id"]?.toString().trim() ?? null;
+        const projectId =
+          req.projectId ?? req.headers["x-project-id"]?.toString().trim() ?? null;
+        const tenantId = req.headers["x-tenant-id"]?.toString().trim() || undefined;
+
+        const authInfo = {
+          user: authContext.user,
+          scopes: authContext.scopes,
+          type: authContext.type,
+          actor: authContext.actor,
+          workspaceId,
+          projectId,
+          env: req.projectEnv,
+          tenantId,
+        };
+
+        const { clientTransport, pending } = await ensureInit();
+
+        const id = message?.id;
+        const isNotification = id === undefined && message?.method;
+
+        const storePayload = { authInfo, correlationId: req.requestId ?? null };
+
+        if (isNotification) {
+          await runWithMcpRequestContext(storePayload, () =>
+            clientTransport.send(message, { authInfo })
+          );
+          return res.status(202).json(null);
+        }
+
+        const result = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (pending.has(id)) {
+              pending.delete(id);
+              reject(new Error("Request timed out"));
+            }
+          }, 120000);
+          pending.set(id, {
+            resolve: (msg) => {
+              clearTimeout(timeout);
+              resolve(msg);
+            },
+          });
+          runWithMcpRequestContext(storePayload, () =>
+            clientTransport.send(message, { authInfo })
+          ).catch(reject);
         });
+
+        return res.json(result);
       }
 
       // Method not allowed
@@ -128,15 +236,6 @@ export function createMcpHttpMiddleware() {
       });
     } catch (err) {
       console.error("[mcp-http] error:", err);
-      if (err.code === "method_not_found") {
-        return res.status(404).json({
-          ok: false,
-          error: {
-            code: "method_not_found",
-            message: err.message,
-          },
-        });
-      }
       return res.status(500).json({
         ok: false,
         error: {
@@ -146,17 +245,6 @@ export function createMcpHttpMiddleware() {
       });
     }
   };
-}
-
-/**
- * Extract Bearer token from request headers
- * @param {Object} req - Express request
- * @returns {string|null}
- */
-function extractBearerToken(req) {
-  const auth = req.headers["authorization"] ?? "";
-  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
-  return req.headers["x-hub-api-key"]?.trim() ?? null;
 }
 
 /**

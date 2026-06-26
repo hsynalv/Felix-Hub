@@ -9,10 +9,13 @@
  */
 
 import { getPolicyEvaluator, getApprovalStore } from "./policy-hooks.js";
-import { isAuthEnabled } from "./auth.js";
+import { getSecurityRuntime } from "./security/resolve-runtime-security.js";
+import { resolveRequestedBy } from "./auth/resolve-principal.js";
+import { isConfirmedBypassAllowed } from "./security/is-confirmed-bypass-allowed.js";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { emitHttpDenyHubEvent } from "./audit/emit-http-events.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -29,7 +32,7 @@ export function loadPresetsAtStartup() {
 
   const approvalStore = getApprovalStore();
   if (!approvalStore?.listRules || !approvalStore?.addRule) {
-    console.log("[policy] Policy system not yet registered, skipping preset load");
+    console.log("[policy] Rule store not registered yet, skipping preset load");
     return;
   }
 
@@ -48,8 +51,6 @@ export function loadPresetsAtStartup() {
       if (preset.enabled !== false) {
         approvalStore.addRule({
           pattern: preset.pattern,
-          toolPattern: preset.toolPattern,
-          environment: preset.environment,
           action: preset.action,
           description: preset.description ?? `Preset: ${preset.id}`,
           scope: preset.scope ?? "write",
@@ -98,38 +99,39 @@ export function policyGuardrailMiddleware(req, res, next) {
     return next();
   }
 
-  // Skip if confirmed=true — requires admin scope when auth is enabled
-  if (req.query?.confirmed === "true") {
-    if (isAuthEnabled()) {
-      const scopes = req.authScopes ?? [];
-      const hasAdmin = scopes.some((s) => s === "admin");
-      if (!hasAdmin) {
-        return res.status(403).json({
-          ok: false,
-          error: {
-            code: "forbidden",
-            message: "Policy confirmation bypass requires admin scope.",
-          },
-        });
-      }
-    }
+  if (isConfirmedBypassAllowed(req)) {
     return next();
   }
 
-  // Get policy evaluator (may not be available if policy plugin not loaded)
   const evaluate = getPolicyEvaluator();
+  const runtime = getSecurityRuntime();
   if (!evaluate) {
-    return next();
+    if (runtime.policyAllowMissingEvaluator) {
+      return next();
+    }
+    void emitHttpDenyHubEvent(req, {
+      source: "policy_guard",
+      statusCode: 503,
+      errorCode: "policy_unavailable",
+    }).catch(() => {});
+    const requestId = req.requestId ?? null;
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "policy_unavailable",
+        message:
+          "Policy engine is required for write operations. Load the policy plugin or set POLICY_ALLOW_MISSING_EVALUATOR=true for local development only.",
+      },
+      meta: { requestId },
+    });
   }
 
-  const requestedBy = req.actor?.type === "api_key"
-    ? `key:${req.authScopes?.join(",") || "read"}`
-    : "anonymous";
-
-  const result = evaluate(req.method, req.path, req.body, requestedBy, {
-    environment: req.projectEnv || process.env.HUB_ENV || process.env.NODE_ENV,
-    projectId: req.projectId,
+  const requestedBy = resolveRequestedBy({
+    user: req.user,
+    actor: req.actor,
   });
+
+  const result = evaluate(req.method, req.path, req.body, requestedBy);
 
   if (result.allowed) {
     return next();
@@ -140,6 +142,12 @@ export function policyGuardrailMiddleware(req, res, next) {
 
   switch (result.action) {
     case "block": {
+      void emitHttpDenyHubEvent(req, {
+        source: "policy_guard",
+        statusCode: 403,
+        errorCode: "policy_blocked",
+        policyRule: result.rule,
+      }).catch(() => {});
       return res.status(403).json({
         ok: false,
         error: {
@@ -177,6 +185,14 @@ export function policyGuardrailMiddleware(req, res, next) {
     }
 
     case "policy_rate_limit": {
+      void emitHttpDenyHubEvent(req, {
+        source: "policy_guard",
+        statusCode: 429,
+        errorCode: "policy_rate_limit",
+        policyRule: result.rule,
+        policyLimit: result.limit,
+        policyWindow: result.window,
+      }).catch(() => {});
       return res.status(429).json({
         ok: false,
         error: {
@@ -189,6 +205,12 @@ export function policyGuardrailMiddleware(req, res, next) {
     }
 
     default: {
+      void emitHttpDenyHubEvent(req, {
+        source: "policy_guard",
+        statusCode: 403,
+        errorCode: "policy_denied",
+        policyRule: result.rule,
+      }).catch(() => {});
       return res.status(403).json({
         ok: false,
         error: {

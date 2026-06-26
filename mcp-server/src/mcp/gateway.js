@@ -5,9 +5,44 @@
  * Supports both HTTP (Streamable HTTP) and STDIO transports.
  */
 
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { listTools, callTool } from "../core/tool-registry.js";
+import {
+  getMcpRequestContext,
+  runWithMcpRequestContext,
+} from "../core/authorization/mcp-request-context.js";
+import {
+  getStdioSessionContext,
+  mergeMcpAuthInfo,
+} from "../core/authorization/stdio-session-context.js";
+import {
+  filterVisibleTools,
+  filterOptionsFromContext,
+} from "../core/authorization/filter-visible-tools.js";
+import {
+  emitDiscoveryRequestedEvent,
+  emitDiscoveryFilteredEvent,
+} from "../core/audit/emit-hub-event.js";
+import { DiscoverySurfaces } from "../core/audit/discovery-surfaces.js";
+import { resolveActorString } from "../core/audit/base-envelope.js";
+
+function effectiveMcpStore() {
+  return getMcpRequestContext() ?? getStdioSessionContext();
+}
+
+function baseContextFromAuthInfo(authInfo, correlationId) {
+  return {
+    workspaceId: authInfo.workspaceId ?? process.env.HUB_WORKSPACE_ID ?? null,
+    projectId: authInfo.projectId ?? process.env.HUB_PROJECT_ID ?? null,
+    tenantId: authInfo.tenantId ?? process.env.HUB_TENANT_ID ?? null,
+    scopes: authInfo.scopes ?? [],
+    actor: authInfo.actor ?? null,
+    user: authInfo.user ?? null,
+    requestId: correlationId,
+  };
+}
 
 /**
  * Create an MCP server instance
@@ -27,9 +62,51 @@ export function createMcpServer() {
     }
   );
 
-  // Handle listTools request
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = listTools();
+    const store = effectiveMcpStore();
+    const all = listTools();
+    const baseCtx = store?.authInfo
+      ? baseContextFromAuthInfo(store.authInfo, store.correlationId)
+      : {
+          workspaceId: process.env.HUB_WORKSPACE_ID ?? null,
+          projectId: process.env.HUB_PROJECT_ID ?? null,
+          tenantId: process.env.HUB_TENANT_ID ?? null,
+        };
+    const { workspaceId, scopes, tenantId } = filterOptionsFromContext(baseCtx);
+    const tools = filterVisibleTools(all, { workspaceId, scopes, tenantId });
+
+    const correlationId = store?.correlationId != null ? String(store.correlationId) : undefined;
+    const sessionId = store?.sessionId != null ? String(store.sessionId) : undefined;
+    const actor = store?.authInfo
+      ? resolveActorString(store.authInfo.actor ?? store.authInfo.user)
+      : "anonymous";
+    const ws = baseCtx.workspaceId != null ? String(baseCtx.workspaceId) : "global";
+
+    try {
+      await emitDiscoveryRequestedEvent({
+        transport: "mcp",
+        discoverySurface: DiscoverySurfaces.MCP_TOOLS_LIST,
+        correlationId,
+        sessionId,
+        workspaceId: ws,
+        tenantId: baseCtx.tenantId != null ? String(baseCtx.tenantId) : undefined,
+        actor,
+      });
+      await emitDiscoveryFilteredEvent({
+        transport: "mcp",
+        discoverySurface: DiscoverySurfaces.MCP_TOOLS_LIST,
+        correlationId,
+        sessionId,
+        workspaceId: ws,
+        actor,
+        tenantId: baseCtx.tenantId != null ? String(baseCtx.tenantId) : undefined,
+        totalCount: all.length,
+        visibleCount: tools.length,
+      });
+    } catch {
+      /* discovery telemetry is best-effort */
+    }
+
     return {
       tools: tools.map((tool) => ({
         name: tool.name,
@@ -40,12 +117,45 @@ export function createMcpServer() {
   });
 
   // Handle callTool request
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
+    const mcpStore = getMcpRequestContext();
+    const stdioStore = getStdioSessionContext();
+    const sessionInfo = stdioStore?.authInfo;
+    const alsInfo = mcpStore?.authInfo;
+    const authInfo = mergeMcpAuthInfo(
+      mergeMcpAuthInfo(sessionInfo, alsInfo),
+      extra?.authInfo
+    );
+    const scopes = Array.isArray(authInfo.scopes) ? authInfo.scopes : [];
+    const actor =
+      authInfo.actor ??
+      (scopes.length > 0 ? { type: authInfo.type || "bearer", scopes } : null);
+    const correlationForTools =
+      mcpStore?.correlationId != null
+        ? String(mcpStore.correlationId)
+        : stdioStore?.correlationId != null
+          ? String(stdioStore.correlationId)
+          : request.id != null
+            ? `mcp-rpc-${request.id}`
+            : undefined;
+    const sessionId =
+      stdioStore?.sessionId != null ? String(stdioStore.sessionId) : undefined;
+
     const context = {
       method: "MCP",
-      user: request.context?.user || null,
+      source: "mcp",
+      user: authInfo.user ?? request.context?.user ?? null,
       requestId: request.id,
+      correlationId: correlationForTools,
+      sessionId,
+      workspaceId: authInfo.workspaceId ?? process.env.HUB_WORKSPACE_ID ?? null,
+      projectId: authInfo.projectId ?? process.env.HUB_PROJECT_ID ?? null,
+      tenantId: authInfo.tenantId ?? process.env.HUB_TENANT_ID ?? null,
+      env: authInfo.env ?? process.env.HUB_ENV ?? null,
+      scopes,
+      authScopes: scopes,
+      actor,
     };
 
     const result = await callTool(name, args || {}, context);
@@ -103,101 +213,57 @@ export function createMcpServer() {
 }
 
 /**
- * Handle a JSON-RPC message for the HTTP /mcp endpoint.
- * Returns the MCP result payload (not wrapped in JSON-RPC envelope) for compatibility
- * with integration tests and custom-llm clients.
- *
- * @param {object} message - JSON-RPC 2.0 request
- * @param {object} [context] - Auth and request context
- * @returns {Promise<object|null>} Result object or null when no response body
+ * Create an MCP server with a handleRequest helper for testing.
+ * Uses InMemoryTransport to simulate stateless HTTP message flow.
+ * @returns {Promise<{ handleRequest: (message: object, context?: object) => Promise<object> }>}
  */
-export async function handleMcpHttpMessage(message, context = {}) {
-  const { id, method, params = {} } = message;
-
-  if (method === "initialize") {
-    return {
-      protocolVersion: "2024-11-05",
-      capabilities: { tools: {} },
-      serverInfo: { name: "mcp-hub", version: "1.0.0" },
-    };
-  }
-
-  if (method === "initialized" || method === "notifications/initialized") {
-    return null;
-  }
-
-  if (method === "tools/list") {
-    const tools = listTools();
-    return {
-      tools: tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema || { type: "object" },
-      })),
-    };
-  }
-
-  if (method === "tools/call") {
-    const { name, arguments: args } = params;
-    const callContext = {
-      method: "MCP",
-      user: context.user || null,
-      scopes: context.scopes || [],
-      projectId: context.projectId || null,
-      projectEnv: context.projectEnv || null,
-      requestId: context.requestId || id,
-    };
-
-    const result = await callTool(name, args || {}, callContext);
-
-    if (result.ok) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result.data, null, 2),
-          },
-        ],
-        isError: false,
-      };
+export async function createMcpServerWithHandleRequest() {
+  const server = createMcpServer();
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  const pending = new Map();
+  clientTransport.onmessage = (message) => {
+    const id = message?.id;
+    if (id !== undefined && pending.has(id)) {
+      const { resolve } = pending.get(id);
+      pending.delete(id);
+      resolve(message);
     }
-
-    if (result.error?.code === "require_approval") {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `⏳ Approval Required\n\n${result.error.message}\n\nApproval ID: ${result.error.approval?.id}`,
-          },
-        ],
-        isError: false,
+  };
+  return {
+    handleRequest: async (message, context = {}) => {
+      const scopes = Array.isArray(context.scopes) ? context.scopes : [];
+      const authInfo = {
+        user: context.user ?? null,
+        workspaceId: context.workspaceId ?? null,
+        projectId: context.projectId ?? null,
+        tenantId: context.tenantId ?? null,
+        env: context.env ?? process.env.HUB_ENV ?? null,
+        scopes,
+        type: context.type,
+        actor: context.actor ?? (scopes.length ? { type: context.type || "test", scopes } : null),
       };
-    }
-
-    if (result.error?.code === "dry_run") {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `🔍 Dry Run Mode\n\n${result.error.message}\n\nPreview:\n\`\`\`json\n${JSON.stringify(result.error.preview, null, 2)}\n\`\`\``,
+      const id = message?.id;
+      const runSend = () => clientTransport.send(message, { authInfo });
+      if (id === undefined) {
+        await runWithMcpRequestContext({ authInfo, correlationId: null }, runSend);
+        return null;
+      }
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          if (pending.has(id)) {
+            pending.delete(id);
+            reject(new Error("Request timed out"));
+          }
+        }, 10000);
+        pending.set(id, {
+          resolve: (msg) => {
+            clearTimeout(timeout);
+            resolve(msg);
           },
-        ],
-        isError: false,
-      };
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `❌ Error: ${result.error?.code}\n\n${result.error?.message}`,
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  const err = new Error(`Method not found: ${method}`);
-  err.code = "method_not_found";
-  throw err;
+        });
+        runWithMcpRequestContext({ authInfo, correlationId: String(id) }, runSend).catch(reject);
+      });
+    },
+  };
 }

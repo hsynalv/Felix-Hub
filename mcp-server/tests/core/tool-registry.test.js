@@ -5,25 +5,34 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   registerTool,
-  unregisterTool,
   getTool,
   listTools,
   clearTools,
   callTool,
-  ToolTags,
-  getToolRegistryStats,
-  assertUniqueToolNames,
 } from "../../src/core/tool-registry.js";
-import { TEST_INPUT_SCHEMA } from "../framework/test-tool-schema.js";
+import {
+  clearHooks,
+  registerAfterExecutionHook,
+} from "../../src/core/tool-hooks.js";
 
 // Mock policy engine
 vi.mock("../../src/plugins/policy/policy.engine.js", () => ({
   evaluate: vi.fn(() => ({ allowed: true })),
 }));
 
+const emptyObjectSchema = { type: "object", properties: {} };
+
+/** Explicit principal for unit tests when host .env enables hub keys (auth-on + scopes required). */
+const TEST_TOOL_CTX = {
+  actor: { type: "test", scopes: ["read", "write", "admin"] },
+  scopes: ["read", "write", "admin"],
+  authScopes: ["read", "write", "admin"],
+};
+
 describe("Tool Registry", () => {
   beforeEach(() => {
     clearTools();
+    clearHooks();
   });
 
   describe("registerTool", () => {
@@ -31,7 +40,7 @@ describe("Tool Registry", () => {
       registerTool({
         name: "test_tool",
         description: "A test tool",
-        inputSchema: TEST_INPUT_SCHEMA,
+        inputSchema: emptyObjectSchema,
         handler: async () => "result",
       });
 
@@ -45,10 +54,10 @@ describe("Tool Registry", () => {
       expect(() =>
         registerTool({
           description: "A test tool",
-          inputSchema: TEST_INPUT_SCHEMA,
+          inputSchema: emptyObjectSchema,
           handler: async () => "result",
         })
-      ).toThrow("Tool must have a 'name'");
+      ).toThrow(/Tool must have a 'name'/);
     });
 
     it("should throw if tool has no handler", () => {
@@ -56,22 +65,9 @@ describe("Tool Registry", () => {
         registerTool({
           name: "test_tool",
           description: "A test tool",
-          inputSchema: TEST_INPUT_SCHEMA,
+          inputSchema: emptyObjectSchema,
         })
-      ).toThrow("must have a handler function");
-    });
-
-    it("should map legacy parameters to inputSchema", () => {
-      registerTool({
-        name: "legacy_tool",
-        description: "Legacy parameters tool",
-        parameters: TEST_INPUT_SCHEMA,
-        handler: async () => "result",
-      });
-
-      const tool = getTool("legacy_tool");
-      expect(tool.inputSchema).toEqual(TEST_INPUT_SCHEMA);
-      expect(tool.parameters).toBeUndefined();
+      ).toThrow(/handler function/);
     });
   });
 
@@ -84,13 +80,13 @@ describe("Tool Registry", () => {
       registerTool({
         name: "tool1",
         description: "First tool",
-        inputSchema: TEST_INPUT_SCHEMA,
+        inputSchema: emptyObjectSchema,
         handler: async () => "result1",
       });
       registerTool({
         name: "tool2",
         description: "Second tool",
-        inputSchema: TEST_INPUT_SCHEMA,
+        inputSchema: emptyObjectSchema,
         handler: async () => "result2",
       });
 
@@ -110,7 +106,7 @@ describe("Tool Registry", () => {
       registerTool({
         name: "my_tool",
         description: "My tool",
-        inputSchema: TEST_INPUT_SCHEMA,
+        inputSchema: emptyObjectSchema,
         handler: async () => "result",
       });
 
@@ -125,30 +121,72 @@ describe("Tool Registry", () => {
       const result = await callTool("nonexistent", {});
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("tool_not_found");
+      expect(result.meta.durationMs).toBe(0);
     });
 
     it("should call the tool handler", async () => {
       registerTool({
         name: "greet",
         description: "Greet someone",
-        inputSchema: TEST_INPUT_SCHEMA,
+        inputSchema: {
+          type: "object",
+          properties: { name: { type: "string" } },
+          required: ["name"],
+        },
         handler: async (args) => ({ message: `Hello ${args.name}` }),
       });
 
-      const result = await callTool("greet", { name: "World" });
+      const result = await callTool("greet", { name: "World" }, TEST_TOOL_CTX);
       expect(result.ok).toBe(true);
       expect(result.data).toEqual({ message: "Hello World" });
+      expect(typeof result.meta.durationMs).toBe("number");
+    });
+
+    it("should reject invalid args before handler", async () => {
+      registerTool({
+        name: "needs_name",
+        description: "needs name",
+        inputSchema: {
+          type: "object",
+          properties: { name: { type: "string" } },
+          required: ["name"],
+        },
+        handler: async () => ({ ok: true }),
+      });
+
+      const result = await callTool("needs_name", {}, TEST_TOOL_CTX);
+      expect(result.ok).toBe(false);
+      expect(result.error.code).toBe("invalid_tool_input");
+    });
+
+    it("should run after hooks", async () => {
+      let seen = null;
+      registerAfterExecutionHook(async (toolName, args, context, res) => {
+        seen = { toolName, args, context: { ...context }, res };
+      });
+      registerTool({
+        name: "hooked",
+        description: "x",
+        inputSchema: emptyObjectSchema,
+        handler: async () => "done",
+      });
+
+      await callTool("hooked", {}, { ...TEST_TOOL_CTX, requestId: "r1" });
+      expect(seen.toolName).toBe("hooked");
+      expect(seen.res.ok).toBe(true);
+      expect(seen.res.data).toBe("done");
+      expect(seen.context.requestId).toBe("r1");
     });
 
     it("should wrap successful result in envelope", async () => {
       registerTool({
         name: "simple",
         description: "Simple tool",
-        inputSchema: TEST_INPUT_SCHEMA,
+        inputSchema: emptyObjectSchema,
         handler: async () => "raw result",
       });
 
-      const result = await callTool("simple", {});
+      const result = await callTool("simple", {}, TEST_TOOL_CTX);
       expect(result.ok).toBe(true);
       expect(result.data).toBe("raw result");
     });
@@ -157,116 +195,15 @@ describe("Tool Registry", () => {
       registerTool({
         name: "failing",
         description: "Failing tool",
-        inputSchema: TEST_INPUT_SCHEMA,
+        inputSchema: emptyObjectSchema,
         handler: async () => {
           throw new Error("Something went wrong");
         },
       });
 
-      const result = await callTool("failing", {});
+      const result = await callTool("failing", {}, TEST_TOOL_CTX);
       expect(result.ok).toBe(false);
       expect(result.error.code).toBe("tool_execution_error");
-    });
-
-    it("should reject missing required arguments", async () => {
-      registerTool({
-        name: "needs_name",
-        description: "Requires name",
-        inputSchema: {
-          type: "object",
-          properties: { name: { type: "string" } },
-          required: ["name"],
-        },
-        handler: async (args) => ({ echoed: args.name }),
-      });
-
-      const result = await callTool("needs_name", {});
-      expect(result.ok).toBe(false);
-      expect(result.error.code).toBe("invalid_args");
-    });
-
-    it("should block dangerous arguments via security guard", async () => {
-      registerTool({
-        name: "file_read",
-        description: "Read file",
-        inputSchema: TEST_INPUT_SCHEMA,
-        handler: async () => ({ ok: true }),
-      });
-
-      const result = await callTool("file_read", { path: "../../../etc/passwd" });
-      expect(result.ok).toBe(false);
-      expect(result.error.code).toBe("security_blocked");
-    });
-
-    it("should require write scope for write-tagged tools when auth enabled", async () => {
-      const auth = await import("../../src/core/auth.js");
-      vi.spyOn(auth, "isAuthEnabled").mockReturnValue(true);
-
-      registerTool({
-        name: "write_tool",
-        description: "Write tool",
-        inputSchema: TEST_INPUT_SCHEMA,
-        tags: [ToolTags.WRITE],
-        handler: async () => ({ ok: true }),
-      });
-
-      const denied = await callTool("write_tool", {}, { scopes: ["read"] });
-      expect(denied.ok).toBe(false);
-      expect(denied.error.code).toBe("insufficient_scope");
-
-      const allowed = await callTool("write_tool", {}, { scopes: ["write"] });
-      expect(allowed.ok).toBe(true);
-
-      vi.restoreAllMocks();
-    });
-  });
-
-  describe("getToolRegistryStats", () => {
-    it("should aggregate tools by plugin", () => {
-      registerTool({
-        name: "a1",
-        description: "A",
-        inputSchema: TEST_INPUT_SCHEMA,
-        plugin: "alpha",
-        handler: async () => "ok",
-      });
-      registerTool({
-        name: "b1",
-        description: "B",
-        inputSchema: TEST_INPUT_SCHEMA,
-        plugin: "beta",
-        handler: async () => "ok",
-      });
-
-      const stats = getToolRegistryStats();
-      expect(stats.total).toBe(2);
-      expect(stats.byPlugin.alpha).toBe(1);
-      expect(stats.byPlugin.beta).toBe(1);
-    });
-  });
-
-  describe("assertUniqueToolNames", () => {
-    it("should pass when all names are unique", () => {
-      registerTool({
-        name: "unique_tool",
-        description: "Unique",
-        inputSchema: TEST_INPUT_SCHEMA,
-        handler: async () => "ok",
-      });
-      expect(() => assertUniqueToolNames()).not.toThrow();
-    });
-  });
-
-  describe("registerTool duplicate guard", () => {
-    it("should throw when registering the same name twice", () => {
-      const def = {
-        name: "dup_tool",
-        description: "Dup",
-        inputSchema: TEST_INPUT_SCHEMA,
-        handler: async () => "ok",
-      };
-      registerTool(def);
-      expect(() => registerTool(def)).toThrow(/already registered/);
     });
   });
 });

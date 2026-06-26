@@ -39,6 +39,9 @@
     "test:integration:stable": "vitest run --config vitest.integration.stable.config.js",
     "eval:smoke": "vitest run tests/eval/trace-regression.test.js",
     "eval:ci": "vitest run tests/eval/trace-regression.test.js tests/core/faz3-v4.test.js",
+    "eval:run": "node bin/run-retrieval-evals.js run",
+    "eval:compare": "node bin/run-retrieval-evals.js compare",
+    "create-plugin": "node bin/create-plugin.js",
     "sidecar:daemon": "node bin/sidecar-daemon.js"
   },
   "keywords": [
@@ -95,6 +98,9 @@
     "n8n-workflow": "^1.120.9",
     "nodemailer": "^8.0.1",
     "openai": "^6.27.0",
+    "pdf-parse": "^1.1.1",
+    "pdf2pic": "^3.2.0",
+    "tesseract.js": "^5.1.0",
     "pg": "^8.19.0",
     "zod": "^3.23.8"
   }

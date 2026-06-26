@@ -25,7 +25,6 @@ export {
   sanitizeAuditEvent,
   validateAuditEvent,
   generateCorrelationId,
-  normalizeCorrelationId,
 } from "./audit.standard.js";
 
 // Sink interface
@@ -35,7 +34,6 @@ export { AuditSink } from "./sink.interface.js";
 export { MemoryAuditSink } from "./sinks/memory.audit.js";
 export { FileAuditSink } from "./sinks/file.audit.js";
 export { MultiAuditSink } from "./sinks/multi.audit.js";
-export { MssqlAuditSink } from "./sinks/mssql.audit.js";
 
 // Audit manager
 export {
@@ -46,15 +44,44 @@ export {
   auditLog,
 } from "./audit.manager.js";
 
-// Unified write API (preferred)
+// Hub telemetry (contract v1)
 export {
-  logHttp,
-  logOperation,
-  logToolExecution,
-  queryAuditEvents,
-  getHttpRequestLogs,
-  getAuditEventStats,
-} from "./audit.service.js";
+  emitHubAuditEvent,
+  emitDiscoveryFilteredEvent,
+  emitDiscoveryRequestedEvent,
+} from "./emit-hub-event.js";
+export { DiscoverySurfaces } from "./discovery-surfaces.js";
+export {
+  emitRestDiscoveryRequested,
+  emitRestDiscoveryFiltered,
+  emitRestDiscoveryDenied,
+} from "./emit-discovery-http-event.js";
+export { normalizeDiscoveryDeny } from "./normalize-discovery-deny.js";
+export { HubEventTypes, HubOutcomes, HUB_EVENT_SCHEMA_VERSION } from "./event-types.js";
+export {
+  emitJobLifecycleHubEvent,
+  pluginFromJobType,
+  resolveJobInvokeSource,
+  normalizeSubmitJobInvokeSource,
+  getHubJobLifecycleEmitFailureCount,
+  resetHubJobLifecycleEmitFailuresForTesting,
+} from "./emit-job-event.js";
+export { hubEventTypeFromAuthzPhase, hubEventTypeFromPermissionOperation } from "./normalize-deny-event.js";
+export { normalizeHttpDenyEvent, sanitizePolicyRuleRef } from "./normalize-http-deny.js";
+export {
+  buildHttpHubMetadata,
+  emitHttpRequestReceived,
+  emitHttpRequestCompleted,
+  emitHttpDenyHubEvent,
+  httpHubAuditLifecycleMiddleware,
+} from "./emit-http-events.js";
+export { resolveActorString, hubMetadataFromToolContext, mergeHubMetadata } from "./base-envelope.js";
+export { emitStdioBootstrapAuthDenied } from "./emit-stdio-auth.js";
 
-// HTTP middleware + request log readers (single import surface)
-export { auditMiddleware, maskBody, getLogs, getStats } from "../audit.js";
+// HTTP audit middleware + query helpers (legacy audit.js bridge)
+export {
+  auditMiddleware,
+  maskBody,
+  getLogs,
+  getStats,
+} from "../audit.js";
