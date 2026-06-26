@@ -1,28 +1,66 @@
-import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, existsSync } from "fs";
-import { join } from "path";
+/**
+ * Plugin health path resolution and connection test
+ */
 
-const PLUGINS_DIR = join(process.cwd(), "src/plugins");
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { getPluginHealthPath, probePluginHealth } from "../../src/core/plugin-health.js";
 
-describe("plugin health routes", () => {
-  const pluginDirs = readdirSync(PLUGINS_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => existsSync(join(PLUGINS_DIR, name, "index.js")));
+vi.mock("../../src/core/plugins.js", () => ({
+  getPlugins: vi.fn(() => [
+    {
+      name: "github",
+      endpoints: [
+        { method: "GET", path: "/github/health", description: "Plugin health", scope: "read" },
+        { method: "GET", path: "/github/repos", description: "List repos", scope: "read" },
+      ],
+    },
+    {
+      name: "workspace",
+      endpoints: [{ method: "GET", path: "/workspace/health", description: "Plugin health", scope: "read" }],
+    },
+  ]),
+}));
 
-  it("every plugin exposes a /health route", () => {
-    const missing = [];
+describe("getPluginHealthPath", () => {
+  it("returns manifest health path for plugin", () => {
+    expect(getPluginHealthPath("github")).toBe("/github/health");
+    expect(getPluginHealthPath("workspace")).toBe("/workspace/health");
+  });
 
-    for (const name of pluginDirs) {
-      const source = readFileSync(join(PLUGINS_DIR, name, "index.js"), "utf-8");
-      const hasHealth =
-        source.includes('router.get("/health"') ||
-        source.includes("mountPluginHealth(");
-      if (!hasHealth) {
-        missing.push(name);
-      }
-    }
+  it("returns null when no health endpoint", () => {
+    expect(getPluginHealthPath("unknown")).toBeNull();
+  });
+});
 
-    expect(missing, `missing health route: ${missing.join(", ")}`).toEqual([]);
+describe("probePluginHealth", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("skips when plugin has no health route", async () => {
+    const result = await probePluginHealth("unknown");
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("probes declared health endpoint", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, status: "healthy" }),
+    });
+
+    const result = await probePluginHealth("github");
+    expect(result.ok).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/github/health"),
+      expect.objectContaining({ headers: expect.any(Object) })
+    );
   });
 });

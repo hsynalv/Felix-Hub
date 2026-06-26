@@ -19,18 +19,27 @@ function load() {
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return {}; }
 }
 
+/** Keys created by vitest suites — hidden from UI project picker by default. */
+const TEST_PROJECT_KEY_RE = /^(test[-_]|ask-test|notion-index)/i;
+
+function isTestProjectKey(key) {
+  return TEST_PROJECT_KEY_RE.test(key);
+}
+
 function save(data) {
   writeFileSync(storePath(), JSON.stringify(data, null, 2));
 }
 
-export function listProjects() {
+export function listProjects({ includeTestProjects = false } = {}) {
   const all = load();
-  return Object.entries(all).map(([key, project]) => ({
-    key,
-    name:     project.name,
-    envs:     Object.keys(project.envs ?? {}),
-    createdAt: project.createdAt,
-  }));
+  return Object.entries(all)
+    .filter(([key]) => includeTestProjects || !isTestProjectKey(key))
+    .map(([key, project]) => ({
+      key,
+      name: project.name,
+      envs: Object.keys(project.envs ?? {}),
+      createdAt: project.createdAt,
+    }));
 }
 
 export function getProject(name) {

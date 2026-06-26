@@ -2,7 +2,7 @@
  * Project ask + impact API
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import {
   recordContextEvent,
   searchContextForGoal,
@@ -22,6 +22,14 @@ describe("project ask / impact", () => {
       /* ignore */
     }
     createProject(key, "Ask Test");
+  });
+
+  afterAll(() => {
+    try {
+      deleteProject(key);
+    } catch {
+      /* ignore */
+    }
   });
 
   it("searchContextForGoal ranks matching events", async () => {

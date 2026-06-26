@@ -12,7 +12,11 @@ const ObservabilityPage = lazy(() => import("@/pages/ObservabilityPage").then((m
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const UsagePage = lazy(() => import("@/pages/UsagePage").then((m) => ({ default: m.UsagePage })));
 const RunsPage = lazy(() => import("@/pages/RunsPage").then((m) => ({ default: m.RunsPage })));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
 const BrainPage = lazy(() => import("@/pages/BrainPage").then((m) => ({ default: m.BrainPage })));
+const IntentTrainingPage = lazy(() =>
+  import("@/pages/IntentTrainingPage").then((m) => ({ default: m.IntentTrainingPage }))
+);
 
 export default function App() {
   return (
@@ -29,7 +33,10 @@ export default function App() {
           <Route path="observability" element={<ObservabilityPage />} />
           <Route path="usage" element={<UsagePage />} />
           <Route path="runs" element={<RunsPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="projects/:projectKey" element={<ProjectsPage />} />
           <Route path="brain" element={<BrainPage />} />
+          <Route path="intent-training" element={<IntentTrainingPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="ui" element={<Navigate to="/chat" replace />} />

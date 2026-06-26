@@ -4,6 +4,7 @@ import { Activity, Bot, CheckCircle2, Clock, Loader2, MessageSquare, XCircle } f
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { RunStep } from "@/lib/runs-api";
+import { getRunSteps } from "@/lib/runs-api";
 import { cn, formatDuration } from "@/lib/utils";
 
 export interface LiveRunStep {
@@ -82,6 +83,23 @@ export function RunTracePanel({
       el.scrollTop = el.scrollHeight;
     });
   }, [liveSteps.length, live]);
+
+  useEffect(() => {
+    if (!runId || live) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await getRunSteps(runId);
+        if (cancelled) return;
+        setLiveSteps(data.steps.map((s, i) => toLiveStep({ step: s }, i)));
+      } catch {
+        /* keep live steps if hydrate fails */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runId, live]);
 
   useEffect(() => {
     if (!runId || !live) return;

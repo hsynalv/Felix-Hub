@@ -7,8 +7,6 @@ import { AppearanceSettingsPanel } from "@/components/settings/AppearanceSetting
 import { ConnectionsSettingsPanel } from "@/components/settings/ConnectionsSettingsPanel";
 import { PluginEnvPanel } from "@/components/settings/PluginEnvPanel";
 import { LlmRoutingPanel } from "@/components/settings/LlmRoutingPanel";
-import { ProjectSettingsPanel } from "@/components/settings/ProjectSettingsPanel";
-import { UsageQuotaPanel } from "@/components/settings/UsageQuotaPanel";
 import { SidecarSettingsPanel } from "@/components/settings/SidecarSettingsPanel";
 import { SettingsNav, type SettingsSectionId } from "@/components/settings/SettingsNav";
 import { fetchSettings } from "@/lib/settings-api";
@@ -19,10 +17,6 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
   appearance: {
     title: "Görünüm",
     description: "Arayüzün nasıl görüneceğini kişiselleştirin.",
-  },
-  project: {
-    title: "Proje",
-    description: "Hangi proje ve ortamda çalıştığınızı belirleyin.",
   },
   llm: {
     title: "LLM",
@@ -57,7 +51,7 @@ export function SettingsPage() {
 
   const isForbidden = settingsQuery.error instanceof ApiError && settingsQuery.error.status === 403;
   const needsAdmin =
-    section !== "appearance" && section !== "project" && section !== "sidecar";
+    section !== "appearance" && section !== "sidecar";
   const header = SECTION_HEADERS[section];
 
   return (
@@ -70,12 +64,6 @@ export function SettingsPage() {
         )}
 
         {section === "appearance" && <AppearanceSettingsPanel />}
-        {section === "project" && (
-          <>
-            <ProjectSettingsPanel />
-            <UsageQuotaPanel />
-          </>
-        )}
 
         {isForbidden && needsAdmin && (
           <Card className="border-amber-500/40">

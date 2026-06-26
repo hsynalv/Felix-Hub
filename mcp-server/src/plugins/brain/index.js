@@ -27,6 +27,9 @@ import { auditLog }                                from "../../core/audit/index.
 import { requireScope }                            from "../../core/auth.js";
 import { checkRedisHealth }                        from "../../core/redis.js";
 import { routeTask }                               from "../llm-router/index.js";
+import { enrichMemoryFields } from "./brain.classifier.js";
+import { evaluateMemoryWrite } from "./brain.write-policy.js";
+import { detectBrainIntent } from "../../core/chat/brain-intent.js";
 
 import {
   NAMESPACE,
@@ -77,6 +80,7 @@ export const metadata = createMetadata({
     { method: "GET",    path: "/brain/obsidian/canvas",    description: "Export Obsidian canvas JSON", scope: "read"  },
     { method: "GET",    path: "/brain/obsidian/status",    description: "Obsidian export status",        scope: "read"  },
     { method: "PATCH",  path: "/brain/memories/:id",       description: "Update a memory",             scope: "write" },
+    { method: "POST",   path: "/brain/memories/:id/feedback", description: "Memory feedback (confirm/reject/forget)", scope: "write" },
     { method: "DELETE", path: "/brain/memories/:id",       description: "Delete a memory",             scope: "write" },
     { method: "GET",    path: "/brain/projects",           description: "List projects",               scope: "read"  },
     { method: "POST",   path: "/brain/projects",           description: "Register / update project",   scope: "write" },
@@ -92,6 +96,22 @@ const handleError = createPluginErrorHandler("brain");
 function pluginErrorResponse(req, res, err, operation) {
   const standardized = handleError.wrap(err, operation);
   res.status(standardized.statusCode || 500).json(standardized.serialize(req.requestId));
+}
+
+async function requireRedis(req, res, next) {
+  const health = await checkRedisHealth();
+  if (!health.ok) {
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "redis_unavailable",
+        message:
+          health.error ||
+          "Redis is not available. Start with: docker start mcp-hub-redis",
+      },
+    });
+  }
+  next();
 }
 
 // ── Audit helper ─────────────────────────────────────────────────────────────
@@ -111,6 +131,8 @@ const memoryCreateSchema = z.object({
   importance: z.number().min(0).max(1).default(0.5),
   confidence: z.number().min(0).max(1).default(1.0),
   source:     z.enum(["user", "agent", "system"]).default("user"),
+  skipClassification: z.boolean().optional().default(false),
+  autoClassify:       z.boolean().optional().default(false),
 });
 
 const memoryUpdateSchema = z.object({
@@ -185,7 +207,7 @@ export function register(app) {
 
   // ── Health ──────────────────────────────────────────────────────────────────
 
-  router.get("/health", async (_req, res) => {
+  router.get("/health", async (req, res) => {
     try {
       const redis    = await checkRedisHealth();
       const llmReady = !!(process.env.OPENAI_API_KEY || process.env.BRAIN_LLM_API_KEY);
@@ -204,9 +226,11 @@ export function register(app) {
     }
   });
 
+  router.use(requireRedis);
+
   // ── Stats ───────────────────────────────────────────────────────────────────
 
-  router.get("/stats", requireScope("read"), async (_req, res) => {
+  router.get("/stats", requireScope("read"), async (req, res) => {
     try {
       const [memStats, projStats, snapshot] = await Promise.all([
         getMemoryStats(),
@@ -231,7 +255,7 @@ export function register(app) {
 
   // ── Profile ─────────────────────────────────────────────────────────────────
 
-  router.get("/profile", requireScope("read"), async (_req, res) => {
+  router.get("/profile", requireScope("read"), async (req, res) => {
     try {
       res.json({ ok: true, data: await getProfile() });
     } catch (err) {
@@ -289,17 +313,19 @@ export function register(app) {
       const parsed = memoryCreateSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.flatten() });
 
+      const fields = await enrichMemoryFields(parsed.data);
+
       // Deduplication: if near-identical memory exists, update it instead
-      const duplicate = await findDuplicate(parsed.data.content, parsed.data.type);
+      const duplicate = await findDuplicate(fields.content, fields.type);
       if (duplicate) {
         const updated = await updateMemory(duplicate.id, {
-          importance: Math.max(duplicate.importance, parsed.data.importance),
+          importance: Math.max(duplicate.importance, fields.importance),
           updatedAt:  new Date().toISOString(),
         });
         return res.status(200).json({ ok: true, data: updated, deduplicated: true });
       }
 
-      const mem = await addMemory(parsed.data);
+      const mem = await addMemory(fields);
       await useTool("rag_index", {
         id: mem.id, content: mem.content,
         metadata: { type: mem.type, tags: mem.tags, projectId: mem.projectId, source: "brain" },
@@ -335,6 +361,54 @@ export function register(app) {
     }
   });
 
+  router.post("/memories/:id/feedback", requireScope("write"), async (req, res) => {
+    try {
+      const { action, projectId, correction } = req.body ?? {};
+      const mem = await getMemory(req.params.id);
+      if (!mem) {
+        return res.status(404).json({ ok: false, error: { code: "not_found", message: "Memory not found" } });
+      }
+
+      let updated = mem;
+      switch (action) {
+        case "confirm":
+          updated = await updateMemory(req.params.id, {
+            confidence: Math.min(1, (mem.confidence ?? 0.5) + 0.15),
+            importance: Math.min(1, (mem.importance ?? 0.5) + 0.1),
+          });
+          break;
+        case "reject":
+          updated = await updateMemory(req.params.id, {
+            confidence: Math.max(0, (mem.confidence ?? 0.5) - 0.3),
+          });
+          break;
+        case "forget":
+          await deleteMemoryWithRagSync(req.params.id);
+          return res.json({ ok: true, data: { id: req.params.id, forgotten: true } });
+        case "update":
+          if (typeof correction === "string" && correction.trim()) {
+            updated = await updateMemory(req.params.id, { content: correction.trim() });
+          }
+          break;
+        case "link_project":
+          if (projectId) {
+            updated = await updateMemory(req.params.id, { projectId: String(projectId) });
+          }
+          break;
+        default:
+          return res.status(400).json({
+            ok: false,
+            error: { code: "invalid_action", message: "action must be confirm|reject|forget|update|link_project" },
+          });
+      }
+
+      await brainAudit("memory_feedback", { actor: req.user?.sub, memId: req.params.id, action });
+      res.json({ ok: true, data: updated });
+    } catch (err) {
+      pluginErrorResponse(req, res, err, "memory_feedback");
+    }
+  });
+
   router.delete("/memories/:id", requireScope("write"), async (req, res) => {
     try {
       const result = await deleteMemoryWithRagSync(req.params.id);
@@ -364,7 +438,7 @@ export function register(app) {
     }
   });
 
-  router.post("/obsidian/sync", requireScope("write"), async (_req, res) => {
+  router.post("/obsidian/sync", requireScope("write"), async (req, res) => {
     try {
       if (!isExportEnabled()) {
         return res.status(400).json({
@@ -583,7 +657,7 @@ export const tools = [
   // ── brain_remember ─────────────────────────────────────────────────────────
   {
     name: "brain_remember",
-    description: "Persist a fact, decision, preference, or event to long-term memory. Automatically deduplicates: if a very similar memory already exists, it updates the existing one instead of creating a duplicate.",
+    description: "Persist a fact, decision, preference, event, or project note to long-term memory. Server auto-classifies type, tags, and importance. Automatically deduplicates similar entries.",
     tags: [ToolTags.WRITE],
     inputSchema: {
       type: "object",
@@ -599,18 +673,68 @@ export const tools = [
       },
       required: ["content"],
     },
-    handler: async (args) => {
+    handler: async (args, context = {}) => {
       try {
-        // fix-4: Deduplication check
-        const duplicate = await findDuplicate(args.content, args.type || "fact");
-        if (duplicate) {
-          const updated = await updateMemory(duplicate.id, {
-            importance: Math.max(duplicate.importance, args.importance ?? 0.5),
-          });
-          return { ok: true, data: { id: updated.id, saved: true, deduplicated: true, type: updated.type } };
+        const writePolicy = evaluateMemoryWrite(args.content, {
+          explicitSave: detectBrainIntent(args.content || "").save,
+          source: args.source || "agent",
+        });
+
+        if (!writePolicy.shouldRemember && !writePolicy.requiresApproval) {
+          return {
+            ok: false,
+            error: {
+              code: writePolicy.sensitiveRisk ? "memory_write_blocked_sensitive" : "memory_write_policy_rejected",
+              message: writePolicy.reason,
+              policy: writePolicy,
+            },
+          };
         }
 
-        const mem = await addMemory({
+        if (writePolicy.requiresApproval && !context.approvalId) {
+          const { getApprovalStore } = await import("../../core/policy-hooks.js");
+          const approvalStore = getApprovalStore();
+          if (approvalStore?.createApproval) {
+            const approval = approvalStore.createApproval({
+              ruleId: "memory_write_policy",
+              path: "/tools/brain_remember",
+              method: context.method || "POST",
+              body: args,
+              requestedBy: context.user || "agent",
+              toolName: "brain_remember",
+              explanation: args.explanation || "Bellek kaydı (hassas içerik onayı)",
+              runId: context.runId || null,
+              riskLevel: "write",
+            });
+            return {
+              ok: false,
+              status: "approval_required",
+              tool: "brain_remember",
+              memoryWrite: true,
+              explanation: args.explanation || "Memory write requires approval",
+              parameters: args,
+              approval: {
+                id: approval.id,
+                status: "pending",
+                createdAt: approval.createdAt,
+              },
+              message: `Memory write requires approval. Use POST /approve with id '${approval.id}'.`,
+            };
+          }
+        }
+
+        if (!writePolicy.shouldRemember) {
+          return {
+            ok: false,
+            error: {
+              code: "memory_write_blocked_sensitive",
+              message: writePolicy.reason,
+              policy: writePolicy,
+            },
+          };
+        }
+
+        const enriched = await enrichMemoryFields({
           content:    args.content,
           type:       args.type       || "fact",
           tags:       args.tags       || [],
@@ -618,6 +742,25 @@ export const tools = [
           importance: args.importance ?? 0.5,
           confidence: args.confidence ?? 1.0,
           source:     args.source     || "agent",
+        });
+
+        // fix-4: Deduplication check
+        const duplicate = await findDuplicate(enriched.content, enriched.type);
+        if (duplicate) {
+          const updated = await updateMemory(duplicate.id, {
+            importance: Math.max(duplicate.importance, enriched.importance ?? 0.5),
+          });
+          return { ok: true, data: { id: updated.id, saved: true, deduplicated: true, type: updated.type } };
+        }
+
+        const mem = await addMemory({
+          content:    enriched.content,
+          type:       enriched.type,
+          tags:       enriched.tags,
+          projectId:  enriched.projectId,
+          importance: enriched.importance,
+          confidence: enriched.confidence,
+          source:     enriched.source,
         });
 
         // fix-1 prerequisite: index in RAG for semantic recall

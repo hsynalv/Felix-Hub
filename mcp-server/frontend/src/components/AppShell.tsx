@@ -5,6 +5,8 @@ import {
   BarChart3,
   Bot,
   Brain,
+  BrainCircuit,
+  FolderKanban,
   GitBranch,
   Home,
   LayoutGrid,
@@ -34,6 +36,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { apiGet, type HealthData, type WhoamiData } from "@/lib/api-client";
+import { fetchIntentTrainingStatus } from "@/lib/intent-training-api";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -42,6 +45,7 @@ const nav = [
   { to: "/", label: "Panel", icon: Home },
   { to: "/chat", label: "Sohbet", icon: Bot },
   { to: "/runs", label: "Runs", icon: GitBranch },
+  { to: "/projects", label: "Projeler", icon: FolderKanban },
   { to: "/approvals", label: "Onaylar", icon: ShieldCheck },
   { to: "/usage", label: "Kullanım", icon: BarChart3 },
   { to: "/brain", label: "Brain", icon: Brain },
@@ -50,6 +54,7 @@ const nav = [
   { to: "/audit", label: "Audit", icon: Shield },
   { to: "/admin", label: "Admin", icon: ShieldCheck },
   { to: "/observability", label: "Observability", icon: Activity },
+  { to: "/intent-training", label: "Intent Eğitimi", icon: BrainCircuit },
   { to: "/settings", label: "Ayarlar", icon: Settings },
 ];
 
@@ -57,6 +62,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/": "Kontrol Paneli",
   "/chat": "Sohbet",
   "/runs": "Agent Runs",
+  "/projects": "Projeler",
   "/approvals": "Onay Merkezi",
   "/usage": "Kullanım",
   "/brain": "Brain",
@@ -65,6 +71,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/audit": "Audit",
   "/admin": "Admin",
   "/observability": "Observability",
+  "/intent-training": "Intent Eğitimi",
   "/settings": "Ayarlar",
 };
 
@@ -128,7 +135,16 @@ export function AppShell() {
     retry: 1,
   });
 
-  const authDisabled = health?.auth === "disabled";
+  const { data: intentStatus } = useQuery({
+    queryKey: ["intent-status-nav"],
+    queryFn: fetchIntentTrainingStatus,
+    enabled: authReady && (whoami?.auth?.scopes?.includes("admin") ?? false),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    retry: false,
+  });
+
+  const disagreementCount = intentStatus?.counts?.disagreement ?? 0;
   const connected =
     !authError &&
     (authDisabled ? health?.status === "ok" : (whoami?.auth?.scopes?.length ?? 0) > 0);
@@ -156,7 +172,12 @@ export function AppShell() {
           }
         >
           <Icon className="h-4 w-4 shrink-0" />
-          {label}
+          <span className="flex-1">{label}</span>
+          {to === "/intent-training" && disagreementCount > 0 && (
+            <Badge variant="warning" className="h-5 min-w-5 justify-center px-1 text-[10px]">
+              {disagreementCount}
+            </Badge>
+          )}
         </NavLink>
       ))}
     </nav>

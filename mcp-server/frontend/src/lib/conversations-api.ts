@@ -26,9 +26,11 @@ export interface ConversationDetail extends ConversationSummary {
   metadata?: Record<string, unknown> | null;
 }
 
-export async function listConversations(limit = 50) {
+export type ConversationProjectScope = "all" | "current" | "unassigned";
+
+export async function listConversations(limit = 50, scope: ConversationProjectScope = "all") {
   const data = await apiGet<{ conversations: ConversationSummary[] }>(
-    `/ui/chat/conversations?limit=${limit}`
+    `/ui/chat/conversations?limit=${limit}&scope=${scope}`
   );
   return data.conversations ?? [];
 }
@@ -37,7 +39,11 @@ export async function getConversation(id: string) {
   return apiGet<ConversationDetail>(`/ui/chat/conversations/${encodeURIComponent(id)}`);
 }
 
-export async function createConversation(opts?: { title?: string; model?: string }) {
+export async function createConversation(opts?: {
+  title?: string;
+  model?: string;
+  projectId?: string | null;
+}) {
   return apiPost<ConversationDetail>("/ui/chat/conversations", opts ?? {});
 }
 

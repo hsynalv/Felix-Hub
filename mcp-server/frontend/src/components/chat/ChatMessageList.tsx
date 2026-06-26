@@ -21,6 +21,7 @@ type ChatMessageListProps = {
   streamingMessageId?: string | null;
   loading?: boolean;
   hasConversation?: boolean;
+  runId?: string | null;
   onExample: (text: string) => void;
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 };
@@ -55,6 +56,7 @@ export function ChatMessageList({
   streamingMessageId,
   loading = false,
   hasConversation = false,
+  runId = null,
   onExample,
   scrollRef,
 }: ChatMessageListProps) {
@@ -229,6 +231,7 @@ export function ChatMessageList({
                       assistant={item.assistant}
                       tools={item.tools}
                       isStreaming={streaming && item.assistant.id === streamingMessageId}
+                      runId={runId}
                     />
                   );
                 })}

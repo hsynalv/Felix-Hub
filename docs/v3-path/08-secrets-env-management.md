@@ -15,14 +15,14 @@ Settings UI'ı tam **integration setup center** yapmak: her plugin için require
 
 ## Mevcut durum
 
-| Var | Eksik |
-|-----|-------|
+| Var | Eksik (v3.7+) |
+|-----|---------------|
 | `settings/` modülü — bundle, crypto, routes | Per-project override |
-| `SettingsPage` — plugin env formları | Wizard akışı |
-| `plugin-env-catalog.js` | Stale detection |
-| `plugin.meta.json` envVars | Çoğu boş — doldurulacak |
-| `crypto.js` — encrypt at rest | Rotation workflow UI |
-| MSSQL persistence | Secret audit log |
+| `SettingsPage` — plugin env formları + test butonu | Full wizard akışı |
+| `plugin-env-catalog.js` + `sync-plugin-meta-env.js` | Stale detection cron |
+| `plugin.meta.json` envVars (catalog eşlemesi) | Tüm plugin'lerde özel health logic |
+| `POST /settings/test/:plugin` — gerçek health probe | Rotation reminder badge |
+| `settings_audit` + UI (v3.6) | Masked reveal (tek seferlik) |
 
 **İlgili:** `mcp-server/src/core/settings/`, `mcp-server/frontend/src/pages/SettingsPage.tsx`
 
@@ -126,24 +126,24 @@ effective_config(project_id) =
 
 ### Faz A — Meta + catalog tamamlama (1 hafta)
 
-- [ ] 35 plugin `envVars` doldur (`sync-plugin-meta-env.js`)
-- [ ] Settings UI required/optional ayrımı
-- [ ] Incomplete env → plugin enable uyarısı
+- [x] 35 plugin `envVars` — catalog eşlemesi (`sync-plugin-meta-env.js`; katalog dışı plugin'ler bilinçli boş)
+- [x] Settings UI required/optional ayrımı
+- [x] Incomplete env → plugin enable uyarısı
 
 ### Faz B — Test + verify (1 hafta)
 
-- [ ] Standard health test endpoint
-- [ ] `last_verified_at` persistence
-- [ ] Settings'te "Test connection" butonu
+- [x] Standard health test endpoint (`mountPluginHealth` + manifest path probe)
+- [x] `last_verified_at` persistence
+- [x] Settings'te "Test connection" butonu (`PluginEnvPanel` + Plugins wizard)
 
 ### Faz C — Audit + masked reveal (1 hafta)
 
-- [ ] `settings_audit` tablosu
+- [x] `settings_audit` tablosu
 - [ ] Admin reveal (tek seferlik, loglanır)
 
 ### Faz D — Rotation + stale (1 hafta)
 
-- [ ] Rotation service UI
+- [x] Rotation service UI (master key)
 - [ ] Stale badge + cron check
 
 ### Faz E — Project override (1 hafta)
@@ -155,9 +155,9 @@ effective_config(project_id) =
 
 ## Exit criteria
 
-- [ ] Yeni kurulumda `.env` sadece bootstrap (MSSQL + crypto key)
-- [ ] Tüm kritik plugin'ler connection test ile doğrulanabilir
-- [ ] Secret değişikliği audit'te görünür (value yok)
-- [ ] Marketplace wizard (Pillar 05) env adımlarını bu modülden beslenir
+- [x] Yeni kurulumda `.env` sadece bootstrap (MSSQL + crypto key)
+- [x] Tüm kritik plugin'ler connection test ile doğrulanabilir
+- [x] Secret değişikliği audit'te görünür (value yok)
+- [x] Marketplace wizard (Pillar 05) env adımlarını bu modülden beslenir
 
 **Sonraki:** [05-connector-marketplace.md](./05-connector-marketplace.md)

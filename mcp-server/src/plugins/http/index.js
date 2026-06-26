@@ -316,7 +316,7 @@ export const tools = [
   // ── http_request ─────────────────────────────────────────────────────────
   {
     name: "http_request",
-    description: "Make a controlled outbound HTTP request. Enforces SSRF protection, domain allowlist, rate limits. Supports {{secret:NAME}} refs in headers/body so secrets are never exposed.",
+    description: "Make a controlled outbound HTTP request for generic allowlisted APIs only. Do NOT use for GitHub, Notion, Tavily, n8n, Slack, Figma, or OpenAI — use their dedicated hub tools instead. Never invent API paths; blocked paths return 404 or guard rejection.",
     tags: [ToolTags.WRITE, ToolTags.NETWORK, ToolTags.EXTERNAL_API],
     inputSchema: {
       type: "object",
@@ -375,7 +375,11 @@ export const tools = [
         await httpAudit({ operation: "mcp_request", actor, correlationId, durationMs, success: result.ok, method, url, statusCode: result.status });
 
         if (!result.ok) {
-          return { ok: false, error: { code: "request_failed", message: result.error, status: result.status } };
+          const message =
+            result.message ||
+            result.statusText ||
+            (result.status ? `HTTP ${result.status}` : "Request failed");
+          return { ok: false, error: { code: "request_failed", message, status: result.status } };
         }
 
         if (args.cache && method === "GET" && result.status < 400) {

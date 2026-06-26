@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   Brain,
+  Check,
   Download,
   FileJson,
   Layers,
@@ -18,6 +19,7 @@ import {
   Search,
   Sparkles,
   Tags,
+  ThumbsDown,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -44,6 +46,7 @@ import {
   fetchObsidianStatus,
   fetchProjects,
   recallMemories,
+  submitMemoryFeedback,
   syncObsidian,
   pullObsidian,
   downloadObsidianCanvas,
@@ -110,6 +113,7 @@ function MemoryDetailContent({
   onDelete,
   deletePending,
   onSelectRelated,
+  onFeedbackDone,
 }: {
   selected: BrainMemory;
   editing: boolean;
@@ -123,7 +127,24 @@ function MemoryDetailContent({
   onDelete: () => void;
   deletePending: boolean;
   onSelectRelated: (id: string) => void;
+  onFeedbackDone?: () => void;
 }) {
+  const toast = useToast();
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+
+  const runFeedback = async (action: "confirm" | "reject" | "forget") => {
+    setFeedbackBusy(true);
+    try {
+      await submitMemoryFeedback(selected.id, { action });
+      toast.show(action === "forget" ? "Bellek unutuldu" : "Geri bildirim kaydedildi");
+      onFeedbackDone?.();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "Geri bildirim hatası", "error");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4 p-4">
       <div className="flex flex-wrap gap-1.5">
@@ -166,6 +187,21 @@ function MemoryDetailContent({
       )}
 
       <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
+        {!editing && (
+          <>
+            <Button size="sm" variant="outline" disabled={feedbackBusy} onClick={() => runFeedback("confirm")}>
+              <Check className="mr-1.5 h-3.5 w-3.5" />
+              Doğru
+            </Button>
+            <Button size="sm" variant="outline" disabled={feedbackBusy} onClick={() => runFeedback("reject")}>
+              <ThumbsDown className="mr-1.5 h-3.5 w-3.5" />
+              Yanlış
+            </Button>
+            <Button size="sm" variant="outline" disabled={feedbackBusy} onClick={() => runFeedback("forget")}>
+              Unut
+            </Button>
+          </>
+        )}
         {editing ? (
           <>
             <Button size="sm" onClick={onSave} disabled={savePending}>
@@ -233,6 +269,7 @@ export function BrainPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [newContent, setNewContent] = useState("");
   const [newType, setNewType] = useState<MemoryType>("fact");
+  const [typeManuallySelected, setTypeManuallySelected] = useState(false);
   const [view, setView] = useState<"list" | "graph">("list");
 
   const toast = useToast();
@@ -342,12 +379,16 @@ export function BrainPage() {
         type: newType,
         tags: tagFilter ? [tagFilter] : [],
         projectId: projectFilter || null,
+        skipClassification: typeManuallySelected,
+        autoClassify: !typeManuallySelected,
       }),
     onSuccess: (mem) => {
       qc.invalidateQueries({ queryKey: ["brain-memories"] });
       qc.invalidateQueries({ queryKey: ["brain-stats"] });
       setNewOpen(false);
       setNewContent("");
+      setNewType("fact");
+      setTypeManuallySelected(false);
       setSelectedId(mem.id);
       toast.show("Bellek oluşturuldu");
     },
@@ -424,6 +465,10 @@ export function BrainPage() {
         onDelete: () => deleteMutation.mutate(),
         deletePending: deleteMutation.isPending,
         onSelectRelated: selectMemory,
+        onFeedbackDone: () => {
+          void qc.invalidateQueries({ queryKey: ["brain-memories"] });
+          void qc.invalidateQueries({ queryKey: ["brain-stats"] });
+        },
       }
     : null;
 
@@ -816,7 +861,16 @@ export function BrainPage() {
         </>
       )}
 
-      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+      <Dialog
+        open={newOpen}
+        onOpenChange={(open) => {
+          setNewOpen(open);
+          if (open) {
+            setNewType("fact");
+            setTypeManuallySelected(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Yeni bellek</DialogTitle>
@@ -831,7 +885,10 @@ export function BrainPage() {
                     label={MEMORY_TYPE_LABELS[type]}
                     active={newType === type}
                     dotColor={MEMORY_TYPE_COLORS[type]}
-                    onClick={() => setNewType(type)}
+                    onClick={() => {
+                      setNewType(type);
+                      setTypeManuallySelected(true);
+                    }}
                   />
                 ))}
               </div>

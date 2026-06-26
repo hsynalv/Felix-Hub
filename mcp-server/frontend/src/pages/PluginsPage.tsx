@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Plug, Settings2, Zap } from "lucide-react";
+import { Cable, Plug, Settings2, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,8 @@ import {
 } from "@/lib/marketplace-api";
 import { useToast } from "@/providers/ToastProvider";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { McpConnectorsPanel } from "@/components/mcp/McpConnectorsPanel";
 
 function maturityTone(status?: string) {
   switch (status) {
@@ -180,6 +182,7 @@ function SetupWizardDialog({
 }
 
 export function PluginsPage() {
+  const [tab, setTab] = useState("builtin");
   const [search, setSearch] = useState("");
   const [setupPlugin, setSetupPlugin] = useState<MarketplacePlugin | null>(null);
   const [dangerousPlugin, setDangerousPlugin] = useState<MarketplacePlugin | null>(null);
@@ -236,45 +239,66 @@ export function PluginsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
       <PageHeader
         title="Plugins"
-        description={`${plugins.length} plugin — enable/disable ve bağlantı testi`}
+        description="Yerleşik eklentiler ve dış MCP bağlantıları"
         actions={
-          <Input
-            placeholder="Plugin ara…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
-          />
+          tab === "builtin" ? (
+            <Input
+              placeholder="Plugin ara…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-xs"
+            />
+          ) : null
         }
       />
 
-      {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p, i) => (
-            <motion.div
-              key={p.name}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i * 0.02, 0.4) }}
-            >
-              <PluginCard
-                plugin={p}
-                toggling={togglingName === p.name}
-                onSetup={() => setSetupPlugin(p)}
-                onToggle={(enabled) => handleToggle(p, enabled)}
-              />
-            </motion.div>
-          ))}
-        </div>
-      )}
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="builtin" className="gap-1.5">
+            <Plug className="h-3.5 w-3.5" />
+            Yerleşik eklentiler
+          </TabsTrigger>
+          <TabsTrigger value="external" className="gap-1.5">
+            <Cable className="h-3.5 w-3.5" />
+            Dış MCP
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="builtin" className="mt-4 space-y-4">
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-40 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {filtered.map((p, i) => (
+                <motion.div
+                  key={p.name}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.02, 0.4) }}
+                >
+                  <PluginCard
+                    plugin={p}
+                    toggling={togglingName === p.name}
+                    onSetup={() => setSetupPlugin(p)}
+                    onToggle={(enabled) => handleToggle(p, enabled)}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="external" className="mt-4">
+          <McpConnectorsPanel />
+        </TabsContent>
+      </Tabs>
 
       <SetupWizardDialog
         plugin={setupPlugin}

@@ -1,0 +1,13 @@
+{
+  "utterances": [
+    { "utterance": "bunu kaydet", "intent": "brain_save" },
+    { "utterance": "git status ne", "intent": "read_repo" },
+    { "utterance": "merhaba", "intent": "no_tool" },
+    { "utterance": "gigi projesinde alacağımız tutarın tl karşılığı ne kanka", "intent": "project_context" },
+    { "utterance": "n8n workflow oluştur", "intent": "automation" },
+    { "utterance": "bugün dolar kuru ne", "intent": "external_api" },
+    { "utterance": "testleri çalıştır", "intent": "run_command" },
+    { "utterance": "bu dosyayı düzenle", "intent": "modify_files" },
+    { "utterance": "what do you know about billing", "intent": "brain_recall" }
+  ]
+}

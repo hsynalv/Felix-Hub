@@ -7,6 +7,14 @@ export interface ChatMessage {
   content: string;
   toolName?: string;
   toolPhase?: "start" | "end";
+  toolArguments?: Record<string, unknown>;
+  toolSummary?: {
+    ok?: boolean;
+    summary?: string;
+    keyFacts?: string[];
+    truncated?: boolean;
+    rawRef?: { runId?: string; toolName?: string };
+  };
   usage?: {
     promptTokens?: number;
     completionTokens?: number;
@@ -21,12 +29,32 @@ export interface ApprovalPayload {
   tool: string;
   arguments: Record<string, unknown>;
   message?: string;
+  memoryWrite?: boolean;
+}
+
+export interface ChatStreamMeta {
+  provider?: string;
+  model?: string;
+  toolIntent?: string;
+  contextStrategy?: string[];
+  chatProfile?: string;
+  brainContext?: boolean;
+  projectContext?: boolean;
+  toolCount?: number;
+  conversationId?: string;
+  runId?: string;
 }
 
 export interface ChatStreamCallbacks {
-  onMeta?: (data: Record<string, unknown>) => void;
+  onMeta?: (data: ChatStreamMeta) => void;
   onToken?: (text: string) => void;
-  onTool?: (data: { phase: string; name: string; arguments?: Record<string, unknown>; result?: unknown }) => void;
+  onTool?: (data: {
+    phase: string;
+    name: string;
+    arguments?: Record<string, unknown>;
+    result?: unknown;
+    summary?: ChatMessage["toolSummary"];
+  }) => void;
   onRunStep?: (data: Record<string, unknown>) => void;
   onApproval?: (payload: ApprovalPayload) => void | Promise<void>;
   onDone?: (data: Record<string, unknown>) => void;
@@ -114,7 +142,7 @@ export async function streamChat(
 
       switch (event) {
         case "meta":
-          callbacks.onMeta?.(payload);
+          callbacks.onMeta?.(payload as ChatStreamMeta);
           break;
         case "token":
           if (typeof payload.text === "string") callbacks.onToken?.(payload.text);

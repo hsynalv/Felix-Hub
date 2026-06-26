@@ -17,6 +17,7 @@ import {
   getProjectImpact,
 } from "../../core/project-context/project-context.service.js";
 import { syncProjectIndex } from "../../core/project-context/project-indexer.js";
+import { syncProjectToBrainStore } from "../../core/project-context/project-brain-sync.js";
 import { submitJob } from "../../core/jobs.js";
 import { PROJECT_INDEX_JOB_TYPE } from "../../core/project-context/project-index-job.js";
 
@@ -64,6 +65,13 @@ const envConfigSchema = z.object({
 
 const linksSchema = z.object({
   githubRepo: z.string().optional(),
+  backendRepo: z.string().optional(),
+  frontendRepo: z.string().optional(),
+  mobileRepo: z.string().optional(),
+  websiteUrl: z.string().optional(),
+  backendUrl: z.string().optional(),
+  frontendUrl: z.string().optional(),
+  mobileUrl: z.string().optional(),
   notionProjectId: z.string().optional(),
   obsidianVaultPath: z.string().optional(),
   defaultBranch: z.string().optional(),
@@ -144,6 +152,7 @@ export function register(app) {
 
     try {
       const project = createProject(data.key, data.name);
+      void syncProjectToBrainStore({ key: data.key, name: data.name });
       res.status(201).json({ ok: true, project: { key: data.key, ...project } });
     } catch (err) {
       res.status(409).json({ ok: false, error: "already_exists", message: err.message });

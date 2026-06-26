@@ -13,6 +13,10 @@ import {
   getOpenAiClient,
   MAX_TOOL_ITERATIONS,
   APPROVAL_TIMEOUT_MS,
+  checkBrainToolCap,
+  createBrainToolCounts,
+  recordBrainToolCall,
+  BRAIN_TOOL_CAPS,
 } from "../../src/core/chat-orchestrator.js";
 
 describe("chat-orchestrator", () => {
@@ -114,6 +118,37 @@ describe("chat-orchestrator", () => {
   describe("isWriteToolName", () => {
     it("returns false for unknown tool names", () => {
       expect(isWriteToolName("__nonexistent_tool_xyz__")).toBe(false);
+    });
+  });
+
+  describe("brain tool caps", () => {
+    it("exports per-tool limits", () => {
+      expect(BRAIN_TOOL_CAPS.brain_remember).toBe(1);
+      expect(BRAIN_TOOL_CAPS.brain_recall).toBe(1);
+    });
+
+    it("blocks second brain_remember in same turn", () => {
+      const counts = createBrainToolCounts();
+      recordBrainToolCall("brain_remember", counts);
+      const check = checkBrainToolCap("brain_remember", counts);
+      expect(check.blocked).toBe(true);
+      expect(check.message).toContain("brain_remember");
+    });
+
+    it("blocks recall family after one recall tool", () => {
+      const counts = createBrainToolCounts();
+      recordBrainToolCall("brain_recall", counts);
+      expect(checkBrainToolCap("brain_what_do_you_know_about", counts).blocked).toBe(true);
+      expect(checkBrainToolCap("brain_get_context", counts).blocked).toBe(true);
+    });
+
+    it("allows first recall tool", () => {
+      const counts = createBrainToolCounts();
+      expect(checkBrainToolCap("brain_recall", counts).blocked).toBe(false);
+    });
+
+    it("does not cap unrelated tools", () => {
+      expect(checkBrainToolCap("git_status", {}).blocked).toBe(false);
     });
   });
 });

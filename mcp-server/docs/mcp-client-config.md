@@ -9,7 +9,7 @@
   "mcpServers": {
     "mcp-hub": {
       "command": "node",
-      "args": ["/path/to/mcp-server/src/mcp/stdio-bridge.js"],
+      "args": ["/path/to/mcp-server/bin/mcp-hub-stdio.js"],
       "env": {
         "MCP_SERVER_URL": "http://localhost:8787"
       }
@@ -23,7 +23,7 @@
 Cursor Settings → Tools → Add New Tool:
 
 - **Name**: mcp-hub
-- **Command**: `node /path/to/mcp-server/src/mcp/stdio-bridge.js`
+- **Command**: `node /path/to/mcp-server/bin/mcp-hub-stdio.js`
 - **Env**: `MCP_SERVER_URL=http://localhost:8787`
 
 ## Custom LLM
@@ -45,7 +45,7 @@ curl -X POST http://localhost:8787/mcp \
 Stdio transport için:
 
 ```bash
-node src/mcp/stdio-bridge.js
+node bin/mcp-hub-stdio.js
 ```
 
 Environment variables:

@@ -14,13 +14,14 @@ import {
   buildToolCatalogSummary,
   chatWithOpenAi,
   chatWithOllama,
+  createBrainToolCounts,
   resolveChatApproval,
   getApprovalWaiter,
   selectChatTools,
   getChatProvider,
   assertChatQuota,
 } from "./chat-orchestrator.js";
-import { buildCompactContext } from "../plugins/brain/brain.context.js";
+import { getChatContext } from "./chat/chat-context.js";
 import { isPersistenceHealthy } from "./persistence/index.js";
 import {
   listConversations,
@@ -37,6 +38,9 @@ import {
   resolveIncludeBrainContext,
 } from "./chat/chat-instructions.js";
 import { ensureRunForChat, completeRun } from "./agent-runs/run-orchestrator.js";
+import { CHAT_HISTORY_RAW_LIMIT } from "./chat/chat-config.js";
+import { maybeCompressConversation } from "./chat/conversation-compression.js";
+import { resolveChatProfile } from "./chat/chat-profiles.js";
 
 const DEFAULT_TASK = "general";
 
@@ -75,7 +79,20 @@ export function registerUiChatRoutes(app) {
       res.setHeader("Cache-Control", "no-store");
       const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
       const offset = parseInt(req.query.offset, 10) || 0;
-      const projectId = req.query.projectId || req.projectId || null;
+      const scope = String(req.query.scope || "all");
+      let projectId;
+      if (scope === "unassigned") {
+        projectId = null;
+      } else if (scope === "current") {
+        projectId = req.projectId || undefined;
+        if (!projectId) {
+          return res.json({ ok: true, data: { conversations: [] } });
+        }
+      } else if (scope === "project" && req.query.projectId) {
+        projectId = String(req.query.projectId);
+      } else {
+        projectId = undefined;
+      }
       const conversations = await listConversations({ projectId, limit, offset });
       res.json({ ok: true, data: { conversations } });
     } catch (err) {
@@ -87,11 +104,13 @@ export function registerUiChatRoutes(app) {
   app.post("/ui/chat/conversations", requireScope("write"), async (req, res) => {
     if (!isPersistenceHealthy()) return persistenceError(res);
     try {
-      const { title, model, projectId, metadata } = req.body ?? {};
+      const { title, model, projectId: bodyProjectId, metadata } = req.body ?? {};
+      const hasExplicitProject = req.body != null && Object.prototype.hasOwnProperty.call(req.body, "projectId");
+      const projectId = hasExplicitProject ? bodyProjectId ?? null : req.projectId || null;
       const conversation = await createConversation({
         title: title || "Yeni sohbet",
         model: model || null,
-        projectId: projectId || req.projectId || null,
+        projectId,
         metadata: metadata || null,
       });
       res.status(201).json({ ok: true, data: conversation });
@@ -201,6 +220,7 @@ export function registerUiChatRoutes(app) {
     }
 
     const context = {
+      guardBlocks: [],
       method: "UI_CHAT",
       user: req.actor?.type || "ui",
       scopes: req.authScopes || [],
@@ -210,22 +230,29 @@ export function registerUiChatRoutes(app) {
       source: "chat_ui",
       channel: "web",
       conversationId: conversationId || null,
+      brainToolCounts: createBrainToolCounts(),
+      readToolsUsed: false,
     };
 
     let activeConversationId = conversationId || null;
     let chatHistory = history.filter((m) => m?.role && m?.content);
     let conversationMetadata = {};
+    let historySummaryBlock = "";
 
     if (isPersistenceHealthy()) {
       try {
         if (activeConversationId) {
+          void maybeCompressConversation(activeConversationId).catch(() => {});
           const conv = await getConversation(activeConversationId);
           if (conv) {
             conversationMetadata = normalizeConversationMetadata(conv.metadata);
           }
-          const loaded = await getConversationHistoryForChat(activeConversationId, { limit: 20 });
+          const loaded = await getConversationHistoryForChat(activeConversationId, {
+            limit: CHAT_HISTORY_RAW_LIMIT,
+          });
           if (loaded) {
             chatHistory = loaded.history;
+            historySummaryBlock = loaded.summaryBlock || "";
           }
         } else if (autoCreate) {
           const created = await createConversation({
@@ -267,24 +294,33 @@ export function registerUiChatRoutes(app) {
       responseStyle
     );
 
-    let brainBlock = "";
-    if (includeBrainContext) {
-      try {
-        brainBlock = await buildCompactContext({ task: message, projectId: context.projectId });
-      } catch {
-        brainBlock = "";
-      }
-    }
+    const chatProfile = resolveChatProfile(conversationMetadata.chatProfile).id;
+
+    const chatCtx = await getChatContext({
+      message,
+      projectId: context.projectId,
+      conversationId: activeConversationId,
+      includeBrainContext,
+      hasConversationHistory: chatHistory.length > 0,
+      chatProfile,
+      historySummaryBlock,
+    });
+    context.intent = chatCtx.toolIntent;
 
     const scopedPlugin =
       typeof pluginFilter === "string" && pluginFilter.trim() ? pluginFilter.trim().toLowerCase() : null;
 
-    const toolSelectOpts = { allowWriteTools, pluginFilter: scopedPlugin };
+    const toolSelectOpts = {
+      allowWriteTools,
+      pluginFilter: scopedPlugin,
+      toolIntent: scopedPlugin ? null : chatCtx.toolIntent,
+      chatProfile,
+    };
     const scopedToolDefs = selectChatTools(listTools(), toolSelectOpts);
     const toolCatalog = scopedPlugin ? "" : buildToolCatalogSummary(scopedToolDefs);
 
     const systemContent = buildSystemPrompt(
-      [instructionsBlock, brainBlock].filter(Boolean).join("\n\n"),
+      [instructionsBlock, chatCtx.contextHints].filter(Boolean).join("\n\n"),
       {
         toolCatalog,
         pluginFilter: scopedPlugin,
@@ -294,7 +330,7 @@ export function registerUiChatRoutes(app) {
 
     const messages = [
       { role: "system", content: systemContent },
-      ...chatHistory.slice(-20),
+      ...chatHistory.slice(-CHAT_HISTORY_RAW_LIMIT),
       { role: "user", content: message },
     ];
 
@@ -331,7 +367,13 @@ export function registerUiChatRoutes(app) {
       model: model || getDefaultModel(),
       task,
       toolCount: tools.length,
-      brainContext: !!brainBlock,
+      brainContext: chatCtx.meta.brainContextInjected,
+      projectContext: chatCtx.meta.projectContextInjected,
+      contextStrategy: chatCtx.meta.contextStrategy,
+      toolIntent: chatCtx.meta.toolIntent,
+      toolIntentSource: chatCtx.meta.toolIntentSource,
+      modelVersion: chatCtx.meta.modelVersion,
+      chatProfile: chatCtx.meta.chatProfile,
       pluginFilter: scopedPlugin,
       conversationId: activeConversationId,
       runId: context.runId,
@@ -345,9 +387,18 @@ export function registerUiChatRoutes(app) {
         onDelta: (text) => sseWrite(res, "token", { text }),
         onToolCall: (payload) => {
           if (payload.phase === "end" && payload.name) {
+            const summaryText =
+              payload.summary?.summary ||
+              (typeof payload.result === "string"
+                ? payload.result
+                : JSON.stringify(payload.result ?? {}));
             toolMessages.push({
-              content: typeof payload.result === "string" ? payload.result : JSON.stringify(payload.result ?? {}),
-              metadata: { toolName: payload.name, toolPhase: "end" },
+              content: summaryText.slice(0, 2000),
+              metadata: {
+                toolName: payload.name,
+                toolPhase: "end",
+                toolSummary: payload.summary || null,
+              },
             });
           }
           sseWrite(res, "tool", payload);
@@ -410,6 +461,30 @@ export function registerUiChatRoutes(app) {
           console.warn("[ui-chat] run complete failed:", err.message);
         }
       }
+
+      try {
+        const { getIntentTrainConfig } = await import("./chat/tool-intent-config.js");
+        const { recordIntentSample } = await import("./chat/tool-intent-samples.service.js");
+        if (getIntentTrainConfig().collectEnabled) {
+          void recordIntentSample({
+            userMessage: message,
+            predictedIntent: chatCtx.toolClassification.intent,
+            predictedConfidence: chatCtx.toolClassification.confidence,
+            predictionSource: chatCtx.toolClassification.source || "regex",
+            effectiveIntent: chatCtx.toolIntent,
+            toolsUsed: toolMessages.map((t) => t.metadata?.toolName).filter(Boolean),
+            guardBlocks: context.guardBlocks || [],
+            projectId: context.projectId,
+            conversationId: activeConversationId,
+            runId: context.runId,
+            chatProfile: chatCtx.meta.chatProfile,
+            modelVersion: chatCtx.toolClassification.modelVersion,
+          });
+        }
+      } catch (err) {
+        console.warn("[ui-chat] intent sample log failed:", err.message);
+      }
+
       res.end();
     } catch (err) {
       if (context.runId) {

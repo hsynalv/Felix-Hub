@@ -127,6 +127,7 @@ export function getLlmConfigSnapshot() {
 
   return {
     mode,
+    globalInstructions: (getEnvValue("CHAT_GLOBAL_INSTRUCTIONS") || "").trim(),
     unified: {
       configured: !!getUnifiedApiKey(),
       maskedKey: getUnifiedApiKey() ? maskSecret(getUnifiedApiKey()) : null,

@@ -31,6 +31,7 @@ import { listTemplates, applyTemplate } from "./templates.js";
 import { computeSettingsDiff } from "./diff.service.js";
 import { validateKeys, validateSingleKey } from "./validate.service.js";
 import { listEnvCatalogEnriched } from "../plugin-env-catalog.js";
+import { listConnectors } from "../mcp-connectors/connector.service.js";
 import { getPlugins } from "../plugins.js";
 import { getLlmConfigSnapshot } from "../llm-config.js";
 import { saveLlmConfig } from "./llm-config.service.js";
@@ -157,8 +158,9 @@ export function registerSettingsRoutes(app) {
     res.json({ ok: true, data: { templates: listTemplates() } });
   });
 
-  router.get("/env-catalog", requireScope("admin"), (_req, res) => {
-    const enriched = listEnvCatalogEnriched(getPlugins());
+  router.get("/env-catalog", requireScope("admin"), async (_req, res) => {
+    const connectors = await listConnectors();
+    const enriched = listEnvCatalogEnriched(getPlugins(), connectors);
     res.json({
       ok: true,
       data: {
@@ -254,6 +256,7 @@ export function registerSettingsRoutes(app) {
       .enum(["auto", "openai", "anthropic", "google", "mistral", "vllm", "ollama"])
       .optional(),
     routerModel: z.string().max(256).optional(),
+    globalInstructions: z.string().max(4_000).optional(),
     providerKeys: z
       .object({
         openai: z.string().max(16_000).optional(),

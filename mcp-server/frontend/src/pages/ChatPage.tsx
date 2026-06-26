@@ -42,6 +42,7 @@ import {
   submitChatApproval,
   type ApprovalPayload,
   type ChatMessage,
+  type ChatStreamMeta,
 } from "@/lib/chat-stream";
 import { useToast } from "@/providers/ToastProvider";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
@@ -87,6 +88,7 @@ export function ChatPage() {
     ...DEFAULT_CONVERSATION_SETTINGS,
   });
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
+  const [turnMeta, setTurnMeta] = useState<ChatStreamMeta | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(() => searchParams.get("run"));
   const [traceOpen, setTraceOpen] = useState(true);
   const [isDesktopTrace, setIsDesktopTrace] = useState(
@@ -376,6 +378,7 @@ export function ChatPage() {
 
     setInput("");
     setStreaming(true);
+    setTurnMeta(null);
     holdLocalMessagesRef.current = true;
     requestAnimationFrame(() => composerRef.current?.focus());
 
@@ -408,6 +411,14 @@ export function ChatPage() {
       await streamChat(msg, history, effectiveModel || undefined, {
         onMeta: (data) => {
           if (!mountedRef.current) return;
+          setTurnMeta({
+            toolIntent: data.toolIntent,
+            contextStrategy: data.contextStrategy,
+            chatProfile: data.chatProfile,
+            toolCount: data.toolCount,
+            brainContext: data.brainContext,
+            projectContext: data.projectContext,
+          });
           if (data.conversationId && typeof data.conversationId === "string") {
             resolvedConversationId = data.conversationId;
             const normalized =
@@ -452,7 +463,8 @@ export function ChatPage() {
           const preview =
             data.phase === "start"
               ? `${JSON.stringify(data.arguments || {}, null, 2).slice(0, 500)}`
-              : `${JSON.stringify(data.result).slice(0, 600)}`;
+              : data.summary?.summary ||
+                `${JSON.stringify(data.result).slice(0, 600)}`;
           setMessages((m) => [
             ...m,
             {
@@ -461,6 +473,8 @@ export function ChatPage() {
               content: preview,
               toolName: data.name,
               toolPhase: data.phase as "start" | "end",
+              toolArguments: data.phase === "start" ? data.arguments : undefined,
+              toolSummary: data.phase === "end" ? data.summary : undefined,
             },
           ]);
         },
@@ -675,6 +689,30 @@ export function ChatPage() {
                       ? "Model listesi alınamadı"
                       : `${modelsData?.provider ?? "—"} · ${modelsData?.toolCount ?? 0} araç`}
                 </p>
+                {turnMeta && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {turnMeta.toolIntent && (
+                      <Badge variant="default" className="font-mono text-[9px]">
+                        Intent: {turnMeta.toolIntent}
+                      </Badge>
+                    )}
+                    {turnMeta.chatProfile && turnMeta.chatProfile !== "balanced" && (
+                      <Badge variant="default" className="font-mono text-[9px]">
+                        Mod: {turnMeta.chatProfile}
+                      </Badge>
+                    )}
+                    {turnMeta.contextStrategy && turnMeta.contextStrategy.length > 0 && (
+                      <Badge variant="default" className="max-w-full truncate font-mono text-[9px]">
+                        Context: {turnMeta.contextStrategy.join(", ")}
+                      </Badge>
+                    )}
+                    {turnMeta.toolCount != null && (
+                      <Badge variant="default" className="font-mono text-[9px]">
+                        {turnMeta.toolCount} tool
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -749,6 +787,7 @@ export function ChatPage() {
               streamingMessageId={streamingMessageId}
               loading={loadingConversation}
               hasConversation={!!activeConversationId}
+              runId={activeRunId}
               onExample={send}
               scrollRef={scrollRef}
             />
@@ -793,13 +832,22 @@ export function ChatPage() {
         <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
           <div className="border-b border-border/60 bg-amber-500/10 px-6 py-4">
             <DialogHeader>
-              <DialogTitle>Araç onayı gerekli</DialogTitle>
+              <DialogTitle>
+                {approval?.tool === "brain_remember" ? "Bellek kaydı onayı" : "Araç onayı gerekli"}
+              </DialogTitle>
               <DialogDescription>
-                Bu işlem politika gereği onayını istiyor. Devam etmeden önce parametreleri kontrol et.
+                {approval?.tool === "brain_remember"
+                  ? "Hassas veya kişisel içerik belleğe kaydedilmek isteniyor. Devam etmeden önce içeriği kontrol et."
+                  : "Bu işlem politika gereği onayını istiyor. Devam etmeden önce parametreleri kontrol et."}
               </DialogDescription>
             </DialogHeader>
           </div>
           <div className="space-y-3 px-6 py-4">
+            {approval?.tool === "brain_remember" && (
+              <Badge variant="warning" className="text-[10px]">
+                Bellek kaydı
+              </Badge>
+            )}
             <p className="font-mono text-sm font-medium text-primary">{approval?.tool}</p>
             <pre className="max-h-48 overflow-auto rounded-xl border border-border/60 bg-muted/40 p-3 text-xs leading-relaxed">
               {JSON.stringify(approval?.arguments ?? {}, null, 2)}

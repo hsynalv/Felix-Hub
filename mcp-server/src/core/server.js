@@ -24,12 +24,23 @@ import { registerAgentRunRoutes } from "./agent-runs/routes.js";
 import { registerAgentRunJobRunner } from "./agent-runs/agent-run-job.js";
 import { registerWorkflowRunJobRunner } from "./agent-runs/workflow-run-job.js";
 import { registerProjectIndexJobRunner } from "./project-context/project-index-job.js";
+import {
+  registerToolIntentTrainJobRunners,
+  scheduleIntentTrainPipeline,
+} from "./chat/tool-intent-train-job.js";
+import { registerIntentTrainingRoutes } from "./intent-training/routes.js";
+import { refreshIntentTrainConfigCache } from "./chat/tool-intent-config.js";
+import { ensureNlpLoaded } from "./chat/tool-intent-nlp.js";
 import { registerAgentRunTools } from "./agent-runs/agent-runs.tools.js";
 import { registerProjectContextTools } from "./project-context/project-context.tools.js";
 import { registerSidecarTools } from "./sidecar/sidecar-tools.js";
 import { resolvePendingApproval } from "./agent-runs/approval-bridge.js";
 import { registerUsageRoutes } from "./usage/routes.js";
 import { registerInternalMarketplaceRoutes } from "./marketplace/internal-routes.js";
+import { registerMcpConnectorRoutes } from "./mcp-connectors/routes.js";
+import { hydrateEnabledConnectors } from "./mcp-connectors/tool-bridge.js";
+import { listConnectors } from "./mcp-connectors/connector.service.js";
+import { getConnectorPluginManifests } from "./mcp-connectors/connector-plugins.js";
 import { registerSidecarRoutes } from "./sidecar/sidecar-routes.js";
 import { registerWorkspacePreferencesRoutes } from "./workspace-preferences.routes.js";
 import { purgeOlderThan } from "./usage/usage-ledger.service.js";
@@ -277,8 +288,13 @@ export async function createServer() {
     });
   });
 
-  app.get("/plugins", requireScope("read"), (req, res) => {
-    res.json(getPlugins());
+  app.get("/plugins", requireScope("read"), async (_req, res) => {
+    try {
+      const connectors = await getConnectorPluginManifests();
+      res.json([...getPlugins(), ...connectors]);
+    } catch (err) {
+      res.json(getPlugins());
+    }
   });
 
   app.get("/plugins/:name/manifest", requireScope("read"), (req, res) => {
@@ -692,9 +708,13 @@ export async function createServer() {
   registerAgentRunJobRunner();
   registerWorkflowRunJobRunner();
   registerProjectIndexJobRunner();
+  registerToolIntentTrainJobRunners();
+  scheduleIntentTrainPipeline();
+  registerIntentTrainingRoutes(app);
   registerAgentRunRoutes(app);
   registerUsageRoutes(app);
   registerInternalMarketplaceRoutes(app);
+  registerMcpConnectorRoutes(app);
   registerSidecarRoutes(app);
   registerWorkspacePreferencesRoutes(app);
 
@@ -709,6 +729,9 @@ export async function createServer() {
   if (isPersistenceHealthy()) {
     const count = await loadSettingsOverlay();
     if (count > 0) console.log(`[settings] Loaded ${count} encrypted setting(s) from MSSQL`);
+
+    await refreshIntentTrainConfigCache();
+    ensureNlpLoaded().catch((err) => console.warn("[intent-nlp] preload failed:", err.message));
 
     purgeOlderThan(90).then((deleted) => {
       if (deleted > 0) console.log(`[usage-ledger] Purged ${deleted} event(s) older than 90 days`);
@@ -737,6 +760,16 @@ export async function createServer() {
   registerAgentRunTools();
   registerProjectContextTools();
   registerSidecarTools();
+
+  try {
+    const hydrated = await hydrateEnabledConnectors(listConnectors);
+    const ok = hydrated.filter((h) => h.ok).length;
+    if (hydrated.length > 0) {
+      console.log(`[mcp-connectors] Hydrated ${ok}/${hydrated.length} enabled connector(s)`);
+    }
+  } catch (err) {
+    console.warn("[mcp-connectors] Startup hydrate failed:", err.message);
+  }
 
   try {
     const { startTelegramPolling } = await import("../plugins/notifications/telegram.webhook.js");

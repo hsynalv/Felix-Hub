@@ -12,6 +12,7 @@ import {
   Trash2,
   Wrench,
   X,
+  Zap,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import {
   fetchEnvCatalog,
   fetchSettings,
   reloadSettings,
+  testPluginConnection,
   upsertSetting,
   type EnvCatalogGroup,
   type EnvCatalogVar,
@@ -136,6 +138,8 @@ function PluginEnvGroup({
   onSave,
   onDelete,
   savingKey,
+  onTest,
+  testing,
 }: {
   group: EnvCatalogGroup;
   expanded: boolean;
@@ -143,6 +147,8 @@ function PluginEnvGroup({
   onSave: (key: string, value: string) => void;
   onDelete: (key: string) => void;
   savingKey: string | null;
+  onTest?: () => void;
+  testing?: boolean;
 }) {
   const configuredCount = group.vars.filter((v) => v.configured).length;
   const missingRequired = group.vars.filter((v) => v.required && !v.configured).length;
@@ -151,49 +157,68 @@ function PluginEnvGroup({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30"
-      >
-        <span className="mt-0.5 text-muted-foreground">
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{group.label}</span>
-            {group.version && (
-              <Badge className="text-[10px]">v{group.version}</Badge>
-            )}
-            {group.toolCount > 0 && (
-              <Badge variant="default" className="gap-1 text-[10px]">
-                <Wrench className="h-3 w-3" />
-                {group.toolCount} araç
-              </Badge>
-            )}
-            <Badge variant={missingRequired > 0 ? "warning" : configuredCount > 0 ? "success" : "default"} className="text-[10px]">
-              {configuredCount}/{group.vars.length} ayarlı
-            </Badge>
-          </div>
-          {group.description && (
-            <p className="text-xs text-muted-foreground">{group.description}</p>
-          )}
-          {group.tools.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {visibleTools.map((tool) => (
-                <span key={tool} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                  {tool}
-                </span>
-              ))}
-              {extraTools > 0 && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  +{extraTools} araç
-                </span>
+      <div className="flex items-start gap-2 px-4 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-start gap-3 text-left transition-colors hover:bg-muted/30 rounded-lg -m-1 p-1"
+        >
+          <span className="mt-0.5 text-muted-foreground">
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </span>
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{group.label}</span>
+              {group.version && (
+                <Badge className="text-[10px]">v{group.version}</Badge>
               )}
+              {group.toolCount > 0 && (
+                <Badge variant="default" className="gap-1 text-[10px]">
+                  <Wrench className="h-3 w-3" />
+                  {group.toolCount} araç
+                </Badge>
+              )}
+              <Badge variant={missingRequired > 0 ? "warning" : configuredCount > 0 ? "success" : "default"} className="text-[10px]">
+                {configuredCount}/{group.vars.length} ayarlı
+              </Badge>
             </div>
-          )}
-        </div>
-      </button>
+            {group.description && (
+              <p className="text-xs text-muted-foreground">{group.description}</p>
+            )}
+            {group.tools.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {visibleTools.map((tool) => (
+                  <span key={tool} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    {tool}
+                  </span>
+                ))}
+                {extraTools > 0 && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    +{extraTools} araç
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </button>
+        {group.plugin !== "hub" && onTest && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 text-xs"
+            disabled={testing}
+            onClick={onTest}
+          >
+            {testing ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Zap className="mr-1 h-3.5 w-3.5" />
+            )}
+            Test
+          </Button>
+        )}
+      </div>
 
       {expanded && (
         <div className="border-t border-border">
@@ -268,6 +293,7 @@ export function PluginEnvPanel() {
   const [newValue, setNewValue] = useState("");
   const [showNewValue, setShowNewValue] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [testingPlugin, setTestingPlugin] = useState<string | null>(null);
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -318,6 +344,22 @@ export function PluginEnvPanel() {
       toast.show("Ayar silindi");
     },
     onError: (e) => toast.show(e instanceof ApiError ? e.message : "Silme hatası", "error"),
+  });
+
+  const testMutation = useMutation({
+    mutationFn: testPluginConnection,
+    onMutate: (plugin) => setTestingPlugin(plugin),
+    onSettled: () => setTestingPlugin(null),
+    onSuccess: (data) => {
+      if (data.ok) {
+        toast.show(data.message || "Bağlantı testi başarılı");
+      } else {
+        toast.show(data.message || "Bağlantı testi başarısız", "error");
+      }
+      queryClient.invalidateQueries({ queryKey: ["marketplace-catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["settings-audit"] });
+    },
+    onError: (e) => toast.show(e instanceof ApiError ? e.message : "Test hatası", "error"),
   });
 
   const handleSave = useCallback(
@@ -469,6 +511,12 @@ export function PluginEnvPanel() {
               onSave={handleSave}
               onDelete={setDeleteTarget}
               savingKey={savingKey}
+              onTest={
+                group.plugin !== "hub"
+                  ? () => testMutation.mutate(group.plugin)
+                  : undefined
+              }
+              testing={testingPlugin === group.plugin}
             />
           ))}
 

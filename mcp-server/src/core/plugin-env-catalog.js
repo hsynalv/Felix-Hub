@@ -196,8 +196,9 @@ function getVarRuntimeState(key) {
 
 /**
  * @param {Array<{ name: string, version?: string, description?: string, tools?: Array<{ name: string }> }>} plugins
+ * @param {Array<{ slug: string, displayName: string, envKeys?: string[], toolCount?: number }>} [mcpConnectors]
  */
-export function listEnvCatalogEnriched(plugins = []) {
+export function listEnvCatalogEnriched(plugins = [], mcpConnectors = []) {
   const pluginMap = new Map(plugins.map((p) => [p.name, p]));
   const catalogKeys = new Set();
 
@@ -231,6 +232,22 @@ export function listEnvCatalogEnriched(plugins = []) {
     ...Object.entries(PLUGIN_ENV_CATALOG)
       .map(([plugin, vars]) => buildGroup(plugin, vars))
       .sort((a, b) => a.label.localeCompare(b.label)),
+    ...mcpConnectors
+      .filter((c) => Array.isArray(c.envKeys) && c.envKeys.length > 0)
+      .map((connector) =>
+        buildGroup(
+          connector.slug,
+          connector.envKeys.map((name) => ({
+            name,
+            required: true,
+            description: `${connector.displayName} — dış MCP bağlantısı`,
+          })),
+          {
+            label: `${connector.displayName} (Dış MCP)`,
+            description: `Harici MCP: ${connector.slug}`,
+          }
+        )
+      ),
   ];
 
   const unassigned = [];

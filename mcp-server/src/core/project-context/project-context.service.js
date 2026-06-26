@@ -10,6 +10,7 @@ import {
 import { getProject, listProjects, updateProjectLinks } from "../../plugins/projects/projects.store.js";
 import { listRuns } from "../agent-runs/agent-runs.service.js";
 import { searchVaultNotes } from "./vault-reader.js";
+import { searchProjectRagSnippets, mergeProjectSnippets } from "./project-rag-bridge.js";
 
 /** @type {Map<string, object[]>} */
 const memoryEvents = new Map();
@@ -17,11 +18,19 @@ const memoryEvents = new Map();
 export function getProjectLinks(projectKey) {
   const project = getProject(projectKey);
   if (!project) return null;
+  const links = project.links || {};
   return {
-    githubRepo: project.links?.githubRepo || project.envs?.development?.github || null,
-    notionProjectId: project.links?.notionProjectId || project.envs?.development?.notionProjectsDb || null,
-    obsidianVaultPath: project.links?.obsidianVaultPath || null,
-    defaultBranch: project.links?.defaultBranch || "main",
+    githubRepo: links.githubRepo || project.envs?.development?.github || null,
+    backendRepo: links.backendRepo || null,
+    frontendRepo: links.frontendRepo || null,
+    mobileRepo: links.mobileRepo || null,
+    websiteUrl: links.websiteUrl || null,
+    backendUrl: links.backendUrl || null,
+    frontendUrl: links.frontendUrl || null,
+    mobileUrl: links.mobileUrl || null,
+    notionProjectId: links.notionProjectId || project.envs?.development?.notionProjectsDb || null,
+    obsidianVaultPath: links.obsidianVaultPath || null,
+    defaultBranch: links.defaultBranch || "main",
   };
 }
 
@@ -29,6 +38,21 @@ function buildGraphEdges(projectKey, links, runs, events) {
   const edges = [];
   if (links?.githubRepo) {
     edges.push({ from: projectKey, to: links.githubRepo, type: "github_repo" });
+  }
+  for (const [field, type] of [
+    ["backendRepo", "backend_repo"],
+    ["frontendRepo", "frontend_repo"],
+    ["mobileRepo", "mobile_repo"],
+  ]) {
+    if (links?.[field]) edges.push({ from: projectKey, to: links[field], type });
+  }
+  for (const [field, type] of [
+    ["websiteUrl", "website"],
+    ["backendUrl", "backend"],
+    ["frontendUrl", "frontend"],
+    ["mobileUrl", "mobile"],
+  ]) {
+    if (links?.[field]) edges.push({ from: projectKey, to: links[field], type });
   }
   if (links?.notionProjectId) {
     edges.push({ from: projectKey, to: links.notionProjectId, type: "notion_db" });
@@ -93,12 +117,22 @@ export async function searchContextForGoal(projectKey, goal, { limit = 8 } = {})
   }
 
   snippets.sort((a, b) => b.score - a.score);
+
+  let ragSnippets = [];
+  try {
+    ragSnippets = await searchProjectRagSnippets(projectKey, goal, Math.min(limit, 5));
+  } catch {
+    ragSnippets = [];
+  }
+  const mergedSnippets = mergeProjectSnippets(snippets, ragSnippets).slice(0, limit);
+
   return {
     projectId: projectKey,
     goal,
-    snippets: snippets.slice(0, limit),
+    snippets: mergedSnippets,
     graph: ctx.graph,
     lastChangeSummary: ctx.lastChangeSummary,
+    ragHits: ragSnippets.length,
   };
 }
 
@@ -205,6 +239,13 @@ export async function getProjectContext(projectKey) {
   const nodes = [
     { id: projectKey, type: "project", label: project?.name || projectKey },
     ...(links?.githubRepo ? [{ id: links.githubRepo, type: "github_repo", label: links.githubRepo }] : []),
+    ...(links?.backendRepo ? [{ id: links.backendRepo, type: "backend_repo", label: `BE: ${links.backendRepo}` }] : []),
+    ...(links?.frontendRepo ? [{ id: links.frontendRepo, type: "frontend_repo", label: `FE: ${links.frontendRepo}` }] : []),
+    ...(links?.mobileRepo ? [{ id: links.mobileRepo, type: "mobile_repo", label: `Mobile: ${links.mobileRepo}` }] : []),
+    ...(links?.websiteUrl ? [{ id: links.websiteUrl, type: "website", label: links.websiteUrl }] : []),
+    ...(links?.backendUrl ? [{ id: links.backendUrl, type: "backend", label: `BE ${links.backendUrl}` }] : []),
+    ...(links?.frontendUrl ? [{ id: links.frontendUrl, type: "frontend", label: `FE ${links.frontendUrl}` }] : []),
+    ...(links?.mobileUrl ? [{ id: links.mobileUrl, type: "mobile", label: `App ${links.mobileUrl}` }] : []),
     ...(links?.notionProjectId ? [{ id: links.notionProjectId, type: "notion", label: "Notion" }] : []),
     ...(links?.obsidianVaultPath ? [{ id: links.obsidianVaultPath, type: "obsidian", label: "Vault" }] : []),
     ...runs.slice(0, 5).map((r) => ({ id: r.id, type: "run", label: r.goal || r.id.slice(0, 8) })),

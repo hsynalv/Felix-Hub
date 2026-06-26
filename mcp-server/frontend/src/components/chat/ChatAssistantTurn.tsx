@@ -2,15 +2,17 @@ import { Bot } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { ChatToolActivity } from "./ChatToolActivity";
+import { MemoryCitationBar } from "./MemoryCitationBar";
 import type { ChatMessageRow } from "./chat-message-groups";
 
 type ChatAssistantTurnProps = {
   assistant: ChatMessageRow;
   tools: ChatMessageRow[];
   isStreaming?: boolean;
+  runId?: string | null;
 };
 
-export function ChatAssistantTurn({ assistant, tools, isStreaming }: ChatAssistantTurnProps) {
+export function ChatAssistantTurn({ assistant, tools, isStreaming, runId }: ChatAssistantTurnProps) {
   const hasContent = assistant.content && assistant.content !== "…";
 
   return (
@@ -22,10 +24,11 @@ export function ChatAssistantTurn({ assistant, tools, isStreaming }: ChatAssista
       </Avatar>
 
       <div className="flex min-w-0 max-w-[min(85%,42rem)] flex-col gap-2">
-        {tools.length > 0 && <ChatToolActivity tools={tools} />}
+        {tools.length > 0 && <ChatToolActivity tools={tools} runId={runId} />}
         {(hasContent || isStreaming) && (
           <ChatMessageBubble message={assistant} isStreaming={isStreaming} embedded />
         )}
+        {hasContent && <MemoryCitationBar content={assistant.content} />}
       </div>
     </div>
   );

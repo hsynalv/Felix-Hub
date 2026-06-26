@@ -2,7 +2,7 @@
  * Project context service tests
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { createProject, deleteProject } from "../../src/plugins/projects/projects.store.js";
 import {
   getProjectContext,
@@ -14,7 +14,7 @@ import { createRun, resetAgentRunsForTests } from "../../src/core/agent-runs/age
 import { completeRun } from "../../src/core/agent-runs/run-orchestrator.js";
 
 describe("Project context", () => {
-  const key = `test-ctx-${Date.now()}`;
+  const key = "test-ctx-project";
 
   beforeEach(() => {
     resetProjectContextForTests();
@@ -25,6 +25,14 @@ describe("Project context", () => {
       /* ignore */
     }
     createProject(key, "Test Context Project");
+  });
+
+  afterAll(() => {
+    try {
+      deleteProject(key);
+    } catch {
+      /* ignore */
+    }
   });
 
   it("builds context graph with links and runs", async () => {

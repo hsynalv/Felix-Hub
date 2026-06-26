@@ -127,7 +127,9 @@ export function registerInternalMarketplaceRoutes(app) {
 
   app.post("/marketplace/plugins/:name/test", requireScope("admin"), async (req, res) => {
     try {
-      const result = await runPluginConnectionTest(req.params.name);
+      const result = await runPluginConnectionTest(req.params.name, {
+        actor: req.actor?.type || "admin",
+      });
       res.json({ ok: result.ok, data: result });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "test_failed", message: err.message } });
@@ -136,7 +138,9 @@ export function registerInternalMarketplaceRoutes(app) {
 
   app.post("/settings/test/:plugin", requireScope("admin"), async (req, res) => {
     try {
-      const result = await runPluginConnectionTest(req.params.plugin);
+      const result = await runPluginConnectionTest(req.params.plugin, {
+        actor: req.actor?.type || "admin",
+      });
       res.json({ ok: result.ok, data: result });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "test_failed", message: err.message } });

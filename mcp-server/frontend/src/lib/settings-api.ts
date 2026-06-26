@@ -157,6 +157,19 @@ export async function fetchEnvCatalog() {
   return apiGet<EnvCatalogResponse>("/settings/env-catalog");
 }
 
+export interface PluginConnectionTestResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  missing?: string[];
+  skipped?: boolean;
+  healthPath?: string;
+}
+
+export async function testPluginConnection(plugin: string) {
+  return apiPost<PluginConnectionTestResult>(`/settings/test/${encodeURIComponent(plugin)}`, {});
+}
+
 export {
   getProjectId,
   getProjectEnv,
@@ -167,6 +180,7 @@ export {
 
 export interface LlmConfigSnapshot {
   mode: "unified" | "split";
+  globalInstructions?: string;
   unified: { configured: boolean; maskedKey: string | null; model: string };
   chat: {
     provider: string;
@@ -192,6 +206,7 @@ export async function saveLlmConfig(body: {
   chatModel?: string;
   routerProvider?: string;
   routerModel?: string;
+  globalInstructions?: string;
   providerKeys?: {
     openai?: string;
     anthropic?: string;

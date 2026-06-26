@@ -1,0 +1,302 @@
+/**
+ * Tool intent classifier — narrows the tool surface per user message.
+ */
+
+import { detectBrainIntent } from "./brain-intent.js";
+
+/** @typedef {import('./tool-intent.js').ToolIntent} ToolIntent */
+
+export const TOOL_INTENTS = [
+  "no_tool",
+  "brain_save",
+  "brain_recall",
+  "project_context",
+  "read_repo",
+  "modify_files",
+  "run_command",
+  "external_api",
+  "automation",
+  "general",
+];
+
+const PROJECT_PATTERNS = [
+  /\bprojede\b/i,
+  /\bprojesinde\b/i,
+  /\bprojesinin\b/i,
+  /\bprojesine\b/i,
+  /\bproje(?:de|si|sinde|sine|sinin)\b/i,
+  /\bproject\b/i,
+  /\bworkspace\b/i,
+  /\bcontext\s+search\b/i,
+];
+
+const CURRENCY_PATTERNS = [
+  /\b(?:tl|try|dolar|usd|eur|gbp|₺|\$)\b/i,
+  /\b(?:kur|karşılığı|exchange|döviz|çevir)\b/i,
+];
+
+const REPO_PATTERNS = [
+  /\bgit\b/i,
+  /\bcommit\b/i,
+  /\bbranch\b/i,
+  /\brepo\b/i,
+  /\bdiff\b/i,
+  /\bpr\b/i,
+  /\bpull\s+request\b/i,
+];
+
+const MODIFY_PATTERNS = [
+  /\b(?:yaz|oluştur|ekle|değiştir|düzenle|sil)\b/i,
+  /\b(?:write|create|edit|delete|modify|refactor|implement)\b/i,
+  /\b(?:fix|patch)\b/i,
+];
+
+const COMMAND_PATTERNS = [
+  /\b(?:çalıştır|run|execute|test(?:leri)?)\b/i,
+  /\bnpm\b/i,
+  /\bvitest\b/i,
+  /\bshell\b/i,
+];
+
+const API_PATTERNS = [
+  /\bgithub\b/i,
+  /\bnotion\b/i,
+  /\btavily\b/i,
+  /\bapi\b/i,
+  /\bhttp\b/i,
+  /\bfetch\b/i,
+];
+
+const LIVE_LOOKUP_PATTERNS = [
+  /\b(?:kur|exchange|döviz|çevir|yapıyor)\b/i,
+  /\b(?:usd|eur|gbp|try|tl|dolar)\b/i,
+  /\b(?:bugün|güncel|current|today)\b/i,
+];
+
+const AUTOMATION_PATTERNS = [
+  /\bn8n\b/i,
+  /\bworkflow\b/i,
+  /\botomasyon\b/i,
+  /\bautomation\b/i,
+];
+
+/** Tool name prefixes / exact names per intent */
+export const INTENT_TOOL_MAP = {
+  no_tool: [],
+  brain_save: ["brain_remember", "brain_update_memory", "brain_forget"],
+  brain_recall: [
+    "brain_recall",
+    "brain_get_context",
+    "brain_what_do_you_know_about",
+    "brain_get_stats",
+    "brain_search_files",
+  ],
+  project_context: [
+    "brain_recall",
+    "brain_get_context",
+    "project_context_search",
+    "project_context_for_goal",
+    "project_recent_changes",
+    "tavily__",
+    "tavily_",
+    "rag_search",
+    "workspace_search",
+    "workspace_read_file",
+  ],
+  read_repo: [
+    "git_status",
+    "git_diff",
+    "git_log",
+    "repo_summary",
+    "repo_analyze",
+    "repo_recent_commits",
+    "workspace_read_file",
+    "workspace_search",
+    "rag_search",
+  ],
+  modify_files: [
+    "workspace_write_file",
+    "workspace_apply_patch",
+    "project_generate_code",
+    "project_generate_structure",
+    "shell_execute",
+  ],
+  run_command: [
+    "shell_execute",
+    "shell_session_create",
+    "shell_session_output",
+    "tests_run",
+  ],
+  external_api: [
+    "tavily__",
+    "tavily_",
+    "github_",
+    "notion_",
+    "http_",
+    "openapi_",
+    "gmail_",
+  ],
+  automation: ["n8n_"],
+  general: [],
+};
+
+/**
+ * @param {string} message
+ * @returns {{ intent: string; confidence: number; reasons: string[]; needsLiveRate?: boolean }}
+ */
+export function classifyToolIntentRegex(message) {
+  const text = typeof message === "string" ? message.trim() : "";
+  const reasons = [];
+
+  if (!text || text.length < 3) {
+    return { intent: "no_tool", confidence: 0.9, reasons: ["too_short"] };
+  }
+
+  const brain = detectBrainIntent(text);
+  if (brain.save) {
+    return { intent: "brain_save", confidence: 0.95, reasons: ["brain_save_pattern"] };
+  }
+  if (brain.recall) {
+    return { intent: "brain_recall", confidence: 0.95, reasons: ["brain_recall_pattern"] };
+  }
+
+  if (AUTOMATION_PATTERNS.some((p) => p.test(text))) {
+    return { intent: "automation", confidence: 0.85, reasons: ["automation_pattern"] };
+  }
+  if (COMMAND_PATTERNS.some((p) => p.test(text))) {
+    return { intent: "run_command", confidence: 0.8, reasons: ["command_pattern"] };
+  }
+  if (MODIFY_PATTERNS.some((p) => p.test(text))) {
+    return { intent: "modify_files", confidence: 0.75, reasons: ["modify_pattern"] };
+  }
+  if (REPO_PATTERNS.some((p) => p.test(text))) {
+    return { intent: "read_repo", confidence: 0.8, reasons: ["repo_pattern"] };
+  }
+
+  const hasProjectCue = PROJECT_PATTERNS.some((p) => p.test(text));
+  const needsLiveRate = CURRENCY_PATTERNS.some((p) => p.test(text));
+
+  if (hasProjectCue) {
+    return {
+      intent: "project_context",
+      confidence: needsLiveRate ? 0.92 : 0.85,
+      reasons: needsLiveRate ? ["project_pattern", "currency_lookup"] : ["project_pattern"],
+      needsLiveRate,
+    };
+  }
+
+  if (needsLiveRate) {
+    return {
+      intent: "external_api",
+      confidence: 0.88,
+      reasons: ["currency_lookup"],
+      needsLiveRate: true,
+    };
+  }
+
+  if (API_PATTERNS.some((p) => p.test(text))) {
+    const tavily = /\btavily\b/i.test(text);
+    const liveLookup = LIVE_LOOKUP_PATTERNS.some((p) => p.test(text));
+    return {
+      intent: "external_api",
+      confidence: tavily || liveLookup ? 0.9 : 0.7,
+      reasons: [tavily ? "tavily_pattern" : liveLookup ? "live_lookup_pattern" : "api_pattern"],
+    };
+  }
+
+  if (/^(?:merhaba|selam|hello|thanks|teşekkür)\b/i.test(text) && text.length < 50) {
+    return { intent: "no_tool", confidence: 0.85, reasons: ["greeting"] };
+  }
+
+  return { intent: "general", confidence: 0.5, reasons: ["default"] };
+}
+
+/**
+ * Hybrid classifier entry — async NLP + regex.
+ * @param {string} message
+ */
+export async function classifyToolIntent(message) {
+  const { classifyToolIntentHybrid } = await import("./tool-intent-hybrid.js");
+  return classifyToolIntentHybrid(message);
+}
+
+/**
+ * @param {string} intent
+ * @param {string} toolName
+ */
+export function toolMatchesIntent(intent, toolName) {
+  if (intent === "general" || intent === "no_tool") return false;
+
+  const patterns = INTENT_TOOL_MAP[intent] || [];
+  return patterns.some((p) => {
+    if (p.endsWith("_")) return toolName.startsWith(p);
+    return toolName === p || toolName.startsWith(`${p}_`);
+  });
+}
+
+/**
+ * Re-order and optionally narrow tools for the detected intent.
+ * Always keeps priority tools; shortlist boosts matching tools to the front.
+ *
+ * @param {Array<{ name: string; plugin?: string; tags?: string[] }>} tools
+ * @param {string} intent
+ * @param {{ maxTools?: number }} [opts]
+ */
+export function shortlistToolsForIntent(tools, intent, opts = {}) {
+  const maxTools = opts.maxTools ?? 128;
+  if (!tools?.length || intent === "general" || intent === "no_tool") {
+    return tools.slice(0, maxTools);
+  }
+
+  const matched = [];
+  const rest = [];
+
+  for (const tool of tools) {
+    if (toolMatchesIntent(intent, tool.name)) matched.push(tool);
+    else rest.push(tool);
+  }
+
+  if (!matched.length) return tools.slice(0, maxTools);
+
+  const seen = new Set();
+  const merged = [];
+  for (const t of [...matched, ...rest]) {
+    if (seen.has(t.name)) continue;
+    seen.add(t.name);
+    merged.push(t);
+    if (merged.length >= maxTools) break;
+  }
+  return merged;
+}
+
+/**
+ * System prompt hint for detected tool intent.
+ */
+export function buildToolIntentHint(classification) {
+  const { intent, reasons, needsLiveRate } = classification;
+  if (intent === "no_tool") {
+    return "## Tool intent\nAnswer without tools unless you discover missing live data.";
+  }
+  if (intent === "general") return "";
+
+  const toolNames = (INTENT_TOOL_MAP[intent] || []).filter((t) => !t.endsWith("_")).slice(0, 6);
+  const prefixTools = (INTENT_TOOL_MAP[intent] || []).filter((t) => t.endsWith("_"));
+
+  const lines = [
+    `## Tool intent: ${intent}`,
+    `Signals: ${reasons.join(", ")}`,
+    "Prefer tools from this shortlist for this message:",
+  ];
+
+  if (toolNames.length) lines.push(`- ${toolNames.join(", ")}`);
+  for (const prefix of prefixTools) lines.push(`- ${prefix}*`);
+  if (needsLiveRate) {
+    lines.push("- Live rate/news: **tavily__tavily_search** only — not n8n_* or invented HTTP APIs.");
+  }
+  if (intent === "project_context") {
+    lines.push("- Do **not** use n8n_* tools — they are workflow builders, not project/business context.");
+  }
+  lines.push("- Use the smallest sufficient tool set. Read before write.");
+
+  return lines.join("\n");
+}

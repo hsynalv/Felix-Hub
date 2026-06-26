@@ -306,6 +306,13 @@ const ROUTING_RULES = [
     priority: 2,
   },
   {
+    task: "intent_labeling",
+    description: "Tool intent corpus labeling for training pipeline",
+    primary: { provider: "openai", model: "gpt-4o-mini" },
+    fallback: { provider: "openai", model: "gpt-4o-mini" },
+    priority: 3,
+  },
+  {
     task: "custom",
     description: "Route to self-hosted vLLM or any OpenAI-compatible custom endpoint",
     primary: { provider: "vllm", model: process.env.VLLM_MODEL || "custom-model" },

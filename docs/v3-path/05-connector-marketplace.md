@@ -15,14 +15,15 @@
 
 ## Mevcut durum
 
-| Var | Eksik |
-|-----|-------|
-| `plugins.js` dynamic load | Enable/disable runtime |
-| `plugin.meta.json` 35/35 | Kalite scaffold; boş envVars |
-| `validate:plugins` script | CI'da var |
-| `PluginsPage` — liste | Wizard, test connection |
-| `marketplace` plugin | Dış kaynak; iç catalog değil |
-| `plugin-env-catalog.js` | UI'da tam wizard değil |
+| Var | Eksik (v3.7+) |
+|-----|---------------|
+| `plugin_state` persistence + enable/disable | npm marketplace → `marketplace/installed/` loader |
+| `internal-routes.js` — catalog, wizard, test | Policy default deny shell (Faz C üretim) |
+| `PluginsPage` — toggle + SetupWizardDialog | |
+| `dangerousCombinations` enable uyarısı (v3.6) | |
+| `marketplace-enable.test.js` | |
+| Eksik env → enable blok | |
+| **Dış MCP (stdio)** — `mcp-connectors/` + Plugins **Dış MCP** sekmesi | HTTP/SSE doğrudan URL, OAuth, harici npm install |
 
 ---
 
@@ -31,7 +32,7 @@
 1. **Admin-only** — `requireScope("admin")` tüm mutasyonlar
 2. **Fail-closed** — Default disabled olan capability'ler açıkça enable edilmeli
 3. **Manifest zorunlu** — `security.capabilities`, `envVars`, `riskLevel`
-4. **No arbitrary install** — Sadece repo içi `src/plugins/*` (V3); harici paket V4+
+4. **No arbitrary install** — V3: repo içi `src/plugins/*`; harici MCP stdio bağlantıları → [mcp-connectors.md](../mcp-connectors.md); npm paket kurulumu sonraki faz
 5. **Unsafe warning** — `shell`, `destructive` açık uyarı
 
 ---
@@ -102,27 +103,27 @@ UI renkleri + "production use" uyarısı experimental için.
 
 ### Faz A — Enable/disable (1 hafta)
 
-- [ ] `plugin_state` persistence
-- [ ] `plugins.js` — disabled plugin tool register etmez
-- [ ] PluginsPage toggle (admin)
+- [x] `plugin_state` persistence
+- [x] `plugins.js` — disabled plugin tool register etmez
+- [x] PluginsPage toggle (admin)
 
 ### Faz B — Wizard (1 hafta)
 
-- [ ] Env catalog → wizard adımları
-- [ ] Test connection endpoint standardı (`mountPluginHealth` genişlet)
-- [ ] Incomplete env → enable blokla
+- [x] Env catalog → wizard adımları
+- [x] Test connection endpoint standardı (`mountPluginHealth` + `/marketplace/plugins/:name/test`)
+- [x] Incomplete env → enable blokla
 
 ### Faz C — Unsafe capabilities (1 hafta)
 
-- [ ] Manifest `security.dangerousCombinations` UI uyarısı
+- [x] Manifest `security.dangerousCombinations` UI uyarısı
 - [ ] Policy default deny shell in production
 
 ---
 
 ## Exit criteria
 
-- [ ] Admin plugin'i disable edince tool listesinden kaybolur
-- [ ] Yeni plugin kurulumu wizard ile < 15 dk (dokümante senaryo)
-- [ ] `validate:plugins` + marketplace state CI testi
+- [x] Admin plugin'i disable edince tool listesinden kaybolur
+- [x] Yeni plugin kurulumu wizard ile < 15 dk (dokümante senaryo)
+- [x] `validate:plugins` + marketplace state CI testi
 
 **Sonraki:** [07-eval-regression.md](./07-eval-regression.md)

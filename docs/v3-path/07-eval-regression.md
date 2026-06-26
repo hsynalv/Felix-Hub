@@ -15,12 +15,12 @@ Agent platformlarında asıl sorun: **bugün iyi çalışan yarın bozuluyor**. 
 
 ## Mevcut durum
 
-| Var | Eksik |
-|-----|-------|
-| `tests/` — 710+ unit/integration | Agent-level eval |
-| `validate:plugins` | Tool schema regression |
-| `tests` plugin | Eval harness değil |
-| CI `test:run` | Nightly agent benchmark yok |
+| Var | Eksik (v3.7+) |
+|-----|---------------|
+| `tests/eval/trace-regression.test.js` — 4 golden trace | Nightly agent benchmark |
+| `eval/runners/trace-compare.js` | Prompt eval + LLM judge |
+| `eval:smoke` CI | `eval:nightly` schedule |
+| `plugin-schema-snapshot.test.js` (Faz B, v3.6) | Version diff / model swap matrix |
 
 **İlgili:** `mcp-server/tests/`, `.github/workflows/`
 
@@ -97,14 +97,14 @@ Karşılaştırma: gerçek run steps vs golden — diff raporu.
 
 ### Faz A — Tool trace regression (1 hafta)
 
-- [ ] Golden trace dosya formatı
-- [ ] `trace-compare.js` — run export vs golden
-- [ ] CI: 3-5 kritik trace smoke test
+- [x] Golden trace dosya formatı
+- [x] `trace-compare.js` — run export vs golden
+- [x] CI: 3-5 kritik trace smoke test (4 fixture)
 
 ### Faz B — MCP contract (mevcut genişletme) (1 hafta)
 
-- [ ] `validate:plugins` çıktısını snapshot'la karşılaştır
-- [ ] Breaking schema change → CI fail
+- [x] `validate:plugins` çıktısını snapshot'la karşılaştır
+- [x] Breaking schema change → CI fail
 
 ### Faz C — Agent task benchmark (2 hafta)
 
@@ -133,8 +133,8 @@ Karşılaştırma: gerçek run steps vs golden — diff raporu.
 
 ## Exit criteria
 
-- [ ] PR'da en az 1 golden trace smoke geçer
-- [ ] Tool schema breaking change CI'da yakalanır
+- [x] PR'da en az 1 golden trace smoke geçer
+- [x] Tool schema breaking change CI'da yakalanır
 - [ ] Nightly agent benchmark raporu artifact olarak saklanır
 - [ ] Model/provider değişikliği öncesi eval checklist dokümante
 

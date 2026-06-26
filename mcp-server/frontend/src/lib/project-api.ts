@@ -1,7 +1,14 @@
-import { apiGet, apiPut, apiPost } from "./api-client";
+import { apiGet, apiPut, apiPost, apiDelete } from "./api-client";
 
 export interface ProjectLinks {
   githubRepo?: string | null;
+  backendRepo?: string | null;
+  frontendRepo?: string | null;
+  mobileRepo?: string | null;
+  websiteUrl?: string | null;
+  backendUrl?: string | null;
+  frontendUrl?: string | null;
+  mobileUrl?: string | null;
   notionProjectId?: string | null;
   obsidianVaultPath?: string | null;
   defaultBranch?: string;
@@ -37,10 +44,32 @@ export interface ProjectContext {
 export interface ProjectSummary {
   key: string;
   name: string;
+  envs?: string[];
+  createdAt?: string;
+}
+
+export interface ProjectRecord {
+  name: string;
+  envs?: Record<string, Record<string, string>>;
+  links?: ProjectLinks;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export async function fetchProjectsList() {
   return apiGet<{ projects: ProjectSummary[]; count: number }>("/projects");
+}
+
+export async function fetchProjectDetail(projectKey: string) {
+  return apiGet<{ key: string; project: ProjectRecord }>(`/projects/${encodeURIComponent(projectKey)}`);
+}
+
+export async function createProject(key: string, name: string) {
+  return apiPost<{ project: { key: string; name: string } }>("/projects", { key, name });
+}
+
+export async function deleteProject(projectKey: string) {
+  return apiDelete<{ deleted: string }>(`/projects/${encodeURIComponent(projectKey)}`);
 }
 
 export async function askProject(projectKey: string, q: string, limit = 8) {

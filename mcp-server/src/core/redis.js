@@ -19,20 +19,27 @@ const DRAFT_SESSION_TTL_HOURS = parseInt(process.env.DRAFT_SESSION_TTL_HOURS || 
 // ── Redis Client ─────────────────────────────────────────────────────────────
 
 let redis = null;
+let lastRedisErrorLogAt = 0;
 
 export function getRedis() {
   const url = resolveRedisUrl();
   if (!redis) {
     redis = new Redis(url, {
+      connectTimeout: 2_000,
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
       retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
+        if (times > 20) return null;
+        return Math.min(times * 200, 2_000);
       },
-      maxRetriesPerRequest: 3,
     });
 
     redis.on("error", (err) => {
-      console.error("Redis error:", err.message);
+      const now = Date.now();
+      if (now - lastRedisErrorLogAt < 5_000) return;
+      lastRedisErrorLogAt = now;
+      const detail = err?.message || err?.code || String(err);
+      console.error("Redis error:", detail);
     });
 
     redis.on("connect", () => {
@@ -124,12 +131,17 @@ export async function deleteDraft(draftId) {
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 
-export async function checkRedisHealth() {
+export async function checkRedisHealth({ timeoutMs = 1_500 } = {}) {
   try {
     const client = getRedis();
-    await client.ping();
+    await Promise.race([
+      client.ping(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Redis connection timed out")), timeoutMs),
+      ),
+    ]);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: err?.message || err?.code || "Redis unavailable" };
   }
 }

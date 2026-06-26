@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderKanban } from "lucide-react";
 import {
@@ -52,10 +52,23 @@ export function ProjectSwitcher({ className }: { className?: string }) {
     saveMutation.mutate({ projectId: pid, projectEnv: env });
   };
 
-  const projectOptions =
-    projects.length > 0
-      ? projects
-      : [{ key: projectId, name: projectId }];
+  const projectOptions = useMemo(() => {
+    const raw =
+      projects.length > 0 ? projects : [{ key: projectId, name: projectId }];
+    const nameCounts = new Map<string, number>();
+    for (const p of raw) {
+      const label = p.name || p.key;
+      nameCounts.set(label, (nameCounts.get(label) ?? 0) + 1);
+    }
+    return raw.map((p) => {
+      const label = p.name || p.key;
+      const duplicateName = (nameCounts.get(label) ?? 0) > 1;
+      return {
+        ...p,
+        displayName: duplicateName ? `${label} (${p.key})` : label,
+      };
+    });
+  }, [projects, projectId]);
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
@@ -67,7 +80,7 @@ export function ProjectSwitcher({ className }: { className?: string }) {
         <SelectContent>
           {projectOptions.map((p) => (
             <SelectItem key={p.key} value={p.key}>
-              {p.name || p.key}
+              {p.displayName ?? (p.name || p.key)}
             </SelectItem>
           ))}
         </SelectContent>

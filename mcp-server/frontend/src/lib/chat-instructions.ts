@@ -1,11 +1,35 @@
 export type ResponseStyle = "concise" | "detailed";
 
+export type ChatProfileId =
+  | "balanced"
+  | "answer_only"
+  | "research"
+  | "project_work"
+  | "code_editing"
+  | "automation"
+  | "personal_assistant"
+  | "safe"
+  | "high_autonomy";
+
 export interface ConversationSettings {
   instructions?: string;
   includeBrainContext?: boolean;
   responseStyle?: ResponseStyle;
   presetId?: string;
+  chatProfile?: ChatProfileId;
 }
+
+export const CHAT_PROFILE_OPTIONS: Array<{ id: ChatProfileId; label: string; description: string }> = [
+  { id: "balanced", label: "Dengeli", description: "Varsayılan otomatik araç seçimi" },
+  { id: "answer_only", label: "Sadece cevap", description: "Tool kullanmadan yanıt" },
+  { id: "research", label: "Araştırma", description: "Read-only + brain recall" },
+  { id: "project_work", label: "Proje işi", description: "Proje context öncelikli" },
+  { id: "code_editing", label: "Kod düzenleme", description: "Repo read + yazma" },
+  { id: "automation", label: "Otomasyon", description: "Workflow araçları" },
+  { id: "personal_assistant", label: "Kişisel asistan", description: "Brain + harici API" },
+  { id: "safe", label: "Güvenli mod", description: "Sadece read + recall" },
+  { id: "high_autonomy", label: "Yüksek özerklik", description: "Tüm write araçları" },
+];
 
 export const INSTRUCTION_PRESETS: Array<{
   id: string;
@@ -46,6 +70,7 @@ export const DEFAULT_CONVERSATION_SETTINGS: ConversationSettings = {
   includeBrainContext: true,
   responseStyle: "concise",
   presetId: "general",
+  chatProfile: "balanced",
 };
 
 export function parseConversationSettings(
@@ -65,6 +90,11 @@ export function parseConversationSettings(
       metadata.responseStyle === "detailed" ? "detailed" : "concise",
     presetId:
       typeof metadata.presetId === "string" ? metadata.presetId : "general",
+    chatProfile:
+      typeof metadata.chatProfile === "string" &&
+      CHAT_PROFILE_OPTIONS.some((p) => p.id === metadata.chatProfile)
+        ? (metadata.chatProfile as ChatProfileId)
+        : "balanced",
   };
 }
 

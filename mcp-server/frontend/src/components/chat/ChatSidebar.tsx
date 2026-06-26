@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageSquarePlus, MoreHorizontal, Pencil, MessagesSquare, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,11 +24,15 @@ import {
   deleteConversation,
   listConversations,
   updateConversation,
+  type ConversationProjectScope,
   type ConversationSummary,
 } from "@/lib/conversations-api";
 import { ApiError } from "@/lib/api-client";
 import { conversationIdsMatch } from "@/lib/conversation-ids";
+import { getProjectId } from "@/lib/project-context";
+import { subscribeWorkspaceContext } from "@/lib/workspace-context-store";
 import { useToast } from "@/providers/ToastProvider";
+import { Badge } from "@/components/ui/badge";
 
 type ChatSidebarProps = {
   activeId: string | null;
@@ -37,22 +41,39 @@ type ChatSidebarProps = {
   className?: string;
 };
 
+const SCOPE_OPTIONS: { id: ConversationProjectScope; label: string }[] = [
+  { id: "all", label: "Tümü" },
+  { id: "current", label: "Bu proje" },
+  { id: "unassigned", label: "Projesiz" },
+];
+
 export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className }: ChatSidebarProps) {
   const [search, setSearch] = useState("");
+  const [scope, setScope] = useState<ConversationProjectScope>("all");
+  const [workspaceProjectId, setWorkspaceProjectId] = useState(() => getProjectId());
   const [renameTarget, setRenameTarget] = useState<ConversationSummary | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const qc = useQueryClient();
   const toast = useToast();
 
+  useEffect(() => {
+    return subscribeWorkspaceContext(() => setWorkspaceProjectId(getProjectId()));
+  }, []);
+
   const { data: conversations = [], isLoading, isError, error } = useQuery({
-    queryKey: ["conversations"],
-    queryFn: () => listConversations(),
+    queryKey: ["conversations", scope],
+    queryFn: () => listConversations(50, scope),
     enabled: persistenceEnabled !== false,
     retry: false,
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createConversation({ title: "Yeni sohbet" }),
+    mutationFn: () => {
+      const payload: { title: string; projectId?: string | null } = { title: "Yeni sohbet" };
+      if (scope === "unassigned") payload.projectId = null;
+      else if (scope === "current") payload.projectId = workspaceProjectId;
+      return createConversation(payload);
+    },
     onSuccess: (conv) => {
       qc.invalidateQueries({ queryKey: ["conversations"] });
       onSelect(conv.id);
@@ -129,6 +150,24 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
           </Button>
         </motion.div>
 
+        <div className="flex flex-wrap gap-1">
+          {SCOPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setScope(opt.id)}
+              className={cn(
+                "rounded-lg px-2 py-1 text-[10px] font-medium transition-colors",
+                scope === opt.id
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-muted/50"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -176,7 +215,19 @@ export function ChatSidebar({ activeId, onSelect, persistenceEnabled, className 
                     />
                   )}
                   <button type="button" className="min-w-0 flex-1 py-0.5 pl-2 text-left" onClick={() => onSelect(conv.id)}>
-                    <div className={cn("truncate font-medium", active && "text-primary")}>{conv.title}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("truncate font-medium", active && "text-primary")}>{conv.title}</span>
+                      {scope === "all" && !conv.projectId && (
+                        <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px]">
+                          projesiz
+                        </Badge>
+                      )}
+                      {scope === "all" && conv.projectId && (
+                        <Badge variant="outline" className="shrink-0 px-1 py-0 font-mono text-[9px]">
+                          {conv.projectId}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="truncate text-[10px] text-muted-foreground">
                       {conv.messageCount} mesaj · {formatTime(conv.updatedAt)}
                     </div>

@@ -103,6 +103,16 @@ export async function runSettingsReload(changedKeys = null) {
     }
   }
 
+  if (hotKeys.includes("intent_training.config")) {
+    try {
+      const { refreshIntentTrainConfigCache } = await import("../chat/tool-intent-config.js");
+      await refreshIntentTrainConfigCache();
+      results.reloaded.push("intent-training");
+    } catch (e) {
+      results.errors.push({ target: "intent-training", message: e.message });
+    }
+  }
+
   if (
     hotKeys.includes("TELEGRAM_BOT_TOKEN") ||
     hotKeys.includes("TELEGRAM_CHAT_ID") ||

@@ -2,6 +2,10 @@ node_modules/
 .env
 cache/
 data/
+!data/tool-intent/
+!data/tool-intent/seed.corpus.json
+!data/tool-intent/models/
+!data/tool-intent/models/.gitkeep
 .pnpm-store/
 *.tgz
 src/public/app/assets/

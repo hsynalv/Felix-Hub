@@ -33,6 +33,12 @@ describe("conversations.service", () => {
     expect(generateTitleFromMessage("  Merhaba dünya  ")).toBe("Merhaba dünya");
   });
 
+  it("listConversations filters unassigned only", async () => {
+    mockQuery.mockResolvedValueOnce({ recordset: [] });
+    await listConversations({ projectId: null });
+    expect(mockQuery.mock.calls[0][0]).toContain("project_id IS NULL");
+  });
+
   it("listConversations returns mapped rows", async () => {
     mockQuery.mockResolvedValueOnce({
       recordset: [

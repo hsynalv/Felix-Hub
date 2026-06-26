@@ -1,7 +1,6 @@
 import {
   Bot,
   Database,
-  FolderKanban,
   Laptop,
   Palette,
   Sparkles,
@@ -12,7 +11,6 @@ import { cn } from "@/lib/utils";
 
 export type SettingsSectionId =
   | "appearance"
-  | "project"
   | "llm"
   | "integrations"
   | "connections"
@@ -30,12 +28,6 @@ export const SETTINGS_SECTIONS: Array<{
     label: "Görünüm",
     description: "Tema ve arayüz",
     icon: Palette,
-  },
-  {
-    id: "project",
-    label: "Proje",
-    description: "Çalışma alanı bağlamı",
-    icon: FolderKanban,
   },
   {
     id: "llm",

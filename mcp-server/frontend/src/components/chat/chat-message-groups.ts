@@ -7,6 +7,14 @@ export type MergedToolCall = {
   name: string;
   status: "running" | "done" | "pending" | "denied";
   detail?: string;
+  arguments?: Record<string, unknown>;
+  summary?: {
+    ok?: boolean;
+    summary?: string;
+    keyFacts?: string[];
+    truncated?: boolean;
+    rawRef?: { runId?: string; toolName?: string };
+  };
 };
 
 export type ChatRenderItem =
@@ -86,9 +94,11 @@ export function mergeToolMessages(tools: ChatMessageRow[]): MergedToolCall[] {
     if (tool.toolPhase === "start") {
       entry.status = "running";
       entry.detail = tool.content;
+      if (tool.toolArguments) entry.arguments = tool.toolArguments;
     } else if (tool.toolPhase === "end") {
       entry.status = "done";
       entry.detail = tool.content;
+      if (tool.toolSummary) entry.summary = tool.toolSummary;
     } else {
       entry.detail = tool.content;
       entry.status = "done";

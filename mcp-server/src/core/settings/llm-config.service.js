@@ -86,6 +86,13 @@ export async function saveLlmConfig(body, actor = "settings-ui") {
     changed.push("OPENAI_CHAT_MODEL");
   }
 
+  if (typeof body.globalInstructions === "string") {
+    const text = body.globalInstructions.trim().slice(0, 4_000);
+    await upsertSetting("CHAT_GLOBAL_INSTRUCTIONS", text, { updatedBy: actor });
+    applyOverlayEntry("CHAT_GLOBAL_INSTRUCTIONS", text);
+    changed.push("CHAT_GLOBAL_INSTRUCTIONS");
+  }
+
   await writeConfigAudit({
     operation: "save_llm_config",
     keyName: "llm-routing",

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -77,6 +78,7 @@ export function LlmRoutingPanel() {
   const [chatModel, setChatModel] = useState("");
   const [routerProvider, setRouterProvider] = useState("auto");
   const [routerModel, setRouterModel] = useState("");
+  const [globalInstructions, setGlobalInstructions] = useState("");
   const [keys, setKeys] = useState({
     openai: "",
     anthropic: "",
@@ -94,6 +96,7 @@ export function LlmRoutingPanel() {
     setChatModel(data.chat.model || "");
     setRouterProvider(data.router.provider);
     setRouterModel(data.router.model || "");
+    setGlobalInstructions(data.globalInstructions || "");
   }, [data]);
 
   const saveMutation = useMutation({
@@ -118,6 +121,7 @@ export function LlmRoutingPanel() {
       chatModel: mode === "split" ? chatModel : unifiedModel,
       routerProvider: mode === "split" ? routerProvider : "openai",
       routerModel: mode === "split" ? routerModel : unifiedModel,
+      globalInstructions,
       providerKeys:
         mode === "split"
           ? {
@@ -327,6 +331,26 @@ export function LlmRoutingPanel() {
           </SettingsSectionCard>
         </>
       )}
+
+      <SettingsSectionCard
+        icon={MessageSquare}
+        title="Global sohbet talimatları"
+        description="Tüm sohbetlere uygulanan özel LLM talimatları. Sohbet başına talimatların üstüne eklenir."
+      >
+        <div className="space-y-2">
+          <Label htmlFor="global-instructions">Custom instructions</Label>
+          <Textarea
+            id="global-instructions"
+            value={globalInstructions}
+            onChange={(e) => setGlobalInstructions(e.target.value)}
+            placeholder="Örn: Her zaman Türkçe yanıt ver. Finansal konularda bellek araçlarını kullan."
+            rows={5}
+            maxLength={4000}
+            className="resize-y font-mono text-sm"
+          />
+          <p className="text-[11px] text-muted-foreground">{globalInstructions.length}/4000</p>
+        </div>
+      </SettingsSectionCard>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saveMutation.isPending}>

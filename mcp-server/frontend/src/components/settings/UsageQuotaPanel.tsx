@@ -14,8 +14,8 @@ import {
 } from "@/lib/usage-api";
 import { useToast } from "@/providers/ToastProvider";
 
-export function UsageQuotaPanel() {
-  const projectId = getProjectId();
+export function UsageQuotaPanel({ projectId: projectIdProp }: { projectId?: string } = {}) {
+  const projectId = projectIdProp ?? getProjectId();
   const toast = useToast();
   const qc = useQueryClient();
 

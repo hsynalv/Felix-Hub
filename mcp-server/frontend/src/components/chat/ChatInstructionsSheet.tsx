@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import {
   DEFAULT_CONVERSATION_SETTINGS,
   INSTRUCTION_PRESETS,
+  CHAT_PROFILE_OPTIONS,
   MAX_INSTRUCTIONS_LENGTH,
   type ConversationSettings,
   hasActiveInstructions,
@@ -127,6 +128,28 @@ export function ChatInstructionsSheet({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Sohbet modu</Label>
+            <Select
+              value={draft.chatProfile || "balanced"}
+              onValueChange={(chatProfile) => setDraft((d) => ({ ...d, chatProfile: chatProfile as ConversationSettings["chatProfile"] }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Mod seç" />
+              </SelectTrigger>
+              <SelectContent>
+                {CHAT_PROFILE_OPTIONS.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {CHAT_PROFILE_OPTIONS.find((p) => p.id === (draft.chatProfile || "balanced"))?.description}
+            </p>
           </div>
 
           <div className="space-y-2">

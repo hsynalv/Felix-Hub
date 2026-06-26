@@ -5,12 +5,21 @@
 import OpenAI from "openai";
 import { listTools, callTool, approveTool } from "./tool-registry.js";
 import { ToolTags } from "./tool-registry.js";
-import { buildCompactContext } from "../plugins/brain/brain.context.js";
 import { recordUsageEvent } from "./usage/usage-ledger.service.js";
 import { computeCostUsd } from "./usage/usage-pricing.js";
 import { mergeUsageTotals, normalizeUsageFromResponse, usageContextFromRequest } from "./usage/usage-context.js";
 import { checkQuota } from "./usage/quota.service.js";
 import { buildSystemPrompt, buildToolCatalogSummary } from "./chat/chat-system-prompt.js";
+import { buildInstructionsBlock } from "./chat/chat-instructions.js";
+import { getChatContext } from "./chat/chat-context.js";
+import { shortlistToolsForIntent } from "./chat/tool-intent.js";
+import { guardToolCall, markReadToolUsed, recordToolCallSignature } from "./chat/tool-planning.js";
+import {
+  summarizeToolResult,
+  formatToolResultForModel,
+} from "./chat/tool-result-summarizer.js";
+import { resolveChatProfile, applyProfileToToolIntent } from "./chat/chat-profiles.js";
+import { CHAT_HISTORY_RAW_LIMIT } from "./chat/chat-config.js";
 import {
   getLlmKeyMode,
   getProviderApiKey,
@@ -31,6 +40,56 @@ import { withToolRetry } from "./agent-runs/tool-retry.js";
 
 export const MAX_TOOL_ITERATIONS = 8;
 export const APPROVAL_TIMEOUT_MS = 120_000;
+
+/** Per user-message cap for brain tools (prevents tool loops) */
+export const BRAIN_TOOL_CAPS = {
+  brain_remember: 1,
+  brain_recall: 1,
+  brain_get_context: 1,
+  brain_what_do_you_know_about: 1,
+};
+
+const BRAIN_RECALL_TOOLS = new Set(["brain_recall", "brain_get_context", "brain_what_do_you_know_about"]);
+
+/**
+ * Check if a brain tool call should be blocked due to per-turn caps.
+ * @param {string} name
+ * @param {Record<string, number>} counts
+ * @returns {{ blocked: boolean; message?: string }}
+ */
+export function checkBrainToolCap(name, counts = {}) {
+  if (!BRAIN_TOOL_CAPS[name]) return { blocked: false };
+
+  if (BRAIN_RECALL_TOOLS.has(name)) {
+    const recallUsed = [...BRAIN_RECALL_TOOLS].some((t) => (counts[t] || 0) >= BRAIN_TOOL_CAPS[t]);
+    if (recallUsed) {
+      return {
+        blocked: true,
+        message: "Bu turda zaten bir brain recall aracı çağrıldı; önceki sonucu kullan.",
+      };
+    }
+    return { blocked: false };
+  }
+
+  const used = counts[name] || 0;
+  if (used >= BRAIN_TOOL_CAPS[name]) {
+    return {
+      blocked: true,
+      message: `Bu turda ${name} zaten çağrıldı; önceki sonucu kullan.`,
+    };
+  }
+  return { blocked: false };
+}
+
+export function createBrainToolCounts() {
+  return {};
+}
+
+export function recordBrainToolCall(name, counts) {
+  if (BRAIN_TOOL_CAPS[name]) {
+    counts[name] = (counts[name] || 0) + 1;
+  }
+}
 
 /** @type {Map<string, { resolve: Function, toolName: string, args: object, context: object }>} */
 const approvalWaiters = new Map();
@@ -110,18 +169,28 @@ const CHAT_TOOL_PRIORITY = new Set([
   "brain_remember",
   "brain_get_context",
   "brain_get_stats",
+  "brain_what_do_you_know_about",
   "prompt_list",
   "git_status",
 ]);
 
-export function selectChatTools(allTools, { allowWriteTools = true, pluginFilter = null } = {}) {
+export function selectChatTools(
+  allTools,
+  { allowWriteTools = true, pluginFilter = null, toolIntent = null, chatProfile = null } = {}
+) {
   let tools = allTools;
   if (pluginFilter) {
     const needle = String(pluginFilter).toLowerCase();
     tools = tools.filter((t) => (t.plugin || "").toLowerCase() === needle);
   }
-  if (!allowWriteTools) {
-    tools = allTools.filter((t) => !isWriteToolDef(t));
+
+  const profile = chatProfile ? resolveChatProfile(chatProfile) : null;
+  const profileAllowsWrite = profile ? profile.allowWriteTools : allowWriteTools;
+  if (!profileAllowsWrite || !allowWriteTools) {
+    tools = tools.filter((t) => !isWriteToolDef(t));
+  }
+  if (toolIntent) {
+    tools = shortlistToolsForIntent(tools, toolIntent);
   }
   const priority = [];
   const rest = [];
@@ -194,6 +263,38 @@ export function deleteApprovalWaiter(approvalId) {
 async function runToolWithApproval(name, args, context, handlers = {}) {
   const { allowWriteTools = true, onToolCall = () => {}, onApproval = () => {} } = handlers;
 
+  const brainToolCounts = context.brainToolCounts || {};
+  const capCheck = checkBrainToolCap(name, brainToolCounts);
+  if (capCheck.blocked) {
+    const capped = {
+      ok: true,
+      data: { capped: true, message: capCheck.message },
+    };
+    onToolCall({ phase: "start", name, arguments: args });
+    onToolCall({ phase: "end", name, result: capped });
+    return capped;
+  }
+
+  const toolDef = listTools().find((t) => t.name === name);
+  if (!context.availableToolNames) {
+    context.availableToolNames = listTools().map((t) => t.name);
+  }
+  const guard = guardToolCall(name, args, context, toolDef);
+  if (guard.blocked) {
+    if (!context.guardBlocks) context.guardBlocks = [];
+    context.guardBlocks.push({ toolName: name, code: guard.code, reason: guard.reason });
+    const rejected = {
+      ok: false,
+      error: { code: guard.code, message: guard.reason },
+    };
+    onToolCall({ phase: "start", name, arguments: args });
+    onToolCall({ phase: "end", name, result: rejected });
+    return rejected;
+  }
+  if (guard.warn) {
+    context._guardWarning = guard.reason;
+  }
+
   if (!allowWriteTools && isWriteToolName(name)) {
     const blocked = {
       ok: false,
@@ -260,7 +361,14 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
     result = await waitForApproval(result.approval.id, name, args, context);
   }
 
-  onToolCall({ phase: "end", name, result });
+  const summary = summarizeToolResult({ toolName: name, result, runId: context.runId });
+  if (context._guardWarning) {
+    summary.summary = `[Guard warning: ${context._guardWarning}] ${summary.summary}`;
+    delete context._guardWarning;
+  }
+  result._toolSummary = summary;
+
+  onToolCall({ phase: "end", name, arguments: args, result, summary });
   if (context.runId) {
     void recordToolStep(context.runId, {
       toolName: name,
@@ -270,6 +378,10 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
       phase: "end",
     });
   }
+  recordBrainToolCall(name, brainToolCounts);
+  recordToolCallSignature(name, args, context);
+  markReadToolUsed(name, toolDef?.tags || [], context);
+
   return result;
 }
 
@@ -393,10 +505,15 @@ async function chatWithOpenAi({ messages, model, tools, context, handlers }) {
 
       toolCallsLog.push({ name: tc.name, arguments: args });
       const result = await runToolWithApproval(tc.name, args, context, toolHandlers);
+      const summary = result._toolSummary || summarizeToolResult({
+        toolName: tc.name,
+        result,
+        runId: context.runId,
+      });
       currentMessages.push({
         role: "tool",
         tool_call_id: tc.id,
-        content: JSON.stringify(result.ok ? result.data : result.error || result),
+        content: formatToolResultForModel(summary),
       });
     }
   }
@@ -511,9 +628,14 @@ async function chatWithOllama({ messages, model, tools, context, handlers }) {
         onToolCall,
         onApproval,
       });
+      const summary = result._toolSummary || summarizeToolResult({
+        toolName: name,
+        result,
+        runId: context.runId,
+      });
       currentMessages.push({
         role: "tool",
-        content: JSON.stringify(result.ok ? result.data : result.error || result),
+        content: formatToolResultForModel(summary),
       });
     }
   }
@@ -546,6 +668,8 @@ export async function runChatTurn({
   context = {},
   allowWriteTools = false,
   onToolCall,
+  chatProfile = "balanced",
+  historySummaryBlock = "",
 }) {
   if (!message || typeof message !== "string") {
     throw new Error("message string required");
@@ -564,25 +688,31 @@ export async function runChatTurn({
     source: context.source || "telegram",
     conversationId: context.conversationId,
     runId: context.runId || null,
+    brainToolCounts: context.brainToolCounts || createBrainToolCounts(),
+    readToolsUsed: false,
   };
 
-  let brainBlock = "";
-  if (includeBrainContext) {
-    try {
-      brainBlock = await buildCompactContext({ task: message, projectId: chatContext.projectId });
-    } catch {
-      brainBlock = "";
-    }
-  }
+  const chatCtx = await getChatContext({
+    message,
+    projectId: chatContext.projectId,
+    conversationId: chatContext.conversationId,
+    includeBrainContext,
+    hasConversationHistory: history.length > 0,
+    chatProfile,
+    historySummaryBlock,
+  });
+  chatContext.intent = chatCtx.toolIntent;
 
-  const systemContent = buildSystemPrompt(
-    [systemPrompt, brainBlock].filter(Boolean).join("\n\n"),
-    { toolCatalog: buildToolCatalogSummary(listTools()) }
-  );
+  const instructionsBlock = buildInstructionsBlock({}, systemPrompt);
+  const systemContent = buildSystemPrompt(instructionsBlock ? `${instructionsBlock}\n\n${chatCtx.contextHints}` : chatCtx.contextHints, {
+    toolCatalog: buildToolCatalogSummary(
+      selectChatTools(listTools(), { allowWriteTools, toolIntent: chatCtx.toolIntent, chatProfile })
+    ),
+  });
 
   const messages = [
     { role: "system", content: systemContent },
-    ...history.filter((m) => m?.role && m?.content).slice(-20),
+    ...history.filter((m) => m?.role && m?.content).slice(-CHAT_HISTORY_RAW_LIMIT),
     { role: "user", content: message },
   ];
 
@@ -594,7 +724,7 @@ export async function runChatTurn({
     }
   }
 
-  const tools = buildOpenAiTools({ allowWriteTools });
+  const tools = buildOpenAiTools({ allowWriteTools, toolIntent: chatCtx.toolIntent, chatProfile });
   const handlers = {
     allowWriteTools,
     onDelta: () => {},

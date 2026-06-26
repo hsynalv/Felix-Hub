@@ -76,6 +76,8 @@ export async function createMemory(body: {
   tags?: string[];
   projectId?: string | null;
   importance?: number;
+  skipClassification?: boolean;
+  autoClassify?: boolean;
 }) {
   return apiPost<BrainMemory>("/brain/memories", body);
 }
@@ -108,6 +110,17 @@ export async function deleteMemory(id: string) {
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error?.message || res.statusText);
   return json;
+}
+
+export async function submitMemoryFeedback(
+  id: string,
+  body: {
+    action: "confirm" | "reject" | "forget" | "update" | "link_project";
+    projectId?: string;
+    correction?: string;
+  }
+) {
+  return apiPost<BrainMemory>(`/brain/memories/${id}/feedback`, body);
 }
 
 export async function recallMemories(body: {

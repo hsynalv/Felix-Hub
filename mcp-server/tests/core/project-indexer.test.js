@@ -2,7 +2,7 @@
  * Project indexer — Notion branch (mocked)
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { syncProjectIndex } from "../../src/core/project-context/project-indexer.js";
 import { createProject, deleteProject, updateProjectLinks } from "../../src/plugins/projects/projects.store.js";
 import { resetProjectContextForTests } from "../../src/core/project-context/project-context.service.js";
@@ -38,6 +38,14 @@ describe("project indexer notion", () => {
         }),
       }))
     );
+  });
+
+  afterAll(() => {
+    try {
+      deleteProject(key);
+    } catch {
+      /* ignore */
+    }
   });
 
   it("records notion_page events on sync", async () => {

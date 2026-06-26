@@ -7,6 +7,8 @@ import {
   isPersistenceHealthy,
   randomUUID,
 } from "../persistence/index.js";
+import { CHAT_HISTORY_RAW_LIMIT } from "./chat-config.js";
+import { buildHistorySummaryBlock } from "./conversation-compression.js";
 
 const DEFAULT_NS = "default";
 
@@ -60,14 +62,17 @@ export function generateTitleFromMessage(message) {
 
 export async function listConversations({
   namespace = DEFAULT_NS,
-  projectId = null,
+  /** @type {string|null|undefined} undefined = all projects, null = unassigned only */
+  projectId = undefined,
   limit = 50,
   offset = 0,
 } = {}) {
   persistenceRequired();
   const inputs = { namespace, limit, offset };
   let projectFilter = "";
-  if (projectId) {
+  if (projectId === null) {
+    projectFilter = " AND project_id IS NULL";
+  } else if (projectId !== undefined && projectId !== "") {
     projectFilter = " AND project_id = @projectId";
     inputs.projectId = projectId;
   }
@@ -201,7 +206,10 @@ export async function appendMessage(conversationId, { role, content, metadata = 
   return { id: msgId, conversationId, seq, role, content, metadata };
 }
 
-export async function getConversationHistoryForChat(conversationId, { limit = 20, namespace = DEFAULT_NS } = {}) {
+export async function getConversationHistoryForChat(
+  conversationId,
+  { limit = CHAT_HISTORY_RAW_LIMIT, namespace = DEFAULT_NS } = {}
+) {
   persistenceRequired();
   const conv = await getConversation(conversationId, { namespace });
   if (!conv) return null;
@@ -209,7 +217,8 @@ export async function getConversationHistoryForChat(conversationId, { limit = 20
     .filter((m) => m.role === "user" || m.role === "assistant")
     .slice(-limit)
     .map((m) => ({ role: m.role, content: m.content }));
-  return { conversation: conv, history: messages };
+  const summaryBlock = buildHistorySummaryBlock(conv.metadata || {});
+  return { conversation: conv, history: messages, summaryBlock };
 }
 
 export async function appendChatExchange(

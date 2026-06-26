@@ -404,7 +404,7 @@ export function register(app) {
 export const tools = [
   {
     name: "n8n_get_context",
-    description: "Get everything needed to build an n8n workflow in ONE call: full node schemas, available credentials, and relevant examples. Always call this first before generating workflow JSON.",
+    description: "Get n8n WORKFLOW BUILDER context only (node schemas, credentials, examples). NOT for business/project/finance context — use brain_recall or project_context_* for that.",
     tags: [ToolTags.READ],
     inputSchema: {
       type: "object",
