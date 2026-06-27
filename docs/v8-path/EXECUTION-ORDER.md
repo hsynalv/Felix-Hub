@@ -35,14 +35,14 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 8.1 | Prompt Pattern Library | [01-prompt-pattern-library.md](./01-prompt-pattern-library.md) | not_started |
-| 8.2 | Mode Chat Profiles | [02-mode-chat-profiles.md](./02-mode-chat-profiles.md) | not_started |
-| 8.3 | Provenance & Safety | [10-provenance-safety.md](./10-provenance-safety.md) | not_started |
+| 8.1 | Prompt Pattern Library | [01-prompt-pattern-library.md](./01-prompt-pattern-library.md) | done |
+| 8.2 | Mode Chat Profiles | [02-mode-chat-profiles.md](./02-mode-chat-profiles.md) | done |
+| 8.3 | Provenance & Safety | [10-provenance-safety.md](./10-provenance-safety.md) | done |
 
 **Exit gate:**
-- [ ] `buildSystemPrompt()` registry render kullanır (`felix-default` bundle)
-- [ ] `chat` / `agent` / `spec` / `review` / `debug` / `ops` / `desktop` modları tanımlı
-- [ ] Provenance metadata şeması + review checklist
+- [x] `buildSystemPrompt()` registry render kullanır (`felix-default` bundle)
+- [x] `chat` / `agent` / `spec` / `review` / `debug` / `ops` / `desktop` modları tanımlı
+- [x] Provenance metadata şeması + review checklist
 
 ---
 
@@ -50,14 +50,14 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 8.4 | Tool Calling Intelligence | [03-tool-calling-intelligence.md](./03-tool-calling-intelligence.md) | not_started |
-| 8.5 | Memory / Brain Prompts | [05-memory-brain-prompts.md](./05-memory-brain-prompts.md) | not_started |
-| 8.6 | Agent Loop Contract | [06-agent-loop-contract.md](./06-agent-loop-contract.md) | not_started |
+| 8.4 | Tool Calling Intelligence | [03-tool-calling-intelligence.md](./03-tool-calling-intelligence.md) | done |
+| 8.5 | Memory / Brain Prompts | [05-memory-brain-prompts.md](./05-memory-brain-prompts.md) | done |
+| 8.6 | Agent Loop Contract | [06-agent-loop-contract.md](./06-agent-loop-contract.md) | done |
 
 **Exit gate:**
-- [ ] Tool planning karar şeması prompt + `guardToolCall` uyumlu
-- [ ] Brain create/update/delete kuralları prompt + limitler hizalı
-- [ ] Orchestrator turn metadata: observe / plan / act / reflect
+- [x] Tool planning karar şeması prompt + `guardToolCall` uyumlu
+- [x] Brain create/update/delete kuralları prompt + limitler hizalı
+- [x] Orchestrator turn metadata: observe / plan / act / reflect
 
 ---
 
@@ -65,16 +65,16 @@ flowchart TB
 
 | Sıra | Pillar | Dosya | Durum |
 |------|--------|-------|-------|
-| 8.7 | Spec Driven Development | [04-spec-driven-development.md](./04-spec-driven-development.md) | not_started |
-| 8.8 | Prompt Eval Studio | [07-prompt-eval-studio.md](./07-prompt-eval-studio.md) | not_started |
-| 8.9 | Prompt Importer | [08-prompt-importer.md](./08-prompt-importer.md) | not_started |
-| 8.10 | Prompt Marketplace | [09-prompt-marketplace.md](./09-prompt-marketplace.md) | not_started |
+| 8.7 | Spec Driven Development | [04-spec-driven-development.md](./04-spec-driven-development.md) | done |
+| 8.8 | Prompt Eval Studio | [07-prompt-eval-studio.md](./07-prompt-eval-studio.md) | done |
+| 8.9 | Prompt Importer | [08-prompt-importer.md](./08-prompt-importer.md) | done |
+| 8.10 | Prompt Marketplace | [09-prompt-marketplace.md](./09-prompt-marketplace.md) | done |
 
 **Exit gate:**
-- [ ] Spec mode: requirements → design → tasks artifact + opsiyonel runbook
-- [ ] `eval:prompt` veya Eval Studio panel: ≥3 variant skor kartı
-- [ ] Importer CLI: arşiv tarama → draft registry JSON
-- [ ] UI: profil/marketplace seçimi (MVP)
+- [x] Spec mode: requirements → design → tasks artifact + opsiyonel runbook
+- [x] `eval:prompt` veya Eval Studio panel: ≥3 variant skor kartı
+- [x] Importer CLI: arşiv tarama → draft registry JSON
+- [x] UI: profil/marketplace seçimi (MVP)
 
 ---
 

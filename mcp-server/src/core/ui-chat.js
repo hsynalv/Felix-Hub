@@ -41,6 +41,7 @@ import { ensureRunForChat, completeRun } from "./agent-runs/run-orchestrator.js"
 import { CHAT_HISTORY_RAW_LIMIT } from "./chat/chat-config.js";
 import { maybeCompressConversation } from "./chat/conversation-compression.js";
 import { resolveChatProfile } from "./chat/chat-profiles.js";
+import { createAgentLoopState } from "./chat/agent-loop.js";
 import { TOOL_INTENTS } from "./chat/tool-intent.js";
 import { resolveChatNamespace } from "./auth/tenant-middleware.js";
 
@@ -345,6 +346,9 @@ export function registerUiChatRoutes(app) {
     );
 
     const chatProfile = resolveChatProfile(conversationMetadata.chatProfile).id;
+    const chatMode = conversationMetadata.chatMode || null;
+    context.chatMode = chatMode || resolveChatProfile(chatProfile).mode;
+    context.agentLoop = createAgentLoopState();
 
     const chatCtx = await getChatContext({
       message,
@@ -353,6 +357,7 @@ export function registerUiChatRoutes(app) {
       includeBrainContext,
       hasConversationHistory: chatHistory.length > 0,
       chatProfile,
+      chatMode,
       historySummaryBlock,
     });
     context.intent = chatCtx.toolIntent;
@@ -375,6 +380,10 @@ export function registerUiChatRoutes(app) {
         toolCatalog,
         pluginFilter: scopedPlugin,
         scopedTools: scopedPlugin ? scopedToolDefs : [],
+        chatProfile,
+        chatMode,
+        marketplacePackId: conversationMetadata.marketplacePackId || null,
+        projectId: context.projectId,
       }
     );
 
@@ -426,6 +435,8 @@ export function registerUiChatRoutes(app) {
       rawIntent: chatCtx.toolClassification.rawIntent ?? chatCtx.toolClassification.intent,
       modelVersion: chatCtx.meta.modelVersion,
       chatProfile: chatCtx.meta.chatProfile,
+      chatMode: chatCtx.meta.chatMode,
+      agentLoopPhase: chatCtx.meta.agentLoopPhase,
       toolsDisabled,
       pluginFilter: scopedPlugin,
       conversationId: activeConversationId,

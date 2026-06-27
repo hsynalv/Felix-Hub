@@ -1,6 +1,7 @@
 import {
   Bot,
   Database,
+  FileCode2,
   Flower2,
   KeyRound,
   Laptop,
@@ -19,6 +20,7 @@ export type SettingsSectionId =
   | "personal"
   | "connections"
   | "sidecar"
+  | "prompts"
   | "advanced";
 
 export type SettingsSection = {
@@ -78,6 +80,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: "Yerel masaüstü ajanı",
     icon: Laptop,
     group: "hub",
+  },
+  {
+    id: "prompts",
+    label: "Prompt Registry",
+    description: "Import draft onay kuyruğu",
+    icon: FileCode2,
+    group: "sistem",
   },
   {
     id: "advanced",

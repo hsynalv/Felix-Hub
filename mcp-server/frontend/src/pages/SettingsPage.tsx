@@ -12,6 +12,7 @@ import { PluginEnvPanel } from "@/components/settings/PluginEnvPanel";
 import { LlmRoutingPanel } from "@/components/settings/LlmRoutingPanel";
 import { PersonalOsSettingsPanel } from "@/components/settings/PersonalOsSettingsPanel";
 import { SidecarSettingsPanel } from "@/components/settings/SidecarSettingsPanel";
+import { PromptImportSettingsPanel } from "@/components/settings/PromptImportSettingsPanel";
 import {
   SettingsNav,
   SETTINGS_SECTIONS,
@@ -53,6 +54,10 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
     title: "Felix Desktop",
     description: "Yerel masaüstü ajanı, production modu ve eşleştirilmiş cihazlar.",
   },
+  prompts: {
+    title: "Prompt Registry",
+    description: "Harici arşivden türetilmiş draft'ları inceleyin ve onaylayın.",
+  },
   advanced: {
     title: "Gelişmiş",
     description: "Yedekleme, taşıma ve kurulum araçları.",
@@ -90,7 +95,10 @@ export function SettingsPage() {
 
   const isForbidden = settingsQuery.error instanceof ApiError && settingsQuery.error.status === 403;
   const needsAdmin =
-    section !== "appearance" && section !== "sidecar" && section !== "personal" && section !== "account";
+    section !== "appearance" &&
+    section !== "sidecar" &&
+    section !== "personal" &&
+    section !== "account";
   const header = SECTION_HEADERS[section];
 
   return (
@@ -122,6 +130,7 @@ export function SettingsPage() {
           {section === "llm" && !isForbidden && <LlmRoutingPanel />}
           {section === "connections" && !isForbidden && <ConnectionsSettingsPanel />}
           {section === "sidecar" && <SidecarSettingsPanel />}
+          {section === "prompts" && !isForbidden && <PromptImportSettingsPanel />}
           {section === "advanced" && !isForbidden && <AdvancedSettingsPanel />}
         </div>
       </div>

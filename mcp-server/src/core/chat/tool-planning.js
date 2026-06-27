@@ -1,12 +1,30 @@
 /**
  * Tool planning protocol — guides LLM before tool calls.
+ * V8 Faz B: decision tree, mode/profile awareness, eval schema.
  */
 
 import { toolMatchesIntent } from "./tool-intent.js";
 import { checkHttpRequestDedicatedRouting } from "./http-dedicated-routing.js";
 import { isRiskyIntentMismatch } from "./intent-decision.js";
+import { isChatMode } from "./prompt-constants.js";
+import { resolveChatProfile } from "./chat-profiles.js";
 
-const PLANNING_PROTOCOL = `## Tool planning protocol
+const TOOL_DECISION_TREE = `## Tool decision tree (follow in order)
+1. **Need tool?** — If injected context fully answers the question, respond without tools.
+2. **Intent** — Match detected intent; do not scatter across unrelated plugins.
+3. **Read first** — Run read-only tools before any write/destructive action.
+4. **Risk** — Check tags: write, destructive, needs_approval.
+5. **Approval** — If policy requires approval, wait; never bypass or pretend success.
+6. **Stop** — When results are sufficient, synthesize and stop; no duplicate calls.
+
+### Loop prevention
+- Do not call the same tool with identical arguments twice in one turn.
+- After **reflect**, do not start another tool round without new user input.
+- If a tool was blocked by the server guard, read the reason and try an aligned alternative once.`;
+
+const PLANNING_PROTOCOL = `${TOOL_DECISION_TREE}
+
+## Tool planning protocol
 Before calling any tool:
 1. Decide whether a tool is **necessary** — prefer answering from injected context when sufficient.
 2. **Read before write** — gather state with read-only tools first.
@@ -56,11 +74,104 @@ const INTENT_MICRO_PLANS = {
   ],
 };
 
+/** @type {Record<string, string>} */
+const MODE_PLANNING_HINTS = {
+  chat: "_Mode: chat — minimize tools; answer from context when possible._",
+  agent: "_Mode: agent — use tools when live data or hub actions are required._",
+  spec: "_Mode: spec — **no write tools**; produce planning artifacts in the reply._",
+  review: "_Mode: review — **read-only**; never modify files or run shell writes._",
+  debug: "_Mode: debug — read/inspect first, then minimal fix tools._",
+  ops: "_Mode: ops — prefer **agent_workflow_*** / **agent_run_*** for runbooks._",
+  desktop: "_Mode: desktop — local actions via Felix Desktop; expect approvals._",
+};
+
+/** JSON schema for eval / structured logging */
+export const TOOL_DECISION_SCHEMA = {
+  type: "object",
+  properties: {
+    needsTool: { type: "boolean" },
+    intent: { type: "string" },
+    readBeforeWriteOk: { type: "boolean" },
+    riskLevel: { type: "string", enum: ["low", "medium", "high"] },
+    needsApproval: { type: "boolean" },
+    shouldStop: { type: "boolean" },
+    blocked: { type: "boolean" },
+    blockCode: { type: "string" },
+    blockReason: { type: "string" },
+  },
+};
+
+function riskLevelFromTool(name, tags = []) {
+  if (tags.includes("destructive") || name.includes("delete") || name.startsWith("shell_execute")) {
+    return "high";
+  }
+  if (tags.includes("write") || name.startsWith("brain_remember") || name.startsWith("workspace_write")) {
+    return "medium";
+  }
+  return "low";
+}
+
+function isReadOnlyMode(mode) {
+  return mode === "review" || mode === "spec";
+}
+
 /**
- * @param {{ intent?: string; route?: { skipBrainContext?: boolean } }} ctx
+ * Structured tool decision snapshot (mirrors guard for eval).
+ * @param {object} params
+ */
+export function evaluateToolDecision({
+  intent = "general",
+  mode = "agent",
+  toolName = "",
+  tags = [],
+  readToolsUsed = false,
+  availableToolNames = [],
+  args = {},
+}) {
+  const decision = {
+    needsTool: intent !== "no_tool" && !!toolName,
+    intent,
+    readBeforeWriteOk: true,
+    riskLevel: toolName ? riskLevelFromTool(toolName, tags) : "low",
+    needsApproval: false,
+    shouldStop: intent === "no_tool",
+    blocked: false,
+    blockCode: null,
+    blockReason: null,
+  };
+
+  if (!toolName) return decision;
+
+  const guard = guardToolCall(toolName, args, {
+    intent,
+    readToolsUsed,
+    availableToolNames,
+    chatMode: mode,
+    toolCallSignatures: new Set(),
+  }, { tags });
+
+  decision.blocked = guard.blocked;
+  decision.blockCode = guard.code || null;
+  decision.blockReason = guard.reason || null;
+  decision.readBeforeWriteOk = !guard.blocked || guard.code !== "tool_call_rejected_by_guard" || !String(guard.reason || "").includes("Read current state");
+
+  if (isReadOnlyMode(mode) && isWriteToolName(toolName, tags)) {
+    decision.blocked = true;
+    decision.blockCode = "mode_read_only";
+    decision.blockReason = `Write tool ${toolName} blocked in ${mode} mode.`;
+  }
+
+  return decision;
+}
+
+/**
+ * @param {{ intent?: string; route?: { skipBrainContext?: boolean }; chatMode?: string; chatProfile?: string }} ctx
  */
 export function buildToolPlanningBlock(ctx = {}) {
   const lines = [PLANNING_PROTOCOL];
+  const mode = isChatMode(ctx.chatMode) ? ctx.chatMode : resolveChatProfile(ctx.chatProfile).mode;
+  const modeHint = MODE_PLANNING_HINTS[mode];
+  if (modeHint) lines.push(modeHint);
 
   if (ctx.intent === "no_tool") {
     lines.push("\n_Planner: tools likely unnecessary for this message._");
@@ -73,6 +184,10 @@ export function buildToolPlanningBlock(ctx = {}) {
     }
   }
 
+  if (mode === "ops" && ctx.intent !== "agent_workflow" && ctx.intent !== "automation") {
+    lines.push("_Ops hint: consider **agent_workflow_*** tools for multi-step runbooks._");
+  }
+
   if (ctx.route?.skipBrainContext) {
     lines.push("_Planner: brain context skipped — do not call brain tools unless user asks._");
   }
@@ -80,7 +195,7 @@ export function buildToolPlanningBlock(ctx = {}) {
   return lines.join("\n");
 }
 
-function isWriteToolName(name, tags = []) {
+export function isWriteToolName(name, tags = []) {
   return (
     tags.includes("write") ||
     tags.includes("destructive") ||
@@ -118,6 +233,23 @@ function toolCallSignature(name, args) {
 export function guardToolCall(name, args, context = {}, toolDef = null) {
   const tags = toolDef?.tags || [];
   const isWrite = isWriteToolName(name, tags);
+  const mode = isChatMode(context.chatMode) ? context.chatMode : null;
+
+  if (mode === "review" && isWrite) {
+    return {
+      blocked: true,
+      code: "mode_read_only",
+      reason: `Review mode blocks write tool: ${name}.`,
+    };
+  }
+
+  if (mode === "spec" && isWrite && !name.startsWith("brain_recall")) {
+    return {
+      blocked: true,
+      code: "mode_spec_no_write",
+      reason: `Spec mode blocks mutating tools (${name}). Produce artifacts in the reply instead.`,
+    };
+  }
 
   if (name === "http_request" && args?.url) {
     const routeCheck = checkHttpRequestDedicatedRouting(args.url, context.availableToolNames);

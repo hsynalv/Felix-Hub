@@ -15,6 +15,7 @@ import {
   evalReplayCompare,
   evalTwoRuns,
 } from "./eval-studio.service.js";
+import { runPromptEvalSuite, buildPromptEvalReport } from "./prompt-eval.service.js";
 import { getWorkflowTemplate, buildPlanFromTemplate } from "../agent-runs/workflow-templates.js";
 
 export function registerEvalRoutes(app) {
@@ -119,6 +120,24 @@ export function registerEvalRoutes(app) {
       res.json({ ok: true, data });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "workflow_diff_failed", message: err.message } });
+    }
+  });
+
+  app.post("/eval/prompt", requireScope("read"), (_req, res) => {
+    try {
+      const suite = runPromptEvalSuite();
+      res.json({ ok: true, data: suite });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "prompt_eval_failed", message: err.message } });
+    }
+  });
+
+  app.get("/eval/prompt/report", requireScope("read"), (_req, res) => {
+    try {
+      const report = buildPromptEvalReport();
+      res.json({ ok: true, data: report.json, html: report.html });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "prompt_eval_report_failed", message: err.message } });
     }
   });
 }

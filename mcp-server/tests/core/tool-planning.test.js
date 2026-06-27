@@ -4,9 +4,9 @@ import { evaluateMemoryWrite } from "../../src/plugins/brain/brain.write-policy.
 import { formatMemoryCitation } from "../../src/plugins/brain/brain.memory-scopes.js";
 
 describe("tool-planning", () => {
-  it("builds planning block with intent", () => {
+  it("planning block includes decision tree", () => {
     const block = buildToolPlanningBlock({ intent: "read_repo" });
-    expect(block).toContain("Tool planning protocol");
+    expect(block).toContain("Tool decision tree");
     expect(block).toContain("read_repo");
   });
 

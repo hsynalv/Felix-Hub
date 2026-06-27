@@ -37,6 +37,7 @@ import {
   type ConversationSettings,
 } from "@/lib/chat-instructions";
 import { ChatInstructionsSheet } from "@/components/chat/ChatInstructionsSheet";
+import { SpecArtifactPanel } from "@/components/chat/SpecArtifactPanel";
 import {
   streamChat,
   submitChatApproval,
@@ -904,6 +905,14 @@ export function ChatPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          <div className="shrink-0 px-4 pt-2">
+            <SpecArtifactPanel
+              settings={chatSettings}
+              onSettingsChange={handleSaveSettings}
+              disabled={modelsLoading || streaming}
+            />
+          </div>
 
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <ChatMessageList

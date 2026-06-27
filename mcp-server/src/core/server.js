@@ -49,6 +49,8 @@ import { registerInboxRoutes } from "./inbox/inbox.routes.js";
 import { registerObservabilityProRoutes } from "./observability-pro/observability-pro.routes.js";
 import { registerV6PhaseCRoutes } from "./v6-c/routes.js";
 import { registerV7Routes } from "./v7/routes.js";
+import { registerV8Routes } from "./v8/v8.routes.js";
+import { registerSpecRoutes } from "./spec/spec.routes.js";
 import { startSlaRunner } from "./sla/sla-runner.js";
 import {
   canAccessProject,
@@ -843,6 +845,8 @@ export async function createServer() {
   registerObservabilityProRoutes(app);
   registerV6PhaseCRoutes(app);
   registerV7Routes(app);
+  registerV8Routes(app);
+  registerSpecRoutes(app);
   startScheduleRunner();
   startBriefingSchedulerRunner();
   startSlaRunner();

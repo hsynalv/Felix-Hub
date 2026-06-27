@@ -3,6 +3,8 @@
  */
 
 import { getEnvValue } from "../settings/effective-config.js";
+import { isChatMode } from "./prompt-constants.js";
+import { CHAT_PROFILES } from "./chat-profiles.js";
 
 const RESPONSE_STYLE_SUFFIX = {
   concise: "Yanıtlarını kısa ve öz tut. Gereksiz tekrar yapma.",
@@ -17,7 +19,14 @@ export function getGlobalChatInstructions() {
 
 export function normalizeConversationMetadata(metadata) {
   if (!metadata || typeof metadata !== "object") return {};
-  return metadata;
+  const out = { ...metadata };
+  if (typeof out.chatProfile === "string" && !CHAT_PROFILES[out.chatProfile]) {
+    delete out.chatProfile;
+  }
+  if (out.chatMode != null && !isChatMode(out.chatMode)) {
+    delete out.chatMode;
+  }
+  return out;
 }
 
 export function buildInstructionsBlock(metadata = {}, explicitSystemPrompt, explicitResponseStyle) {

@@ -11,8 +11,10 @@ import {
   evalGoldenTrace,
   fetchGoldenTraces,
   runRegressionSuite,
+  runPromptEvalSuite,
   type GoldenTrace,
   type TemplateEvalResult,
+  type PromptEvalSuite,
 } from "@/lib/eval-api";
 import { useToast } from "@/providers/ToastProvider";
 
@@ -20,6 +22,7 @@ export function EvalStudioPage() {
   const toast = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [evalResults, setEvalResults] = useState<Record<string, TemplateEvalResult>>({});
+  const [promptEval, setPromptEval] = useState<PromptEvalSuite | null>(null);
 
   const tracesQuery = useQuery({
     queryKey: ["eval-golden"],
@@ -51,6 +54,20 @@ export function EvalStudioPage() {
     onError: (e: Error) => toast.show(e.message, "error"),
   });
 
+  const promptEvalMutation = useMutation({
+    mutationFn: runPromptEvalSuite,
+    onSuccess: (data) => {
+      setPromptEval(data);
+      toast.show(
+        data.pass
+          ? `Prompt eval geçti (${data.summary.passed}/${data.summary.variants})`
+          : `Prompt eval: ${data.summary.failed} variant başarısız`,
+        data.pass ? undefined : "error"
+      );
+    },
+    onError: (e: Error) => toast.show(e.message, "error"),
+  });
+
   const traces = tracesQuery.data?.traces ?? [];
   const selected = traces.find((t) => t.id === selectedId) ?? traces[0] ?? null;
   const selectedResult = selected ? evalResults[selected.id] : undefined;
@@ -66,6 +83,7 @@ export function EvalStudioPage() {
       <Tabs defaultValue="golden" className="mt-6">
         <TabsList equalWidth>
           <TabsTrigger value="golden">Golden traces</TabsTrigger>
+          <TabsTrigger value="prompts">Prompt eval</TabsTrigger>
           <TabsTrigger value="regression">Regression</TabsTrigger>
           <TabsTrigger value="help">Rehber</TabsTrigger>
         </TabsList>
@@ -163,6 +181,58 @@ export function EvalStudioPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="prompts" className="mt-4">
+          <OpsPanel title="Prompt variant matrix (V8)">
+            <p className="mb-3 text-sm text-muted-foreground">
+              Heuristic smoke — tool decision tree, agent loop, mode overlay, spec artifact shape.
+            </p>
+            <Button
+              size="sm"
+              disabled={promptEvalMutation.isPending}
+              onClick={() => promptEvalMutation.mutate()}
+            >
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              Prompt eval çalıştır
+            </Button>
+            {promptEval && (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="p-2">Variant</th>
+                      {promptEval.metrics.map((m) => (
+                        <th key={m} className="p-2">
+                          {m}
+                        </th>
+                      ))}
+                      <th className="p-2">Skor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {promptEval.variants.map((v) => (
+                      <tr key={v.variantId} className="border-b border-border/40">
+                        <td className="p-2 font-medium">{v.label}</td>
+                        {promptEval.metrics.map((m) => (
+                          <td key={m} className="p-2">
+                            {v.scores[m] ? (
+                              <CheckCircle2 className="inline h-3.5 w-3.5 text-success" />
+                            ) : (
+                              <XCircle className="inline h-3.5 w-3.5 text-destructive" />
+                            )}
+                          </td>
+                        ))}
+                        <td className="p-2">
+                          {v.total}/{v.max}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </OpsPanel>
         </TabsContent>
 
         <TabsContent value="regression" className="mt-4 space-y-4">

@@ -15,27 +15,12 @@ import { toolContextFromRequest } from "../../core/authorization/http-tool-conte
 import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/index.js";
 import { loadPrompts, withStore } from "./prompts.store.js";
 import { resolveSlots } from "./prompts.slots.js";
-
-// ─── Constants ─────────────────────────────────────────────────────────────
-
-const STANDARD_SECTION_KEYS = [
-  "identity",
-  "capabilities",
-  "flow",
-  "tool_calling",
-  "response_style",
-  "code_style",
-  "context_understanding",
-  "memory_injection",
-  "preferences_injection",
-  "completion_spec",
-  "non_compliance",
-  "todo_spec",
-];
-
-const SECTION_ORDER = [...STANDARD_SECTION_KEYS];
-
-const MODES = ["agent", "spec", "review", "debug", "chat"];
+import { ensureBuiltinPrompts } from "./prompts.seed.js";
+import {
+  STANDARD_SECTION_KEYS,
+  SECTION_ORDER,
+  CHAT_MODES as MODES,
+} from "../../core/chat/prompt-constants.js";
 
 const handleError = createPluginErrorHandler("prompt-registry");
 
@@ -411,6 +396,10 @@ function toolCtx(req) {
 }
 
 export function register(app) {
+  ensureBuiltinPrompts().catch((err) => {
+    console.warn("[prompt-registry] builtin seed failed:", err.message);
+  });
+
   const router = Router();
 
   router.get("/health", async (_req, res) => {

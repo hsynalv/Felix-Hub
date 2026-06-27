@@ -1,0 +1,10 @@
+{
+  "providers": {
+    "Kiro": { "defaultMode": "spec", "pathHints": ["Kiro"] },
+    "Cursor": { "defaultMode": "agent", "pathHints": ["Cursor Prompts", "Cursor"] },
+    "Manus": { "defaultMode": "agent", "pathHints": ["Manus"] },
+    "Claude": { "defaultMode": "agent", "pathHints": ["Anthropic", "Claude"] }
+  },
+  "defaultSource": "../system-prompts-and-models-of-ai-tools",
+  "defaultOut": "./cache/prompt-intelligence/drafts"
+}

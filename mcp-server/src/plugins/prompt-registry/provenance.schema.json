@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://felix-hub.local/schemas/prompt-provenance.json",
+  "title": "PromptProvenance",
+  "type": "object",
+  "required": ["sourceProvider", "derivedAt", "risk"],
+  "additionalProperties": false,
+  "properties": {
+    "sourceProvider": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Origin label, e.g. felix-hub, derived-kiro, importer"
+    },
+    "sourceFile": {
+      "type": "string",
+      "description": "Optional path or URL reference (not copied content)"
+    },
+    "derivedAt": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO date when pattern was derived"
+    },
+    "reviewer": {
+      "type": "string",
+      "description": "Human or system reviewer id"
+    },
+    "risk": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

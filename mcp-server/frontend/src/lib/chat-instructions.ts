@@ -1,5 +1,14 @@
 export type ResponseStyle = "concise" | "detailed";
 
+export type ChatModeId =
+  | "chat"
+  | "agent"
+  | "spec"
+  | "review"
+  | "debug"
+  | "ops"
+  | "desktop";
+
 export type ChatProfileId =
   | "balanced"
   | "answer_only"
@@ -9,7 +18,9 @@ export type ChatProfileId =
   | "automation"
   | "personal_assistant"
   | "safe"
-  | "high_autonomy";
+  | "high_autonomy"
+  | "spec_planner"
+  | "desktop_assistant";
 
 export interface ConversationSettings {
   instructions?: string;
@@ -17,7 +28,23 @@ export interface ConversationSettings {
   responseStyle?: ResponseStyle;
   presetId?: string;
   chatProfile?: ChatProfileId;
+  /** V8: overrides profile default mode for prompt render */
+  chatMode?: ChatModeId;
+  /** V8: marketplace behavior pack */
+  marketplacePackId?: string;
+  /** V8: linked spec workflow session */
+  specSessionId?: string;
 }
+
+export const CHAT_MODE_OPTIONS: Array<{ id: ChatModeId; label: string; description: string }> = [
+  { id: "agent", label: "Agent", description: "İş yap — tool kullan, görev tamamla" },
+  { id: "chat", label: "Sohbet", description: "Açıklama odaklı, az tool" },
+  { id: "spec", label: "Spec", description: "requirements → design → tasks" },
+  { id: "review", label: "İnceleme", description: "Read-only kod inceleme" },
+  { id: "debug", label: "Debug", description: "Hata ayıklama adımları" },
+  { id: "ops", label: "Ops", description: "Runbook / workflow / incident" },
+  { id: "desktop", label: "Desktop", description: "Felix Desktop yerel işlemler" },
+];
 
 export const CHAT_PROFILE_OPTIONS: Array<{ id: ChatProfileId; label: string; description: string }> = [
   { id: "balanced", label: "Dengeli", description: "Varsayılan otomatik araç seçimi" },
@@ -29,6 +56,8 @@ export const CHAT_PROFILE_OPTIONS: Array<{ id: ChatProfileId; label: string; des
   { id: "personal_assistant", label: "Kişisel asistan", description: "Brain + harici API" },
   { id: "safe", label: "Güvenli mod", description: "Sadece read + recall" },
   { id: "high_autonomy", label: "Yüksek özerklik", description: "Tüm write araçları" },
+  { id: "spec_planner", label: "Spec planlama", description: "Artifact odaklı planlama" },
+  { id: "desktop_assistant", label: "Felix Desktop", description: "Yerel dosya/terminal" },
 ];
 
 export const INSTRUCTION_PRESETS: Array<{
@@ -95,6 +124,14 @@ export function parseConversationSettings(
       CHAT_PROFILE_OPTIONS.some((p) => p.id === metadata.chatProfile)
         ? (metadata.chatProfile as ChatProfileId)
         : "balanced",
+    chatMode:
+      typeof metadata.chatMode === "string" &&
+      CHAT_MODE_OPTIONS.some((m) => m.id === metadata.chatMode)
+        ? (metadata.chatMode as ChatModeId)
+        : undefined,
+    marketplacePackId:
+      typeof metadata.marketplacePackId === "string" ? metadata.marketplacePackId : undefined,
+    specSessionId: typeof metadata.specSessionId === "string" ? metadata.specSessionId : undefined,
   };
 }
 

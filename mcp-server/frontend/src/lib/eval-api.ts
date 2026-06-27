@@ -64,3 +64,24 @@ export async function evalReplayCompare(runId: string, dryRun = true) {
     { dryRun }
   );
 }
+
+export interface PromptEvalVariant {
+  variantId: string;
+  label: string;
+  scores: Record<string, number>;
+  total: number;
+  max: number;
+  pass: boolean;
+}
+
+export interface PromptEvalSuite {
+  pass: boolean;
+  summary: { variants: number; passed: number; failed: number };
+  variants: PromptEvalVariant[];
+  metrics: string[];
+  generatedAt: string;
+}
+
+export async function runPromptEvalSuite() {
+  return apiPost<PromptEvalSuite>("/eval/prompt", {});
+}

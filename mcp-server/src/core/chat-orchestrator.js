@@ -15,6 +15,11 @@ import { getChatContext } from "./chat/chat-context.js";
 import { shortlistToolsForIntent } from "./chat/tool-intent.js";
 import { guardToolCall, markReadToolUsed, recordToolCallSignature } from "./chat/tool-planning.js";
 import {
+  createAgentLoopState,
+  setAgentLoopPhase,
+  getAgentLoopSnapshot,
+} from "./chat/agent-loop.js";
+import {
   summarizeToolResult,
   formatToolResultForModel,
 } from "./chat/tool-result-summarizer.js";
@@ -273,6 +278,8 @@ export function deleteApprovalWaiter(approvalId) {
 async function runToolWithApproval(name, args, context, handlers = {}) {
   const { allowWriteTools = true, onToolCall = () => {}, onApproval = () => {} } = handlers;
 
+  setAgentLoopPhase(context, "act");
+
   const reqCtx = getRequestContext();
   if (reqCtx?.namespace) {
     await loadTenantOverlay(reqCtx.namespace);
@@ -285,8 +292,8 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
       ok: true,
       data: { capped: true, message: capCheck.message },
     };
-    onToolCall({ phase: "start", name, arguments: args });
-    onToolCall({ phase: "end", name, result: capped });
+    onToolCall({ phase: "start", name, arguments: args, loopPhase: getAgentLoopSnapshot(context).phase });
+    onToolCall({ phase: "end", name, result: capped, loopPhase: getAgentLoopSnapshot(context).phase });
     return capped;
   }
 
@@ -302,8 +309,8 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
       ok: false,
       error: { code: guard.code, message: guard.reason },
     };
-    onToolCall({ phase: "start", name, arguments: args });
-    onToolCall({ phase: "end", name, result: rejected });
+    onToolCall({ phase: "start", name, arguments: args, loopPhase: getAgentLoopSnapshot(context).phase });
+    onToolCall({ phase: "end", name, result: rejected, loopPhase: getAgentLoopSnapshot(context).phase });
     return rejected;
   }
   if (guard.warn) {
@@ -320,12 +327,12 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
         message: `Write tool "${name}" is not allowed in this channel`,
       },
     };
-    onToolCall({ phase: "start", name, arguments: args });
-    onToolCall({ phase: "end", name, result: blocked });
+    onToolCall({ phase: "start", name, arguments: args, loopPhase: getAgentLoopSnapshot(context).phase });
+    onToolCall({ phase: "end", name, result: blocked, loopPhase: getAgentLoopSnapshot(context).phase });
     return blocked;
   }
 
-  onToolCall({ phase: "start", name, arguments: args });
+  onToolCall({ phase: "start", name, arguments: args, loopPhase: getAgentLoopSnapshot(context).phase });
   const toolStart = Date.now();
   const toolContext = {
     ...context,
@@ -363,7 +370,7 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
         ok: false,
         error: { code: "approval_required_blocked", message: "Tool approval not available in this channel" },
       };
-      onToolCall({ phase: "end", name, result: rejected });
+      onToolCall({ phase: "end", name, result: rejected, loopPhase: getAgentLoopSnapshot(context).phase });
       if (context.runId) {
         void recordToolStep(context.runId, {
           toolName: name,
@@ -382,6 +389,7 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
         args,
       });
     }
+    setAgentLoopPhase(context, "wait");
     onApproval({
       approvalId: result.approval.id,
       tool: name,
@@ -399,7 +407,15 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
   }
   result._toolSummary = summary;
 
-  onToolCall({ phase: "end", name, arguments: args, result, summary });
+  setAgentLoopPhase(context, "reflect");
+  onToolCall({
+    phase: "end",
+    name,
+    arguments: args,
+    result,
+    summary,
+    loopPhase: getAgentLoopSnapshot(context).phase,
+  });
   if (context.runId) {
     void recordToolStep(context.runId, {
       toolName: name,
@@ -455,6 +471,7 @@ async function chatWithOpenAi({ messages, model, tools, context, handlers }) {
 
   const resolvedModel = model || getDefaultModel();
   const { onDelta = () => {}, maxIterations = MAX_TOOL_ITERATIONS, ...toolHandlers } = handlers;
+  if (!context.agentLoop) context.agentLoop = createAgentLoopState();
   let currentMessages = [...messages];
   let iterations = 0;
   const toolCallsLog = [];
@@ -462,6 +479,7 @@ async function chatWithOpenAi({ messages, model, tools, context, handlers }) {
 
   while (iterations < maxIterations) {
     iterations++;
+    setAgentLoopPhase(context, iterations === 1 ? "plan" : "plan");
     const iterStart = Date.now();
     const stream = await client.chat.completions.create({
       model: resolvedModel,
@@ -513,7 +531,14 @@ async function chatWithOpenAi({ messages, model, tools, context, handlers }) {
 
     const toolCalls = [...toolCallsByIndex.values()].filter((t) => t.name);
     if (!toolCalls.length) {
-      return { text: assistantContent, iterations, toolCalls: toolCallsLog, usage: totalUsage };
+      setAgentLoopPhase(context, "stop");
+      return {
+        text: assistantContent,
+        iterations,
+        toolCalls: toolCallsLog,
+        usage: totalUsage,
+        agentLoop: getAgentLoopSnapshot(context),
+      };
     }
 
     currentMessages.push({
@@ -547,9 +572,18 @@ async function chatWithOpenAi({ messages, model, tools, context, handlers }) {
         content: formatToolResultForModel(summary),
       });
     }
+    setAgentLoopPhase(context, "reflect");
   }
 
-  return { text: "", iterations, maxIterations: true, toolCalls: toolCallsLog, usage: totalUsage };
+  setAgentLoopPhase(context, "stop");
+  return {
+    text: "",
+    iterations,
+    maxIterations: true,
+    toolCalls: toolCallsLog,
+    usage: totalUsage,
+    agentLoop: getAgentLoopSnapshot(context),
+  };
 }
 
 async function chatWithOllama({ messages, model, tools, context, handlers }) {
@@ -564,6 +598,7 @@ async function chatWithOllama({ messages, model, tools, context, handlers }) {
   } = handlers;
   const ollamaTools = tools?.length ? tools : buildOpenAiTools({ allowWriteTools });
 
+  if (!context.agentLoop) context.agentLoop = createAgentLoopState();
   let currentMessages = [...messages];
   let iterations = 0;
   const toolCallsLog = [];
@@ -571,6 +606,7 @@ async function chatWithOllama({ messages, model, tools, context, handlers }) {
 
   while (iterations < maxIterations) {
     iterations++;
+    setAgentLoopPhase(context, "plan");
     const iterStart = Date.now();
     const res = await fetch(`${baseUrl}/api/chat`, {
       method: "POST",
@@ -646,7 +682,14 @@ async function chatWithOllama({ messages, model, tools, context, handlers }) {
 
     msg.tool_calls = (msg.tool_calls || []).filter((t) => t?.function?.name);
     if (!msg.tool_calls.length) {
-      return { text: msg.content || "", iterations, toolCalls: toolCallsLog, usage: totalUsage };
+      setAgentLoopPhase(context, "stop");
+      return {
+        text: msg.content || "",
+        iterations,
+        toolCalls: toolCallsLog,
+        usage: totalUsage,
+        agentLoop: getAgentLoopSnapshot(context),
+      };
     }
 
     currentMessages.push(msg);
@@ -675,9 +718,18 @@ async function chatWithOllama({ messages, model, tools, context, handlers }) {
         content: formatToolResultForModel(summary),
       });
     }
+    setAgentLoopPhase(context, "reflect");
   }
 
-  return { text: "", iterations, maxIterations: true, toolCalls: toolCallsLog, usage: totalUsage };
+  setAgentLoopPhase(context, "stop");
+  return {
+    text: "",
+    iterations,
+    maxIterations: true,
+    toolCalls: toolCallsLog,
+    usage: totalUsage,
+    agentLoop: getAgentLoopSnapshot(context),
+  };
 }
 
 /**
@@ -706,6 +758,8 @@ export async function runChatTurn({
   allowWriteTools = false,
   onToolCall,
   chatProfile = "balanced",
+  chatMode = null,
+  marketplacePackId = null,
   historySummaryBlock = "",
 }) {
   if (!message || typeof message !== "string") {
@@ -729,6 +783,11 @@ export async function runChatTurn({
     readToolsUsed: false,
   };
 
+  const profile = resolveChatProfile(chatProfile);
+  const effectiveChatMode = chatMode || context.chatMode || null;
+  chatContext.chatMode = effectiveChatMode || profile.mode;
+  chatContext.marketplacePackId = marketplacePackId || context.marketplacePackId || null;
+
   const chatCtx = await getChatContext({
     message,
     projectId: chatContext.projectId,
@@ -736,11 +795,11 @@ export async function runChatTurn({
     includeBrainContext,
     hasConversationHistory: history.length > 0,
     chatProfile,
+    chatMode: effectiveChatMode,
     historySummaryBlock,
   });
   chatContext.intent = chatCtx.toolIntent;
 
-  const profile = resolveChatProfile(chatProfile);
   const effectiveAllowWrite = allowWriteTools && profile.allowWriteTools;
   const maxIterations = profile.maxIterations ?? MAX_TOOL_ITERATIONS;
 
@@ -757,6 +816,9 @@ export async function runChatTurn({
       ),
       channel: chatContext.channel,
       projectId: chatContext.projectId,
+      chatProfile,
+      chatMode: effectiveChatMode,
+      marketplacePackId: context.marketplacePackId || null,
     }
   );
 

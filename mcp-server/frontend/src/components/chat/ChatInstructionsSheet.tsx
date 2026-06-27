@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -26,10 +27,12 @@ import {
   DEFAULT_CONVERSATION_SETTINGS,
   INSTRUCTION_PRESETS,
   CHAT_PROFILE_OPTIONS,
+  CHAT_MODE_OPTIONS,
   MAX_INSTRUCTIONS_LENGTH,
   type ConversationSettings,
   hasActiveInstructions,
 } from "@/lib/chat-instructions";
+import { fetchMarketplacePacks, type MarketplacePack } from "@/lib/v8-api";
 
 type ChatInstructionsSheetProps = {
   settings: ConversationSettings;
@@ -47,6 +50,21 @@ export function ChatInstructionsSheet({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<ConversationSettings>(settings);
   const [saving, setSaving] = useState(false);
+
+  const marketplaceQuery = useQuery({
+    queryKey: ["prompt-marketplace"],
+    queryFn: fetchMarketplacePacks,
+    enabled: open,
+  });
+
+  const applyMarketplacePack = (pack: MarketplacePack) => {
+    setDraft((d) => ({
+      ...d,
+      marketplacePackId: pack.id === "felix-default" ? undefined : pack.id,
+      chatProfile: pack.chatProfile as ConversationSettings["chatProfile"],
+      chatMode: pack.chatMode === "agent" ? undefined : (pack.chatMode as ConversationSettings["chatMode"]),
+    }));
+  };
 
   useEffect(() => {
     if (open) setDraft(settings);
@@ -131,7 +149,60 @@ export function ChatInstructionsSheet({
           </div>
 
           <div className="space-y-2">
-            <Label>Sohbet modu</Label>
+            <Label>Davranış paketi (marketplace)</Label>
+            <Select
+              value={draft.marketplacePackId || "felix-default"}
+              onValueChange={(id) => {
+                const pack = marketplaceQuery.data?.packs.find((p) => p.id === id);
+                if (pack) applyMarketplacePack(pack);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Paket seç" />
+              </SelectTrigger>
+              <SelectContent>
+                {(marketplaceQuery.data?.packs ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {marketplaceQuery.data?.packs.find((p) => p.id === (draft.marketplacePackId || "felix-default"))
+                ?.description ?? "Felix davranış paketleri — mod ve profili birlikte ayarlar."}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Agent davranış modu</Label>
+            <Select
+              value={draft.chatMode || "agent"}
+              onValueChange={(chatMode) =>
+                setDraft((d) => ({
+                  ...d,
+                  chatMode: chatMode === "agent" ? undefined : (chatMode as ConversationSettings["chatMode"]),
+                }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Mod seç" />
+              </SelectTrigger>
+              <SelectContent>
+                {CHAT_MODE_OPTIONS.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {CHAT_MODE_OPTIONS.find((m) => m.id === (draft.chatMode || "agent"))?.description}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Araç profili</Label>
             <Select
               value={draft.chatProfile || "balanced"}
               onValueChange={(chatProfile) => setDraft((d) => ({ ...d, chatProfile: chatProfile as ConversationSettings["chatProfile"] }))}

@@ -10,6 +10,8 @@ import { buildRoutedBrainContext } from "../../plugins/brain/brain.context.js";
 import { buildRoutedProjectContext } from "../project-context/project-context.context.js";
 import { applyProfileToToolIntent, resolveChatProfile } from "./chat-profiles.js";
 import { buildHistorySummaryBlock } from "./conversation-compression.js";
+import { buildAgentLoopHint } from "./agent-loop.js";
+import { isChatMode } from "./prompt-constants.js";
 
 /**
  * @param {object} opts
@@ -19,6 +21,7 @@ import { buildHistorySummaryBlock } from "./conversation-compression.js";
  * @param {boolean} [opts.includeBrainContext]
  * @param {boolean} [opts.hasConversationHistory]
  * @param {string} [opts.chatProfile]
+ * @param {string} [opts.chatMode]
  * @param {string} [opts.historySummaryBlock]
  */
 export async function getChatContext({
@@ -28,6 +31,7 @@ export async function getChatContext({
   includeBrainContext = true,
   hasConversationHistory = false,
   chatProfile = "balanced",
+  chatMode = null,
   historySummaryBlock = "",
 }) {
   const route = analyzeContextNeeds(message, { projectId, hasConversationHistory });
@@ -83,9 +87,12 @@ export async function getChatContext({
   const planningBlock = buildToolPlanningBlock({
     intent: toolClassification.intent,
     route,
+    chatProfile: profile.id,
+    chatMode: isChatMode(chatMode) ? chatMode : profile.mode,
   });
 
   const contextHints = [
+    buildAgentLoopHint("observe"),
     planningBlock,
     routerHint,
     toolIntentHint,
@@ -114,6 +121,8 @@ export async function getChatContext({
       toolIntentSource: toolClassification.source,
       modelVersion: toolClassification.modelVersion,
       chatProfile: profile.id,
+      chatMode: isChatMode(chatMode) ? chatMode : profile.mode,
+      agentLoopPhase: "observe",
     },
   };
 }
