@@ -5,7 +5,15 @@
  * Usage:
  *   npm run sidecar:daemon
  *   SIDECAR_AUTH_TOKEN=<from-pairing> npm run sidecar:daemon
+ *   # or write token to ~/.config/felix-desktop/env and run npm run sidecar:daemon
  */
+
+import { loadFelixDesktopEnv } from "../src/core/sidecar/load-desktop-env.js";
+
+const envLoad = loadFelixDesktopEnv();
+if (envLoad.loaded && envLoad.keys > 0) {
+  console.log(`[sidecar] Loaded ${envLoad.keys} var(s) from ${envLoad.path}`);
+}
 
 import express from "express";
 import { fsList, fsRead, fsWrite, fsHash } from "../src/plugins/local-sidecar/sidecar.core.js";
@@ -27,7 +35,22 @@ import {
 import { validateSidecarRequest } from "../src/core/sidecar/sidecar-auth.js";
 
 const port = Number(process.env.SIDECAR_PORT || 9477);
+const bind = (process.env.SIDECAR_BIND || "127.0.0.1").trim();
 const authToken = process.env.SIDECAR_AUTH_TOKEN || "";
+const isLocalBind = bind === "127.0.0.1" || bind === "localhost" || bind === "::1";
+
+if (!isLocalBind && !authToken) {
+  console.error("[sidecar] SIDECAR_BIND is not localhost but SIDECAR_AUTH_TOKEN is empty.");
+  console.error("");
+  console.error("  Önce hub'dan eşleştir (daemon kapalı olabilir):");
+  console.error("    1. https://asistan.huseyinalav.com → Ayarlar → Felix Desktop");
+  console.error("    2. Kod oluştur → Cihaz eşleştir → baseUrl = SIDECAR_PUBLIC_URL");
+  console.error("    3. authToken'ı ~/.config/felix-desktop/env → SIDECAR_AUTH_TOKEN=...");
+  console.error("    4. Tekrar: npm run sidecar:daemon");
+  console.error("");
+  console.error("  Geliştirme için geçici: SIDECAR_BIND=127.0.0.1 (sadece bu Mac'ten erişilir)");
+  process.exit(1);
+}
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
@@ -125,8 +148,21 @@ app.post("/desktop/type", async (req, res) => {
   res.json(await desktopType(req.body || {}));
 });
 
-app.listen(port, "127.0.0.1", () => {
-  console.log(`[sidecar] listening on http://127.0.0.1:${port}`);
+app.listen(port, bind, () => {
+  const listenHost = bind === "0.0.0.0" ? "all interfaces" : bind;
+  console.log(`[sidecar] listening on ${listenHost}:${port}`);
   console.log(`[sidecar] auth: ${authToken ? "enabled (SIDECAR_AUTH_TOKEN set)" : "disabled (dev only)"}`);
-  console.log(`[sidecar] Pair baseUrl=http://127.0.0.1:${port}`);
+  const hub = process.env.FELIX_HUB_URL || process.env.HUB_URL || "";
+  const publicUrl = process.env.SIDECAR_PUBLIC_URL || "";
+  if (hub) {
+    console.log(`[sidecar] hub: ${hub}`);
+  }
+  if (publicUrl) {
+    console.log(`[sidecar] pair baseUrl: ${publicUrl.replace(/\/$/, "")}`);
+  } else if (isLocalBind) {
+    console.log(`[sidecar] Local health: curl http://127.0.0.1:${port}/health`);
+    console.log(`[sidecar] Remote hub + static IP? Set SIDECAR_BIND=0.0.0.0 and SIDECAR_PUBLIC_URL=http://YOUR_IP:${port}`);
+  } else {
+    console.log(`[sidecar] Remote access enabled — pair with http://YOUR_PUBLIC_IP:${port} (or SIDECAR_PUBLIC_URL)`);
+  }
 });

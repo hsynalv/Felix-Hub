@@ -60,7 +60,9 @@
     "eval:run": "node bin/run-retrieval-evals.js run",
     "eval:compare": "node bin/run-retrieval-evals.js compare",
     "create-plugin": "node bin/create-plugin.js",
-    "sidecar:daemon": "node bin/sidecar-daemon.js"
+    "sidecar:daemon": "node bin/sidecar-daemon.js",
+    "sidecar:install": "bash scripts/install-sidecar-local.sh",
+    "sidecar:tunnel": "bash scripts/sidecar-tunnel-cloudflared.sh"
   },
   "keywords": [
     "ai",

@@ -96,9 +96,14 @@ function DeviceRow({
 export function SidecarSettingsPanel() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const isRemoteHub =
+    typeof window !== "undefined" &&
+    !["localhost", "127.0.0.1"].includes(window.location.hostname);
   const [pairCode, setPairCode] = useState("");
   const [deviceName, setDeviceName] = useState("");
-  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:9477");
+  const [baseUrl, setBaseUrl] = useState(
+    isRemoteHub ? "" : "http://127.0.0.1:9477",
+  );
   const [generatedCode, setGeneratedCode] = useState<{
     code: string;
     expiresInSec: number;
@@ -218,6 +223,18 @@ export function SidecarSettingsPanel() {
               )}
             </SettingsInfoBox>
 
+            {status.sidecarRequired && isRemoteHub && (
+              <SettingsInfoBox variant="warning" title="Uzak hub — sidecar erişimi">
+                Hub sunucuda; PC&apos;nizdeki sidecar&apos;a erişmesi gerekir. Sabit IP&apos;niz varsa{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">SIDECAR_BIND=0.0.0.0</code> + modem
+                port forward <code className="rounded bg-muted px-1.5 py-0.5 text-xs">9477</code> ile{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">http://SABIT_IP:9477</code> pair
+                edin (tunnel gerekmez). Sabit IP yoksa{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">npm run sidecar:tunnel</code>.
+                Rehber: <code className="text-xs">docs/SIDECAR-REMOTE-HUB.md</code>
+              </SettingsInfoBox>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-border bg-muted/20 px-4 py-3">
                 <p className="text-xs text-muted-foreground">Ortam</p>
@@ -302,12 +319,22 @@ export function SidecarSettingsPanel() {
           description={`Production veya delegation modunda ${BRAND.desktopAgentName} gereklidir.`}
         >
           <SettingsStepList
-            steps={[
-              "Terminalde mcp-server dizininde `npm run sidecar:daemon` çalıştırın (127.0.0.1:9477).",
-              "Yönetici olarak eşleştirme kodu oluşturun (aşağıdaki bölüm).",
-              "Kodu sidecar makinesinden veya write yetkili anahtarla `/sidecar/pair` ile onaylayın.",
-              "Yanıttaki authToken'ı daemon ortamında `SIDECAR_AUTH_TOKEN` olarak ayarlayın ve daemon'u yeniden başlatın.",
-            ]}
+            steps={
+              isRemoteHub
+                ? [
+                    "PC'de: `npm run sidecar:install`",
+                    "Sabit IP: `~/.config/felix-desktop/env` → `SIDECAR_BIND=0.0.0.0`, modemde 9477 port forward",
+                    "Pair baseUrl: `http://SABIT_IP:9477` (tunnel yok) veya tunnel URL (`npm run sidecar:tunnel`)",
+                    "Yönetici: eşleştirme kodu oluştur → cihaz eşleştir",
+                    "authToken → `SIDECAR_AUTH_TOKEN` olarak env dosyasına; daemon yeniden başlat",
+                  ]
+                : [
+                    "Terminalde mcp-server dizininde `npm run sidecar:daemon` çalıştırın (127.0.0.1:9477).",
+                    "Yönetici olarak eşleştirme kodu oluşturun (aşağıdaki bölüm).",
+                    "Kodu sidecar makinesinden veya write yetkili anahtarla `/sidecar/pair` ile onaylayın.",
+                    "Yanıttaki authToken'ı daemon ortamında `SIDECAR_AUTH_TOKEN` olarak ayarlayın ve daemon'u yeniden başlatın.",
+                  ]
+            }
           />
         </SettingsSectionCard>
       )}
@@ -390,10 +417,20 @@ export function SidecarSettingsPanel() {
                 id="sidecar-url"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="http://127.0.0.1:9477"
+                placeholder={
+                  isRemoteHub
+                    ? "http://SABIT_IP:9477 veya https://xxxx.trycloudflare.com"
+                    : "http://127.0.0.1:9477"
+                }
                 className="font-mono text-sm"
                 required
               />
+              {isRemoteHub && (
+                <p className="text-xs text-muted-foreground">
+                  Sabit IP: <code className="rounded bg-muted px-1">http://IP:9477</code> + port forward.
+                  Yoksa: <code className="rounded bg-muted px-1">npm run sidecar:tunnel</code>
+                </p>
+              )}
             </div>
             <Button type="submit" disabled={pairMutation.isPending || !pairCode.trim()}>
               {pairMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -415,7 +452,9 @@ export function SidecarSettingsPanel() {
                 Token'ı kopyala
               </Button>
               <p className="mt-2 text-xs text-muted-foreground">
-                Daemon'da: <code>SIDECAR_AUTH_TOKEN=… npm run sidecar:daemon</code>
+                <code className="rounded bg-muted px-1">~/.config/felix-desktop/env</code> içine{" "}
+                <code>SIDECAR_AUTH_TOKEN=…</code> yazın, ardından{" "}
+                <code>npm run sidecar:daemon</code>
               </p>
             </div>
           )}
