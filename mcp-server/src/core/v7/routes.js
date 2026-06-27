@@ -66,6 +66,8 @@ import {
 } from "./personal-ops.service.js";
 import { registerPersonalOpsHook } from "./personal-ops-hook.js";
 import { registerTelegramSidecarDeliveryHook } from "../v9/telegram-agent-session.js";
+import { registerSidecarPolicyHook } from "../v10/sidecar-policy-hook.js";
+import { registerSidecarUndoHook } from "../v10/sidecar-undo.js";
 import {
   searchProducts,
   selectShoppingOption,
@@ -101,6 +103,8 @@ import { listTelegramOutbound } from "./telegram-outbound-store.js";
 export function registerV7Routes(app) {
   registerPersonalOpsHook();
   registerTelegramSidecarDeliveryHook();
+  registerSidecarPolicyHook();
+  registerSidecarUndoHook();
   app.get("/personal/command-center", requireScope("read"), async (req, res) => {
     try {
       const scope = req.query.scope === "project" ? "project" : "personal";

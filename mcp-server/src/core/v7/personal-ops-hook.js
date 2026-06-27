@@ -11,12 +11,16 @@ import { evaluatePersonalToolPolicy } from "./personal-autonomy.service.js";
 
 const DESKTOP_TOOLS = new Set([
   "desktop_screenshot",
+  "desktop_region_screenshot",
+  "desktop_window_screenshot",
   "desktop_active_window",
   "desktop_ocr",
   "desktop_click",
   "desktop_type",
   "desktop_scroll",
   "desktop_hotkey",
+  "desktop_drag",
+  "desktop_focus_app",
   "desktop_app_focus",
 ]);
 
@@ -25,6 +29,7 @@ const DESKTOP_ACTION_TOOLS = new Set([
   "desktop_type",
   "desktop_scroll",
   "desktop_hotkey",
+  "desktop_drag",
 ]);
 
 let registered = false;

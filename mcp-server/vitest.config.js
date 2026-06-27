@@ -22,7 +22,6 @@ export default defineConfig({
       "tests/plugins/tech-detector.test.js",
       "tests/plugins/notion.test.js",
       "tests/plugins/code-review.test.js",
-      "tests/plugins/local-sidecar.test.js",
       "tests/contract/llm-router.contract.test.js",
     ],
     coverage: {

@@ -4,6 +4,7 @@ import { AppError, NotFoundError } from "../errors.js";
 import { config } from "../config.js";
 import { loadPlugins, getPlugins } from "../plugins.js";
 import { initializeToolHooks } from "../tool-registry.js";
+import { registerSidecarRuntimeHooks } from "../v10/sidecar-runtime-hooks.js";
 import {
   getAuditManager,
   initAuditManager,
@@ -910,6 +911,7 @@ export async function createServer() {
 
   // Initialize tool registry hooks (policy, auditing, etc.)
   initializeToolHooks();
+  registerSidecarRuntimeHooks();
 
   await loadPlugins(app);
   await validateSecurityAfterPluginsOrExit();

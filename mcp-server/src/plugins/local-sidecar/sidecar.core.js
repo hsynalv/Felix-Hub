@@ -6,26 +6,17 @@
 
 import { readdir, readFile, writeFile, stat } from "fs/promises";
 import { createHash } from "crypto";
-import { join, resolve, isAbsolute, normalize } from "path";
-import { homedir } from "os";
-import { loadWhitelistConfig } from "./whitelist.config.js";
+import { join, normalize } from "path";
+import { fsPolicyDecide } from "./fs-path-policy.js";
+export { resolveUserPath } from "./path-resolve.js";
+import { resolveUserPath } from "./path-resolve.js";
 
 /**
  * Resolve user-facing paths (~, relative, absolute) to an absolute path.
  * @param {string} targetPath
  * @returns {string}
  */
-export function resolveUserPath(targetPath) {
-  if (!targetPath || typeof targetPath !== "string") {
-    return normalize(process.cwd());
-  }
-  let p = targetPath.trim();
-  if (p === "~") return homedir();
-  if (p.startsWith("~/") || p.startsWith("~\\")) {
-    p = join(homedir(), p.slice(2));
-  }
-  return isAbsolute(p) ? normalize(p) : normalize(join(process.cwd(), p));
-}
+export { resolveUserPath };
 
 /**
  * @param {Buffer} buf
@@ -44,27 +35,24 @@ function imageDimensionsFromBuffer(buf, ext) {
  * @param {string} targetPath - Path to check
  * @returns {{allowed: boolean, resolvedPath?: string, error?: string}}
  */
-export function checkPathAllowed(targetPath) {
-  const whitelist = loadWhitelistConfig();
-  const resolved = resolveUserPath(targetPath);
+export function checkPathAllowed(targetPath, operation = "read") {
+  const policy = fsPolicyDecide(targetPath, operation);
 
-  // Check against whitelist
-  const isAllowed = whitelist.some(allowedPath => {
-    const normalizedAllowed = normalize(allowedPath);
-    // Path must be within allowed directory
-    return resolved === normalizedAllowed || 
-           resolved.startsWith(normalizedAllowed + "/") ||
-           resolved.startsWith(normalizedAllowed + "\\");
-  });
-
-  if (!isAllowed) {
+  if (policy.blocked || !policy.allowed) {
     return {
       allowed: false,
-      error: `Access denied: ${resolved} is not in whitelisted directories`,
+      error: policy.reason || `Access denied: ${policy.resolvedPath}`,
+      classification: policy.classification,
+      requireApproval: policy.requireApproval,
     };
   }
 
-  return { allowed: true, resolvedPath: resolved };
+  return {
+    allowed: true,
+    resolvedPath: policy.resolvedPath,
+    classification: policy.classification,
+    requireApproval: policy.requireApproval,
+  };
 }
 
 /**
@@ -73,7 +61,7 @@ export function checkPathAllowed(targetPath) {
  * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
  */
 export async function fsList(dirPath) {
-  const check = checkPathAllowed(dirPath);
+  const check = checkPathAllowed(dirPath, "list");
   if (!check.allowed) {
     return { ok: false, error: { code: "access_denied", message: check.error } };
   }
@@ -129,7 +117,7 @@ export async function fsList(dirPath) {
  * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
  */
 export async function fsRead(filePath, options = {}) {
-  const check = checkPathAllowed(filePath);
+  const check = checkPathAllowed(filePath, "read");
   if (!check.allowed) {
     return { ok: false, error: { code: "access_denied", message: check.error } };
   }
@@ -183,12 +171,33 @@ export async function fsRead(filePath, options = {}) {
  * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
  */
 export async function fsWrite(filePath, content, options = {}) {
-  const check = checkPathAllowed(filePath);
+  const check = checkPathAllowed(filePath, "write");
   if (!check.allowed) {
     return { ok: false, error: { code: "access_denied", message: check.error } };
   }
 
   try {
+    let backup = null;
+    try {
+      const existing = await readFile(check.resolvedPath, "utf8");
+      const existingStat = await stat(check.resolvedPath);
+      backup = {
+        type: "fs_write_restore",
+        path: filePath,
+        resolvedPath: check.resolvedPath,
+        content: existing,
+        hadFile: true,
+        previousSize: existingStat.size,
+      };
+    } catch {
+      backup = {
+        type: "fs_write_restore",
+        path: filePath,
+        resolvedPath: check.resolvedPath,
+        hadFile: false,
+      };
+    }
+
     await writeFile(check.resolvedPath, content, "utf8");
 
     const fileStat = await stat(check.resolvedPath);
@@ -200,6 +209,7 @@ export async function fsWrite(filePath, content, options = {}) {
         resolvedPath: check.resolvedPath,
         size: fileStat.size,
         written: content.length,
+        undo: backup,
       },
     };
   } catch (err) {
@@ -216,7 +226,7 @@ export async function fsWrite(filePath, content, options = {}) {
  * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
  */
 export async function fsHash(filePath) {
-  const check = checkPathAllowed(filePath);
+  const check = checkPathAllowed(filePath, "hash");
   if (!check.allowed) {
     return { ok: false, error: { code: "access_denied", message: check.error } };
   }

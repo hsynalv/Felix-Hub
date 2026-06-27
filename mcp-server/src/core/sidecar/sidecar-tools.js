@@ -10,21 +10,40 @@ import {
   delegateTerminalSessionExec,
   delegateNotify,
   delegateDesktopScreenshot,
+  delegateDesktopRegionScreenshot,
+  delegateDesktopWindowScreenshot,
   delegateDesktopActiveWindow,
   delegateDesktopOcr,
   delegateDesktopClick,
   delegateDesktopType,
+  delegateDesktopScroll,
+  delegateDesktopHotkey,
+  delegateDesktopDrag,
+  delegateDesktopFocusApp,
+  delegateClipboardRead,
+  delegateClipboardWrite,
   sidecarRequiredError,
 } from "./sidecar-proxy.js";
 import { execTerminalCommand } from "../../plugins/local-sidecar/terminal.core.js";
 import { sendDesktopNotification } from "../../plugins/local-sidecar/notify.core.js";
 import {
   captureScreenshot,
+  captureRegionScreenshot,
+  captureWindowScreenshot,
+  screenshotWithContextGuard,
   getActiveWindow,
   ocrScreenRegion,
   desktopClick,
   desktopType,
+  desktopScroll,
+  desktopHotkey,
+  desktopDrag,
+  desktopFocusApp,
 } from "../../plugins/local-sidecar/desktop.core.js";
+import { clipboardRead, clipboardWrite } from "../../plugins/local-sidecar/clipboard.core.js";
+
+import { registerBrowserTools } from "./browser-tools.js";
+import { registerSidecarHealthTools } from "./sidecar-health-tools.js";
 
 export function registerSidecarTools() {
   registerTool({
@@ -133,7 +152,55 @@ export function registerSidecarTools() {
       if (!isLocalFsOnServer()) {
         return (await delegateDesktopScreenshot({ format })) || sidecarRequiredError();
       }
-      return captureScreenshot({ format });
+      return screenshotWithContextGuard(await captureScreenshot({ format }));
+    },
+  });
+
+  registerTool({
+    name: "desktop_region_screenshot",
+    description: "Capture a rectangular screen region via paired sidecar (x, y, width, height)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        x: { type: "number" },
+        y: { type: "number" },
+        width: { type: "number" },
+        height: { type: "number" },
+        format: { type: "string", enum: ["png", "jpg"] },
+      },
+      required: ["x", "y", "width", "height"],
+    },
+    handler: async ({ x, y, width, height, format }) => {
+      if (!isLocalFsOnServer()) {
+        return (
+          (await delegateDesktopRegionScreenshot({ x, y, width, height, format })) ||
+          sidecarRequiredError()
+        );
+      }
+      return screenshotWithContextGuard(
+        await captureRegionScreenshot({ x, y, width, height, format })
+      );
+    },
+  });
+
+  registerTool({
+    name: "desktop_window_screenshot",
+    description: "Capture the frontmost application window via paired sidecar",
+    plugin: "local-sidecar",
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        format: { type: "string", enum: ["png", "jpg"] },
+      },
+    },
+    handler: async ({ format }) => {
+      if (!isLocalFsOnServer()) {
+        return (await delegateDesktopWindowScreenshot({ format })) || sidecarRequiredError();
+      }
+      return screenshotWithContextGuard(await captureWindowScreenshot({ format }));
     },
   });
 
@@ -218,4 +285,152 @@ export function registerSidecarTools() {
       return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
     },
   });
+
+  registerTool({
+    name: "desktop_scroll",
+    description: "Scroll the mouse wheel at optional screen coordinates (requires approval)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        direction: { type: "string", enum: ["up", "down", "left", "right"], default: "down" },
+        amount: { type: "number", default: 3 },
+        x: { type: "number" },
+        y: { type: "number" },
+        explanation: { type: "string" },
+      },
+      required: ["explanation"],
+    },
+    handler: async ({ direction, amount, x, y, explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateDesktopScroll({ direction, amount, x, y });
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await desktopScroll({ direction, amount, x, y });
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
+    },
+  });
+
+  registerTool({
+    name: "desktop_hotkey",
+    description: "Send a keyboard shortcut on the local machine (requires approval)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        keys: {
+          description: 'Shortcut as string "cmd+c" or array ["command","c"]',
+        },
+        explanation: { type: "string" },
+      },
+      required: ["keys", "explanation"],
+    },
+    handler: async ({ keys, explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateDesktopHotkey({ keys });
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await desktopHotkey({ keys });
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
+    },
+  });
+
+  registerTool({
+    name: "desktop_drag",
+    description: "Drag from one screen coordinate to another (requires approval)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        fromX: { type: "number" },
+        fromY: { type: "number" },
+        toX: { type: "number" },
+        toY: { type: "number" },
+        explanation: { type: "string" },
+      },
+      required: ["fromX", "fromY", "toX", "toY", "explanation"],
+    },
+    handler: async ({ fromX, fromY, toX, toY, explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateDesktopDrag({ fromX, fromY, toX, toY });
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await desktopDrag({ fromX, fromY, toX, toY });
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
+    },
+  });
+
+  registerTool({
+    name: "desktop_focus_app",
+    description: "Bring an application to the foreground by name",
+    plugin: "local-sidecar",
+    tags: [ToolTags.WRITE, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        appName: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["appName"],
+    },
+    handler: async ({ appName, explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateDesktopFocusApp({ appName });
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await desktopFocusApp({ appName });
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
+    },
+  });
+
+  registerTool({
+    name: "clipboard_read",
+    description: "Read text from the system clipboard (preview + approval on sensitive context)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.READ_ONLY, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        explanation: { type: "string" },
+      },
+      required: ["explanation"],
+    },
+    handler: async ({ explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateClipboardRead();
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await clipboardRead();
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
+    },
+  });
+
+  registerTool({
+    name: "clipboard_write",
+    description: "Write text to the system clipboard (requires approval; saves undo)",
+    plugin: "local-sidecar",
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["text", "explanation"],
+    },
+    handler: async ({ text, explanation }) => {
+      if (!isLocalFsOnServer()) {
+        const r = await delegateClipboardWrite({ text });
+        return r ? { ...r, data: r.data ? { ...r.data, explanation } : undefined } : sidecarRequiredError();
+      }
+      const result = await clipboardWrite({ text });
+      return result.ok ? { ok: true, data: { ...result.data, explanation } } : result;
+    },
+  });
+
+  registerBrowserTools();
+  registerSidecarHealthTools();
 }

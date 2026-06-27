@@ -104,8 +104,10 @@ export function validateCoordinates({ x, y, maxX = 10000, maxY = 10000 } = {}) {
  * @param {{ action: string, app?: string, title?: string, x?: number, y?: number }} ctx
  */
 export function assertDesktopActionAllowed(ctx = {}) {
-  const coordCheck =
-    ctx.action === "click" ? validateCoordinates({ x: ctx.x, y: ctx.y }) : { ok: true, preview: null };
+  const needsCoords = ["click", "drag", "scroll"].includes(ctx.action);
+  const coordCheck = needsCoords
+    ? validateCoordinates({ x: ctx.x ?? ctx.fromX, y: ctx.y ?? ctx.fromY })
+    : { ok: true, preview: null };
   if (!coordCheck.ok) return coordCheck;
 
   const sensitivity = detectSensitiveContext({ app: ctx.app, title: ctx.title });

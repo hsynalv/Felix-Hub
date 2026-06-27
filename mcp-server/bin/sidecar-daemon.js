@@ -18,6 +18,14 @@ if (envLoad.loaded && envLoad.keys > 0) {
 import express from "express";
 import { fsList, fsRead, fsWrite, fsHash } from "../src/plugins/local-sidecar/sidecar.core.js";
 import {
+  fsStat,
+  fsRecent,
+  fsSearch,
+  fsCopy,
+  fsMove,
+  fsDeleteToTrash,
+} from "../src/plugins/local-sidecar/fs-pro.core.js";
+import {
   createTerminalSession,
   execTerminalCommand,
   execInSession,
@@ -27,11 +35,33 @@ import {
 import { sendDesktopNotification } from "../src/plugins/local-sidecar/notify.core.js";
 import {
   captureScreenshot,
+  captureRegionScreenshot,
+  captureWindowScreenshot,
+  screenshotWithContextGuard,
   getActiveWindow,
   ocrScreenRegion,
   desktopClick,
   desktopType,
+  desktopScroll,
+  desktopHotkey,
+  desktopDrag,
+  desktopFocusApp,
 } from "../src/plugins/local-sidecar/desktop.core.js";
+import { clipboardRead, clipboardWrite } from "../src/plugins/local-sidecar/clipboard.core.js";
+import {
+  checkSidecarDependencies,
+  checkDesktopPermissions,
+} from "../src/plugins/local-sidecar/sidecar-health.core.js";
+import {
+  browserOpenUrl,
+  browserSnapshot,
+  browserScreenshot,
+  browserExtractLinks,
+  browserExtractTable,
+  browserFindText,
+  browserClick,
+  browserType,
+} from "../src/plugins/local-sidecar/browser.core.js";
 import { validateSidecarRequest } from "../src/core/sidecar/sidecar-auth.js";
 
 const port = Number(process.env.SIDECAR_PORT || 9477);
@@ -68,7 +98,7 @@ app.get("/health", (_req, res) => {
     status: "healthy",
     service: "mcp-hub-sidecar",
     authRequired: Boolean(authToken),
-    capabilities: ["fs", "terminal", "notify", "desktop"],
+    capabilities: ["fs", "terminal", "notify", "desktop", "browser"],
   });
 });
 
@@ -92,6 +122,53 @@ app.post("/fs/write", async (req, res) => {
 app.get("/fs/hash", async (req, res) => {
   if (!req.query.path) return res.status(400).json({ ok: false, error: "path required" });
   res.json(await fsHash(req.query.path));
+});
+
+app.get("/fs/stat", async (req, res) => {
+  if (!req.query.path) return res.status(400).json({ ok: false, error: "path required" });
+  res.json(await fsStat(req.query.path));
+});
+
+app.get("/fs/recent", async (req, res) => {
+  res.json(
+    await fsRecent(req.query.path || ".", {
+      limit: parseInt(req.query.limit, 10) || 20,
+      maxDepth: parseInt(req.query.maxDepth, 10) || 3,
+    })
+  );
+});
+
+app.get("/fs/search", async (req, res) => {
+  res.json(
+    await fsSearch(req.query.path || ".", {
+      pattern: req.query.pattern,
+      extension: req.query.extension,
+      maxResults: parseInt(req.query.maxResults, 10) || 50,
+      maxDepth: parseInt(req.query.maxDepth, 10) || 4,
+    })
+  );
+});
+
+app.post("/fs/copy", async (req, res) => {
+  const { source, destination } = req.body || {};
+  if (!source || !destination) {
+    return res.status(400).json({ ok: false, error: "source and destination required" });
+  }
+  res.json(await fsCopy(source, destination));
+});
+
+app.post("/fs/move", async (req, res) => {
+  const { source, destination } = req.body || {};
+  if (!source || !destination) {
+    return res.status(400).json({ ok: false, error: "source and destination required" });
+  }
+  res.json(await fsMove(source, destination));
+});
+
+app.post("/fs/delete-to-trash", async (req, res) => {
+  const { path } = req.body || {};
+  if (!path) return res.status(400).json({ ok: false, error: "path required" });
+  res.json(await fsDeleteToTrash(path));
 });
 
 app.post("/terminal/sessions", (req, res) => {
@@ -128,7 +205,25 @@ app.post("/notify", async (req, res) => {
 });
 
 app.get("/desktop/screenshot", async (req, res) => {
-  res.json(await captureScreenshot({ format: req.query.format || "png" }));
+  const shot = await captureScreenshot({ format: req.query.format || "png" });
+  res.json(await screenshotWithContextGuard(shot));
+});
+
+app.get("/desktop/screenshot/region", async (req, res) => {
+  const { x, y, width, height, format } = req.query;
+  const shot = await captureRegionScreenshot({
+    x: parseInt(x, 10),
+    y: parseInt(y, 10),
+    width: parseInt(width, 10),
+    height: parseInt(height, 10),
+    format: format || "png",
+  });
+  res.json(await screenshotWithContextGuard(shot));
+});
+
+app.get("/desktop/screenshot/window", async (req, res) => {
+  const shot = await captureWindowScreenshot({ format: req.query.format || "png" });
+  res.json(await screenshotWithContextGuard(shot));
 });
 
 app.get("/desktop/active-window", async (_req, res) => {
@@ -146,6 +241,76 @@ app.post("/desktop/click", async (req, res) => {
 
 app.post("/desktop/type", async (req, res) => {
   res.json(await desktopType(req.body || {}));
+});
+
+app.post("/desktop/scroll", async (req, res) => {
+  res.json(await desktopScroll(req.body || {}));
+});
+
+app.post("/desktop/hotkey", async (req, res) => {
+  res.json(await desktopHotkey(req.body || {}));
+});
+
+app.post("/desktop/drag", async (req, res) => {
+  res.json(await desktopDrag(req.body || {}));
+});
+
+app.post("/desktop/focus-app", async (req, res) => {
+  res.json(await desktopFocusApp(req.body || {}));
+});
+
+app.get("/clipboard/read", async (_req, res) => {
+  res.json(await clipboardRead());
+});
+
+app.post("/clipboard/write", async (req, res) => {
+  res.json(await clipboardWrite(req.body || {}));
+});
+
+app.get("/health/dependencies", async (_req, res) => {
+  res.json(await checkSidecarDependencies());
+});
+
+app.get("/desktop/permissions", async (_req, res) => {
+  res.json(await checkDesktopPermissions());
+});
+
+app.post("/browser/open", async (req, res) => {
+  res.json(await browserOpenUrl(req.body || {}));
+});
+
+app.get("/browser/snapshot", async (_req, res) => {
+  res.json(await browserSnapshot());
+});
+
+app.get("/browser/screenshot", async (_req, res) => {
+  res.json(await browserScreenshot());
+});
+
+app.get("/browser/extract-links", async (req, res) => {
+  res.json(await browserExtractLinks({ maxLinks: parseInt(req.query.maxLinks, 10) || 50 }));
+});
+
+app.get("/browser/extract-table", async (req, res) => {
+  res.json(await browserExtractTable({ maxTables: parseInt(req.query.maxTables, 10) || 3 }));
+});
+
+app.get("/browser/find-text", async (req, res) => {
+  if (!req.query.query) return res.status(400).json({ ok: false, error: "query required" });
+  res.json(
+    await browserFindText({
+      query: req.query.query,
+      maxMatches: parseInt(req.query.maxMatches, 10) || 10,
+    })
+  );
+});
+
+app.post("/browser/click", async (req, res) => {
+  res.json(await browserClick(req.body || {}));
+});
+
+app.post("/browser/type", async (req, res) => {
+  res.json(await browserType(req.body || {}));
 });
 
 app.listen(port, bind, () => {

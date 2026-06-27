@@ -1,5 +1,5 @@
 /**
- * V9 — Telegram agent session: approvals + sidecar deliverables (photo/file).
+ * V9/V10 — Telegram agent session: approvals + sidecar deliverables (photo/file).
  */
 
 import { registerAfterExecutionHook } from "../tool-hooks.js";
@@ -13,6 +13,13 @@ import { resolveChatApproval } from "../chat-orchestrator.js";
 
 const TELEGRAM_MAX_DOC_BYTES = 45 * 1024 * 1024;
 
+const SCREENSHOT_TOOLS = new Set([
+  "desktop_screenshot",
+  "desktop_region_screenshot",
+  "desktop_window_screenshot",
+  "browser_screenshot",
+]);
+
 let deliveryHookRegistered = false;
 
 /**
@@ -21,11 +28,13 @@ let deliveryHookRegistered = false;
  */
 export function createTelegramOnApproval(chatId, reply) {
   return async (payload) => {
-    const { approvalId, tool, arguments: args, message } = payload;
+    const { approvalId, tool, arguments: args, message, preview } = payload;
     const explanation = args?.explanation || message || "";
+    const previewSummary = preview?.summary || payload.metadata?.preview?.summary;
     const text = [
       "Onay gerekli",
       `Araç: ${tool}`,
+      previewSummary ? `Önizleme: ${previewSummary}` : "",
       explanation ? `Açıklama: ${String(explanation).slice(0, 500)}` : "",
       "",
       "Onayla veya reddet:",
@@ -68,6 +77,27 @@ function extractTelegramChatId(context) {
   return actor.slice("telegram:".length);
 }
 
+async function deliverScreenshotToTelegram(chatId, result, label = "Felix Desktop screenshot") {
+  if (result.data?.deliveryBlocked || result.data?.sensitiveContext) {
+    await sendTelegramWithMarkup(
+      chatId,
+      `Ekran görüntüsü Telegram'a gönderilmedi (hassas içerik): ${(result.data.sensitiveReasons || []).join(", ") || "login/payment context"}`,
+      undefined,
+      "telegram_sidecar_sensitive_block",
+    ).catch(() => {});
+    return;
+  }
+
+  const b64 = result.data?.imageBase64 || result.data?.base64;
+  if (!b64) return;
+  await sendChatAction(chatId, "upload_photo").catch(() => {});
+  await sendTelegramPhotoBase64(chatId, b64, {
+    caption: label,
+    filename: `screenshot.${result.data?.format || "png"}`,
+    source: "telegram_sidecar_delivery",
+  }).catch(() => {});
+}
+
 export function registerTelegramSidecarDeliveryHook() {
   if (deliveryHookRegistered) return;
   deliveryHookRegistered = true;
@@ -77,15 +107,16 @@ export function registerTelegramSidecarDeliveryHook() {
     const chatId = extractTelegramChatId(context);
     if (!chatId) return;
 
-    if (toolName === "desktop_screenshot") {
-      const b64 = result.data?.imageBase64 || result.data?.base64;
-      if (!b64) return;
-      await sendChatAction(chatId, "upload_photo").catch(() => {});
-      await sendTelegramPhotoBase64(chatId, b64, {
-        caption: "Felix Desktop screenshot",
-        filename: `screenshot.${result.data?.format || "png"}`,
-        source: "telegram_sidecar_delivery",
-      }).catch(() => {});
+    if (SCREENSHOT_TOOLS.has(toolName)) {
+      const label =
+        toolName === "browser_screenshot"
+          ? `Felix Browser — ${result.data?.url || "page"}`
+          : toolName === "desktop_region_screenshot"
+          ? "Felix Desktop — bölge ekran görüntüsü"
+          : toolName === "desktop_window_screenshot"
+            ? `Felix Desktop — ${result.data?.window?.app || "pencere"}`
+            : "Felix Desktop screenshot";
+      await deliverScreenshotToTelegram(chatId, result, label);
       return;
     }
 
@@ -102,6 +133,21 @@ export function registerTelegramSidecarDeliveryHook() {
         caption: path,
         source: "telegram_sidecar_delivery",
       }).catch(() => {});
+    }
+
+    if (toolName === "fs_stat" && result.data?.resolvedPath) {
+      const lines = [
+        `📄 ${result.data.path}`,
+        `Boyut: ${result.data.size} byte`,
+        `Tür: ${result.data.isDirectory ? "klasör" : "dosya"}`,
+        `Değişti: ${result.data.modifiedAt}`,
+      ];
+      await sendTelegramWithMarkup(
+        chatId,
+        lines.join("\n"),
+        undefined,
+        "telegram_sidecar_fs_stat",
+      ).catch(() => {});
     }
   });
 }

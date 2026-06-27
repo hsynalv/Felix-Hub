@@ -8,8 +8,12 @@ import {
   consumePairingCode,
   listSidecarDevices,
   removeSidecarDevice,
+  rotateSidecarDeviceToken,
+  updateSidecarDeviceCapabilities,
   isLocalFsOnServer,
 } from "./pairing.service.js";
+import { auditLog } from "../audit/index.js";
+import { listSidecarCapabilityCatalog } from "../../plugins/local-sidecar/sidecar-health.core.js";
 
 async function probeDeviceHealth(device) {
   try {
@@ -111,10 +115,67 @@ export function registerSidecarRoutes(app) {
   });
 
   app.delete("/sidecar/devices/:id", requireScope("admin"), async (req, res) => {
+    const reason = req.body?.reason || req.query?.reason || "admin_revoke";
     const removed = await removeSidecarDevice(req.params.id);
     if (!removed) {
       return res.status(404).json({ ok: false, error: { code: "not_found" } });
     }
-    res.json({ ok: true, deleted: req.params.id });
+    void auditLog({
+      plugin: "local-sidecar",
+      operation: "sidecar_device_revoke",
+      actor: req.user?.id || "admin",
+      allowed: true,
+      success: true,
+      metadata: { deviceId: req.params.id, reason },
+    }).catch(() => {});
+    res.json({ ok: true, deleted: req.params.id, reason });
+  });
+
+  app.post("/sidecar/devices/:id/rotate-token", requireScope("admin"), async (req, res) => {
+    const result = await rotateSidecarDeviceToken(req.params.id);
+    if (!result.ok) {
+      return res.status(404).json({ ok: false, error: { code: result.error, message: result.error } });
+    }
+    void auditLog({
+      plugin: "local-sidecar",
+      operation: "sidecar_token_rotate",
+      actor: req.user?.id || "admin",
+      allowed: true,
+      success: true,
+      metadata: {
+        deviceId: result.deviceId,
+        reason: req.body?.reason || "admin_rotate",
+        rotatedAt: result.rotatedAt,
+      },
+    }).catch(() => {});
+    res.json({
+      ok: true,
+      data: {
+        deviceId: result.deviceId,
+        authToken: result.authToken,
+        rotatedAt: result.rotatedAt,
+      },
+    });
+  });
+
+  app.get("/sidecar/capabilities", requireScope("read"), (_req, res) => {
+    res.json(listSidecarCapabilityCatalog());
+  });
+
+  app.patch("/sidecar/devices/:id/capabilities", requireScope("admin"), async (req, res) => {
+    const { capabilities } = req.body ?? {};
+    const result = await updateSidecarDeviceCapabilities(req.params.id, capabilities);
+    if (!result.ok) {
+      return res.status(404).json({ ok: false, error: { code: result.error, message: result.error } });
+    }
+    void auditLog({
+      plugin: "local-sidecar",
+      operation: "sidecar_capabilities_update",
+      actor: req.user?.id || "admin",
+      allowed: true,
+      success: true,
+      metadata: { deviceId: result.deviceId, capabilities: result.capabilities },
+    }).catch(() => {});
+    res.json({ ok: true, data: result });
   });
 }

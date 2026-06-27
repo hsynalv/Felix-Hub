@@ -9,6 +9,14 @@ import { Router } from "express";
 import { toolContextFromRequest } from "../../core/authorization/http-tool-context.js";
 import { ToolTags, callTool } from "../../core/tool-registry.js";
 import { fsList, fsRead, fsWrite, fsHash, checkPathAllowed } from "./sidecar.core.js";
+import {
+  fsStat,
+  fsRecent,
+  fsSearch,
+  fsCopy,
+  fsMove,
+  fsDeleteToTrash,
+} from "./fs-pro.core.js";
 import { delegateToSidecar } from "../../core/sidecar/sidecar-proxy.js";
 import { spawn } from "child_process";
 import { createReadStream } from "fs";
@@ -167,6 +175,126 @@ export const tools = [
           explanation,
         },
       };
+    },
+  },
+  {
+    name: "fs_stat",
+    description: "Get file or directory metadata (size, modified, permissions)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "File or directory path" },
+        explanation: { type: "string", description: "Why you need this metadata" },
+      },
+      required: ["path", "explanation"],
+    },
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    handler: async ({ path, explanation }) => {
+      const delegated = await delegateToSidecar("stat", { path });
+      const result = delegated ?? (await fsStat(path));
+      if (!result.ok) return result;
+      return { ok: true, data: { ...result.data, explanation } };
+    },
+  },
+  {
+    name: "fs_recent",
+    description: "List recently modified files under a directory",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Directory path", default: "." },
+        limit: { type: "number", description: "Max files to return", default: 20 },
+        explanation: { type: "string" },
+      },
+      required: ["path", "explanation"],
+    },
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    handler: async ({ path, limit, explanation }) => {
+      const delegated = await delegateToSidecar("recent", { path, limit });
+      const result = delegated ?? (await fsRecent(path, { limit }));
+      if (!result.ok) return result;
+      return { ok: true, data: { ...result.data, explanation } };
+    },
+  },
+  {
+    name: "fs_search",
+    description: "Search files by name pattern and optional extension under a directory",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", default: "." },
+        pattern: { type: "string", description: "Substring or glob (e.g. *.pdf)" },
+        extension: { type: "string", description: "File extension without dot" },
+        maxResults: { type: "number", default: 50 },
+        explanation: { type: "string" },
+      },
+      required: ["path", "explanation"],
+    },
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
+    handler: async ({ path, pattern, extension, maxResults, explanation }) => {
+      const delegated = await delegateToSidecar("search", { path, pattern, extension, maxResults });
+      const result = delegated ?? (await fsSearch(path, { pattern, extension, maxResults }));
+      if (!result.ok) return result;
+      return { ok: true, data: { ...result.data, explanation } };
+    },
+  },
+  {
+    name: "fs_copy",
+    description: "Copy file or directory (requires approval)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string" },
+        destination: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["source", "destination", "explanation"],
+    },
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
+    handler: async ({ source, destination, explanation }) => {
+      const delegated = await delegateToSidecar("copy", { source, destination });
+      const result = delegated ?? (await fsCopy(source, destination));
+      if (!result.ok) return result;
+      return { ok: true, data: { ...result.data, explanation } };
+    },
+  },
+  {
+    name: "fs_move",
+    description: "Move or rename file/directory (requires approval)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string" },
+        destination: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["source", "destination", "explanation"],
+    },
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.DESTRUCTIVE, ToolTags.LOCAL_FS],
+    handler: async ({ source, destination, explanation }) => {
+      const delegated = await delegateToSidecar("move", { source, destination });
+      const result = delegated ?? (await fsMove(source, destination));
+      if (!result.ok) return result;
+      return { ok: true, data: { ...result.data, explanation } };
+    },
+  },
+  {
+    name: "fs_delete_to_trash",
+    description: "Move file or directory to Trash (requires approval)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["path", "explanation"],
+    },
+    tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.DESTRUCTIVE, ToolTags.LOCAL_FS],
+    handler: async ({ path, explanation }) => {
+      const delegated = await delegateToSidecar("delete_to_trash", { path });
+      const result = delegated ?? (await fsDeleteToTrash(path));
+      if (!result.ok) return result;
+      return { ok: true, data: { ...result.data, explanation } };
     },
   },
   {

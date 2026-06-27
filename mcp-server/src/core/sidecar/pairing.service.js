@@ -97,7 +97,7 @@ export function createPairingCode({ createdBy = "admin" } = {}) {
   return { id, code, expiresInSec: CODE_TTL_MS / 1000 };
 }
 
-export async function consumePairingCode(code, { deviceName, baseUrl, capabilities = ["fs"] }) {
+export async function consumePairingCode(code, { deviceName, baseUrl, capabilities = ["fs", "terminal", "desktop", "notify", "browser"] }) {
   await hydrateDevicesFromDb();
   const pending = pendingCodes.get(code);
   if (!pending) return { ok: false, error: "invalid_code" };
@@ -151,6 +151,38 @@ export async function removeSidecarDevice(deviceId) {
   const ok = devices.delete(deviceId);
   if (ok) await deleteDeviceFromDb(deviceId);
   return ok;
+}
+
+export async function rotateSidecarDeviceToken(deviceId) {
+  await hydrateDevicesFromDb();
+  const device = devices.get(deviceId);
+  if (!device) return { ok: false, error: "not_found" };
+
+  const authToken = generateSidecarAuthToken();
+  device.authToken = authToken;
+  device.tokenRotatedAt = new Date().toISOString();
+  device.lastSeenAt = new Date().toISOString();
+  await persistDevice(device);
+
+  return {
+    ok: true,
+    deviceId: device.id,
+    authToken,
+    rotatedAt: device.tokenRotatedAt,
+  };
+}
+
+export async function updateSidecarDeviceCapabilities(deviceId, capabilities) {
+  await hydrateDevicesFromDb();
+  const device = devices.get(deviceId);
+  if (!device) return { ok: false, error: "not_found" };
+  if (!Array.isArray(capabilities) || capabilities.length === 0) {
+    return { ok: false, error: "invalid_capabilities" };
+  }
+  device.capabilities = capabilities;
+  device.lastSeenAt = new Date().toISOString();
+  await persistDevice(device);
+  return { ok: true, deviceId, capabilities: device.capabilities };
 }
 
 export function resetSidecarPairingForTests() {

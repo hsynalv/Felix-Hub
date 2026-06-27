@@ -160,15 +160,40 @@ export const INTENT_TOOL_MAP = {
     "fs_read",
     "fs_write",
     "fs_hash",
+    "fs_stat",
+    "fs_recent",
+    "fs_search",
+    "fs_copy",
+    "fs_move",
+    "fs_delete_to_trash",
     "local_terminal_exec",
     "local_terminal_session_create",
     "local_terminal_session_exec",
     "local_notify",
     "desktop_screenshot",
+    "desktop_region_screenshot",
+    "desktop_window_screenshot",
     "desktop_active_window",
     "desktop_ocr",
     "desktop_click",
     "desktop_type",
+    "desktop_scroll",
+    "desktop_hotkey",
+    "desktop_drag",
+    "desktop_focus_app",
+    "clipboard_read",
+    "clipboard_write",
+    "browser_open_url",
+    "browser_snapshot",
+    "browser_screenshot",
+    "browser_extract_links",
+    "browser_extract_table",
+    "browser_find_text",
+    "browser_click",
+    "browser_type",
+    "sidecar_dependency_check",
+    "desktop_permission_check",
+    "sidecar_capabilities",
   ],
   external_api: [
     "tavily__",
@@ -370,7 +395,12 @@ export function buildToolIntentHint(classification) {
       "- Use **fs_list** / **fs_read** for Mac folders (e.g. ~/Documents). Never claim missing permission without calling a tool."
     );
     lines.push("- Paths: `~/Documents`, `~/Downloads`, or whitelisted dirs. Writes need user approval.");
-    lines.push("- Screenshots: **desktop_screenshot**; active window: **desktop_active_window**.");
+    lines.push("- Screenshots: **desktop_screenshot**, **desktop_region_screenshot**, **desktop_window_screenshot**.");
+    lines.push("- File tools: **fs_search**, **fs_recent**, **fs_stat**; copy/move/delete need approval.");
+    lines.push("- Desktop control: **desktop_hotkey**, **desktop_scroll**, **desktop_drag** (approval required).");
+    lines.push("- Clipboard: **clipboard_read** / **clipboard_write** (approval + sensitive guard).");
+    lines.push("- Browser: **browser_open_url** → snapshot/extract; **browser_click/type** need approval; login/payment hard-stop.");
+    lines.push("- Health: **sidecar_dependency_check**, **desktop_permission_check** for Mac setup diagnostics.");
   }
   lines.push("- Use the smallest sufficient tool set. Read before write.");
 

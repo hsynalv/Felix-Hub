@@ -4,14 +4,12 @@
 
 import { spawn } from "child_process";
 import { randomUUID } from "crypto";
-
-const ALLOWED_COMMANDS = new Set(
-  (process.env.SIDECAR_TERMINAL_ALLOWLIST ||
-    "ls,cat,echo,grep,find,head,tail,wc,pwd,git,npm,node,python,python3,which,date,uname,whoami")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean)
-);
+import {
+  getSidecarTerminalAllowlistSet,
+  checkSidecarSafeModeOperators,
+  isSidecarPowerCommand,
+  getSidecarTerminalMode,
+} from "./sidecar-terminal-config.js";
 
 const BLOCKED_PATTERNS = [
   /\brm\s+.*-[rf]*r/i,
@@ -31,9 +29,18 @@ function validateCommand(command) {
   for (const p of BLOCKED_PATTERNS) {
     if (p.test(trimmed)) return { ok: false, error: "command blocked by policy" };
   }
+  const operatorErr = checkSidecarSafeModeOperators(trimmed);
+  if (operatorErr) return { ok: false, error: operatorErr };
+
   const first = trimmed.split(/\s+/)[0].replace(/^.*\//, "").toLowerCase();
-  if (!ALLOWED_COMMANDS.has(first)) {
-    return { ok: false, error: `command not in allowlist: ${first}` };
+  const allowlist = getSidecarTerminalAllowlistSet();
+  if (!allowlist.has(first)) {
+    const mode = getSidecarTerminalMode();
+    const hint =
+      mode === "safe" && isSidecarPowerCommand(trimmed)
+        ? ` (blocked in safe mode; power commands need SIDECAR_TERMINAL_MODE=power + admin approval)`
+        : "";
+    return { ok: false, error: `command not in allowlist: ${first}${hint}` };
   }
   return { ok: true, command: trimmed };
 }
@@ -107,6 +114,7 @@ export function execTerminalCommand(command, { cwd = process.cwd(), timeoutMs = 
           stdout,
           stderr,
           durationMs: Date.now() - start,
+          mode: getSidecarTerminalMode(),
         },
       });
     });

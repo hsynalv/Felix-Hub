@@ -3,6 +3,7 @@
  */
 
 import { executeBeforeHooks, executeAfterHooks } from "../tool-hooks.js";
+import { enrichSidecarToolContext } from "../sidecar/sidecar-context.js";
 import { validateToolArgs } from "./validate-input.js";
 import { withTimeout } from "./with-timeout.js";
 import {
@@ -122,7 +123,7 @@ async function emitToolExecutionHub(p) {
  */
 export async function executeRegisteredTool({ name, tool, args, context }) {
   const started = Date.now();
-  const ctx = context && typeof context === "object" ? context : {};
+  const ctx = await enrichSidecarToolContext(context && typeof context === "object" ? context : {});
   const normalizedArgs = coerceArgs(args);
 
   await emitToolExecutionHub({

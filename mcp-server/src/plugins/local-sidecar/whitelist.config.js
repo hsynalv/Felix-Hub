@@ -9,12 +9,11 @@ import { join, resolve } from "path";
 import { homedir } from "os";
 
 const DEFAULT_WHITELIST = [
-  // Current workspace
   process.cwd(),
-  // User's home directory (limited access)
+  join(homedir(), "Desktop"),
   join(homedir(), "Documents"),
   join(homedir(), "Downloads"),
-  // Project-specific directories can be added via config
+  join(homedir(), "Pictures"),
 ];
 
 let cachedWhitelist = null;
