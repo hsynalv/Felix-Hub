@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -11,7 +11,6 @@ import { ConnectionsSettingsPanel } from "@/components/settings/ConnectionsSetti
 import { PluginEnvPanel } from "@/components/settings/PluginEnvPanel";
 import { LlmRoutingPanel } from "@/components/settings/LlmRoutingPanel";
 import { PersonalOsSettingsPanel } from "@/components/settings/PersonalOsSettingsPanel";
-import { SidecarSettingsPanel } from "@/components/settings/SidecarSettingsPanel";
 import { PromptImportSettingsPanel } from "@/components/settings/PromptImportSettingsPanel";
 import {
   SettingsNav,
@@ -50,10 +49,6 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
     title: "Bağlantılar",
     description: "Harici servislere ait kayıtlı bağlantı profillerini görüntüleyin.",
   },
-  sidecar: {
-    title: "Felix Desktop",
-    description: "Yerel masaüstü ajanı, production modu ve eşleştirilmiş cihazlar.",
-  },
   prompts: {
     title: "Prompt Registry",
     description: "Harici arşivden türetilmiş draft'ları inceleyin ve onaylayın.",
@@ -64,7 +59,8 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
   },
 };
 
-function parseTabParam(tab: string | null): SettingsSectionId {
+function parseTabParam(tab: string | null): SettingsSectionId | "sidecar" {
+  if (tab === "sidecar") return "sidecar";
   if (tab && VALID_TABS.has(tab as SettingsSectionId)) {
     return tab as SettingsSectionId;
   }
@@ -75,10 +71,17 @@ export function SettingsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tabParam = searchParams.get("tab");
-  const [section, setSection] = useState<SettingsSectionId>(() => parseTabParam(tabParam));
+  const parsed = parseTabParam(tabParam);
+
+  if (parsed === "sidecar") {
+    return <Navigate to="/desktop" replace />;
+  }
+
+  const [section, setSection] = useState<SettingsSectionId>(() => parsed as SettingsSectionId);
 
   useEffect(() => {
     const next = parseTabParam(tabParam);
+    if (next === "sidecar") return;
     if (next !== section) setSection(next);
   }, [tabParam, section]);
 
@@ -96,7 +99,6 @@ export function SettingsPage() {
   const isForbidden = settingsQuery.error instanceof ApiError && settingsQuery.error.status === 403;
   const needsAdmin =
     section !== "appearance" &&
-    section !== "sidecar" &&
     section !== "personal" &&
     section !== "account";
   const header = SECTION_HEADERS[section];
@@ -129,7 +131,6 @@ export function SettingsPage() {
           {section === "personal" && <PersonalOsSettingsPanel />}
           {section === "llm" && !isForbidden && <LlmRoutingPanel />}
           {section === "connections" && !isForbidden && <ConnectionsSettingsPanel />}
-          {section === "sidecar" && <SidecarSettingsPanel />}
           {section === "prompts" && !isForbidden && <PromptImportSettingsPanel />}
           {section === "advanced" && !isForbidden && <AdvancedSettingsPanel />}
         </div>

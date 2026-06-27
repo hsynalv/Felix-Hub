@@ -5,7 +5,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fsList, fsRead, fsWrite, fsHash, checkPathAllowed } from "../../src/plugins/local-sidecar/sidecar.core.js";
+import { join, normalize } from "path";
+import { homedir } from "os";
+import { fsList, fsRead, fsWrite, fsHash, checkPathAllowed, resolveUserPath } from "../../src/plugins/local-sidecar/sidecar.core.js";
 import { loadWhitelistConfig, clearWhitelistCache } from "../../src/plugins/local-sidecar/whitelist.config.js";
 import * as localSidecar from "../../src/plugins/local-sidecar/index.js";
 
@@ -101,6 +103,20 @@ describe("Local Sidecar Plugin", () => {
   });
 
   describe("Whitelist Protection", () => {
+    it("should expand ~ to home directory", () => {
+      const home = process.env.HOME || process.env.USERPROFILE || "/tmp";
+      loadWhitelistConfig.mockReturnValueOnce([join(home, "Documents")]);
+      const result = checkPathAllowed("~/Documents");
+      expect(result.allowed).toBe(true);
+      expect(result.resolvedPath).toBe(normalize(join(home, "Documents")));
+    });
+
+    it("resolveUserPath expands tilde paths", () => {
+      const home = homedir();
+      expect(resolveUserPath("~/Downloads")).toBe(normalize(join(home, "Downloads")));
+      expect(resolveUserPath("~")).toBe(home);
+    });
+
     it("should allow access to whitelisted paths", () => {
       const result = checkPathAllowed("/allowed/path/test.txt");
       expect(result.allowed).toBe(true);

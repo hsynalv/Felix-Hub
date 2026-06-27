@@ -41,6 +41,7 @@ const InboxPage = lazy(() => import("@/pages/InboxPage").then((m) => ({ default:
 const LifeAgentsPage = lazy(() =>
   import("@/pages/LifeAgentsPage").then((m) => ({ default: m.LifeAgentsPage }))
 );
+const DesktopPage = lazy(() => import("@/pages/DesktopPage").then((m) => ({ default: m.DesktopPage })));
 const GuidePage = lazy(() => import("@/pages/GuidePage").then((m) => ({ default: m.GuidePage })));
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
@@ -57,6 +58,7 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="today" element={<TodayPage />} />
             <Route path="guide" element={<GuidePage />} />
+            <Route path="desktop" element={<DesktopPage />} />
             <Route path="life" element={<LifeAgentsPage />} />
             <Route path="system" element={<SystemDashboardPage />} />
             <Route path="chat" element={<ChatPage />} />

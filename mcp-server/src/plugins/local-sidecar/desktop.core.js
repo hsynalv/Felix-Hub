@@ -45,6 +45,7 @@ export async function captureScreenshot({ format = "png" } = {}) {
   try {
     await execFileAsync("screencapture", ["-x", `-t${ext}`, outPath], { timeout: 15_000 });
     const buf = await readFile(outPath);
+    const dims = imageDimensionsFromBuffer(buf, ext);
     return {
       ok: true,
       data: {
@@ -52,16 +53,23 @@ export async function captureScreenshot({ format = "png" } = {}) {
         format: ext,
         imageBase64: buf.toString("base64"),
         byteLength: buf.length,
+        width: dims?.width ?? null,
+        height: dims?.height ?? null,
         capturedAt: new Date().toISOString(),
       },
     };
   } catch (err) {
+    const msg = String(err.message || err);
+    const needsScreenRecording =
+      /could not create image from display|screen capture|not authorized/i.test(msg);
     return {
       ok: false,
       error: {
         code: "screenshot_failed",
-        message: err.message,
-        hint: "Grant Screen Recording permission to Terminal or the sidecar process",
+        message: msg,
+        hint: needsScreenRecording
+          ? "macOS: Sistem Ayarları → Gizlilik ve Güvenlik → Ekran Kaydı → node (veya Terminal) izni verin. PM2 kullanıyorsanız node binary'sine izin gerekir; ardından npm run sidecar:pm2:restart"
+          : "Grant Screen Recording permission to Terminal or the sidecar process",
       },
     };
   } finally {

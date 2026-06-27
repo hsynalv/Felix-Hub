@@ -97,12 +97,13 @@ export async function capturePersonalDesktopPreview() {
           format: screenshotRes.data?.format || "png",
           width: screenshotRes.data?.width,
           height: screenshotRes.data?.height,
-          /** base64 omitted from API by default — use sidecar directly for full image */
-          hasImage: !!screenshotRes.data?.base64,
+          byteLength: screenshotRes.data?.byteLength,
+          hasImage: !!(screenshotRes.data?.imageBase64 || screenshotRes.data?.base64),
         }
       : {
           captured: false,
           error: screenshotRes?.error?.message || "Sidecar screenshot unavailable",
+          hint: screenshotRes?.error?.hint || null,
         },
     preview: safety.redactedPreview,
   };

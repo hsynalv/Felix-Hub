@@ -4,7 +4,6 @@ import {
   FileCode2,
   Flower2,
   KeyRound,
-  Laptop,
   Palette,
   Sparkles,
   Variable,
@@ -19,7 +18,6 @@ export type SettingsSectionId =
   | "integrations"
   | "personal"
   | "connections"
-  | "sidecar"
   | "prompts"
   | "advanced";
 
@@ -72,13 +70,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Bağlantılar",
     description: "Harici servis profilleri",
     icon: Database,
-    group: "hub",
-  },
-  {
-    id: "sidecar",
-    label: "Felix Desktop",
-    description: "Yerel masaüstü ajanı",
-    icon: Laptop,
     group: "hub",
   },
   {

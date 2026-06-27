@@ -172,10 +172,22 @@ async function cmdDesktop(chatId, args, reply) {
     }
     const win = preview.activeWindow;
     const shot = preview.screenshot;
+    const shotErr = shot?.error || "";
+    const needsMacPerm = /could not create image from display|screen capture|not authorized/i.test(
+      String(shotErr),
+    );
+    const shotLine = shot?.captured
+      ? shot.width && shot.height
+        ? `Screenshot: ${shot.width}×${shot.height}${shot.hasImage ? " (alındı)" : ""}`
+        : `Screenshot: alındı${shot.byteLength ? ` (${Math.round(shot.byteLength / 1024)} KB)` : ""}`
+      : `Screenshot: ${shotErr || "yok"}`;
     const lines = [
       "Desktop önizleme",
       win ? `Pencere: ${win.app || "?"} — ${win.title || "?"}` : "Pencere bilgisi yok",
-      shot?.captured ? `Screenshot: ${shot.width || "?"}×${shot.height || "?"}` : `Screenshot: ${shot?.error || "yok"}`,
+      shotLine,
+      needsMacPerm
+        ? "\n⚠️ macOS Ekran Kaydı izni gerekli.\nSistem Ayarları → Gizlilik → Ekran Kaydı → node açık olsun.\nPM2: npm run sidecar:pm2:restart"
+        : "",
       preview.preview ? `\n${preview.preview.slice(0, 500)}` : "",
     ];
     await reply(lines.filter(Boolean).join("\n"));

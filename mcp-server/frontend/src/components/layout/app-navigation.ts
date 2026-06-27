@@ -11,6 +11,7 @@ import {
   GitBranch,
   Inbox,
   Home,
+  Laptop,
   LayoutGrid,
   Settings,
   Shield,
@@ -45,6 +46,7 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
     items: [
       { to: "/today", label: "Bugün", icon: Home },
       { to: "/guide", label: "Rehber", icon: BookOpen },
+      { to: "/desktop", label: "Felix Desktop", icon: Laptop },
       { to: "/life", label: "Life", icon: Flower2 },
       { to: "/inbox", label: "Inbox", icon: Inbox },
       { to: "/approvals", label: "Onaylar", icon: ShieldCheck },
@@ -89,6 +91,7 @@ export const APP_NAV: AppNavItem[] = [
 export const APP_ROUTE_TITLES: Record<string, string> = {
   "/today": "Bugün",
   "/guide": "Rehber",
+  "/desktop": "Felix Desktop",
   "/life": "Life Agents",
   "/system": "Sistem Paneli",
   "/chat": "Sohbet",

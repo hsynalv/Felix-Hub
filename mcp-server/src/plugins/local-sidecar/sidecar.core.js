@@ -6,8 +6,38 @@
 
 import { readdir, readFile, writeFile, stat } from "fs/promises";
 import { createHash } from "crypto";
-import { join, resolve, relative, isAbsolute, normalize } from "path";
+import { join, resolve, isAbsolute, normalize } from "path";
+import { homedir } from "os";
 import { loadWhitelistConfig } from "./whitelist.config.js";
+
+/**
+ * Resolve user-facing paths (~, relative, absolute) to an absolute path.
+ * @param {string} targetPath
+ * @returns {string}
+ */
+export function resolveUserPath(targetPath) {
+  if (!targetPath || typeof targetPath !== "string") {
+    return normalize(process.cwd());
+  }
+  let p = targetPath.trim();
+  if (p === "~") return homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) {
+    p = join(homedir(), p.slice(2));
+  }
+  return isAbsolute(p) ? normalize(p) : normalize(join(process.cwd(), p));
+}
+
+/**
+ * @param {Buffer} buf
+ * @returns {{ width: number, height: number } | null}
+ */
+function imageDimensionsFromBuffer(buf, ext) {
+  if (!buf || buf.length < 24) return null;
+  if (ext === "png" && buf.toString("ascii", 1, 4) === "PNG") {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+  return null;
+}
 
 /**
  * Check if a path is within whitelisted directories
@@ -16,11 +46,7 @@ import { loadWhitelistConfig } from "./whitelist.config.js";
  */
 export function checkPathAllowed(targetPath) {
   const whitelist = loadWhitelistConfig();
-  
-  // Resolve to absolute path
-  const resolved = isAbsolute(targetPath) 
-    ? normalize(targetPath)
-    : normalize(join(process.cwd(), targetPath));
+  const resolved = resolveUserPath(targetPath);
 
   // Check against whitelist
   const isAllowed = whitelist.some(allowedPath => {
