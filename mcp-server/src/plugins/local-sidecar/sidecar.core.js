@@ -8,14 +8,8 @@ import { readdir, readFile, writeFile, stat } from "fs/promises";
 import { createHash } from "crypto";
 import { join, normalize } from "path";
 import { fsPolicyDecide } from "./fs-path-policy.js";
-export { resolveUserPath } from "./path-resolve.js";
 import { resolveUserPath } from "./path-resolve.js";
 
-/**
- * Resolve user-facing paths (~, relative, absolute) to an absolute path.
- * @param {string} targetPath
- * @returns {string}
- */
 export { resolveUserPath };
 
 /**
