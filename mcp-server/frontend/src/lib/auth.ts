@@ -239,6 +239,11 @@ async function runEnsureAuth(pathname: string): Promise<AuthMode> {
   }
 
   if (isAuthRoute(pathname)) {
+    const sessionUser = await getSession();
+    if (sessionUser) {
+      scheduleSessionRefresh();
+      return "session";
+    }
     return "login_required";
   }
 

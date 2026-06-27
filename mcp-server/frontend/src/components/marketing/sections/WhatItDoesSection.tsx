@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import {
   Brain,
   CheckCircle2,
@@ -6,64 +7,78 @@ import {
   Send,
   Wrench,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionHeader } from "../SectionHeader";
 
 const CAPABILITIES = [
   {
     icon: Wrench,
-    title: "Uses tools",
+    title: "Unified tool layer",
     description:
-      "GitHub, Notion, n8n, RAG, email, image/video, and LLM router — managed from one hub.",
+      "One registry for integrations — source control, knowledge bases, automation, messaging, and model routing.",
   },
   {
     icon: Brain,
-    title: "Remembers",
-    description: "Brain/memory and project context keep user and project state across sessions.",
+    title: "Persistent context",
+    description:
+      "Memory and project scope carry state across sessions so agents do not start from zero every time.",
   },
   {
     icon: Cpu,
-    title: "Plans",
-    description: "Agent runtime and workflow system break goals into steps and orchestrate runs.",
+    title: "Workflow orchestration",
+    description:
+      "Long-running agent runs and workflow steps decompose goals into trackable, resumable work.",
   },
   {
     icon: CheckCircle2,
-    title: "Asks for approval",
-    description: "Risky operations go through the approval and policy layer before execution.",
+    title: "Human-in-the-loop",
+    description:
+      "Sensitive operations pause for approval instead of executing silently in the background.",
   },
   {
     icon: Send,
-    title: "Remote control",
-    description: "Trigger daily tasks and automations from Telegram.",
+    title: "Remote triggers",
+    description:
+      "Kick off summaries, checks, and automations from messaging channels when you are away from the desk.",
   },
   {
     icon: Monitor,
-    title: "Works with your machine",
-    description: "Desktop/sidecar infrastructure for controlled local environment interaction.",
+    title: "Local environment bridge",
+    description:
+      "Optional desktop agent path for controlled interaction with files and tools on your machine.",
   },
 ] as const;
 
 export function WhatItDoesSection() {
   return (
-    <section id="features" className="scroll-mt-16 border-t border-border/60 bg-card/20 py-16 sm:py-20">
+    <section id="features" className="scroll-mt-16 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What it does</h2>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Not a chat wrapper — a controlled runtime that connects models to real tools and workflows.
-        </p>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {CAPABILITIES.map(({ icon: Icon, title, description }) => (
-            <Card key={title} className="border-border/80 bg-card/60 backdrop-blur">
-              <CardHeader className="pb-2">
-                <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Icon className="h-4 w-4" />
+        <SectionHeader
+          eyebrow="Capabilities"
+          title="What Felix Hub does"
+          description="Everything an agent needs to operate in production-like conditions — without handing the model unchecked access."
+        />
+        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {CAPABILITIES.map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.05 }}
+                className="group rounded-2xl border border-white/10 bg-card/50 p-6 transition-colors hover:border-primary/25 hover:bg-card/80"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                  <Icon className="h-5 w-5" />
                 </div>
-                <CardTitle className="text-base">{title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{description}</p>
-              </CardContent>
-            </Card>
-          ))}
+                <h3 className="mt-4 font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {item.description}
+                </p>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>

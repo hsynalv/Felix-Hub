@@ -17,4 +17,12 @@ describe("wantsHtmlNavigation", () => {
       })
     ).toBe(false);
   });
+
+  it("treats wildcard Accept as HTML navigation", () => {
+    expect(
+      wantsHtmlNavigation({
+        headers: { accept: "*/*" },
+      })
+    ).toBe(true);
+  });
 });

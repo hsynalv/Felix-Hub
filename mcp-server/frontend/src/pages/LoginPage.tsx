@@ -1,21 +1,27 @@
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { login } from "@/lib/auth";
+import { useAuth } from "@/providers/AuthProvider";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { ready, mode } = useAuth();
   const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || "/today";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (ready && mode !== "login_required") {
+    return <Navigate to={from.startsWith("/login") ? "/today" : from} replace />;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -1,19 +1,24 @@
 import { ArchitectureDiagram } from "../ArchitectureDiagram";
+import { SectionHeader } from "../SectionHeader";
 
 export function ArchitectureSection() {
   return (
-    <section id="architecture" className="scroll-mt-16 py-16 sm:py-20">
+    <section id="architecture" className="scroll-mt-16 border-y border-border/40 bg-card/20 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Architecture</h2>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          A layered stack — from channels down to persistence.
-        </p>
-        <div className="mt-10 max-w-xl mx-auto">
-          <ArchitectureDiagram />
+        <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
+          <SectionHeader
+            eyebrow="Architecture"
+            title="Layered control plane"
+            description="Each layer has a single job. Models never talk to integrations directly — they go through schemas, policy, and audit."
+          />
+          <div className="lg:pt-8">
+            <ArchitectureDiagram />
+          </div>
         </div>
-        <p className="mx-auto mt-10 max-w-2xl text-center text-sm leading-relaxed text-muted-foreground">
-          Felix does not expose the LLM as a system with unrestricted access to everything. It runs
-          through tool schemas, approval, audit, and policy layers for controlled execution.
+        <p className="mx-auto mt-12 max-w-3xl rounded-xl border border-primary/20 bg-primary/5 px-6 py-4 text-center text-sm leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">Design principle:</span> tool schemas define
+          what is possible, policy defines what is allowed, and approval defines what runs without
+          human sign-off.
         </p>
       </div>
     </section>

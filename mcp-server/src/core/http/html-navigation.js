@@ -4,8 +4,11 @@
  */
 export function wantsHtmlNavigation(req) {
   const accept = (req.headers.accept || "").toLowerCase();
-  if (accept.includes("application/json")) return false;
+  if (accept.includes("application/json") && !accept.includes("text/html")) {
+    return false;
+  }
   if (accept.includes("text/html")) return true;
+  if (accept === "" || accept === "*/*" || accept.includes("*/*")) return true;
   return false;
 }
 

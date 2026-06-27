@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { HowItWorksSection } from "@/components/marketing/sections/HowItWorksSection";
 import { HeroSection } from "@/components/marketing/sections/HeroSection";
 import { WhatItDoesSection } from "@/components/marketing/sections/WhatItDoesSection";
 import { ArchitectureSection } from "@/components/marketing/sections/ArchitectureSection";
@@ -20,6 +21,7 @@ export function LandingPage() {
   return (
     <MarketingLayout>
       <HeroSection />
+      <HowItWorksSection />
       <WhatItDoesSection />
       <ArchitectureSection />
       <HighlightsSection />

@@ -1,40 +1,71 @@
-import { ShieldCheck } from "lucide-react";
+import { motion } from "framer-motion";
+import { FileText, Lock, ScrollText, ShieldCheck, Sliders, UserCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { SectionHeader } from "../SectionHeader";
 
-const SECURITY_POINTS = [
-  "Approval mechanism for risky tool calls",
-  "Explanation required on write/destructive tools",
-  "Audit log for operations",
-  "Policy guards on tool execution",
-  "Sidecar allowlist target for local control",
-  "Safe-control approach for Telegram and desktop channels",
-] as const;
+const SECURITY_POINTS: Array<{ icon: LucideIcon; title: string; description: string }> = [
+  {
+    icon: UserCheck,
+    title: "Approval queue",
+    description: "High-risk tool calls pause until explicitly approved.",
+  },
+  {
+    icon: FileText,
+    title: "Required explanations",
+    description: "Write and destructive tools must include a human-readable reason.",
+  },
+  {
+    icon: ScrollText,
+    title: "Audit trail",
+    description: "Operations are logged with actor, tool, and outcome metadata.",
+  },
+  {
+    icon: Sliders,
+    title: "Policy engine",
+    description: "Tag-based rules filter what agents can invoke per context.",
+  },
+  {
+    icon: Lock,
+    title: "Scoped local access",
+    description: "Desktop agents target allowlisted paths and actions — not full shell freedom.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Channel hardening",
+    description: "Remote channels use the same gates as the web UI.",
+  },
+];
 
 export function SecuritySection() {
   return (
-    <section id="security" className="scroll-mt-16 border-t border-border/60 bg-card/20 py-16 sm:py-20">
+    <section id="security" className="scroll-mt-16 py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-1 h-6 w-6 shrink-0 text-primary" />
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Powerful, but approval-first.
-            </h2>
-            <p className="mt-2 max-w-2xl text-muted-foreground">
-              An agent that can touch your tools and machine needs explicit guardrails — not blind
-              trust.
-            </p>
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-card/80 via-background to-card/40 p-8 sm:p-12">
+          <SectionHeader
+            eyebrow="Security"
+            title="Powerful, but approval-first"
+            description="Agents that can act on your systems need guardrails by design — not as an afterthought."
+          />
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {SECURITY_POINTS.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <motion.div
+                  key={item.title}
+                  initial={{ opacity: 0, y: 8 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.04 }}
+                  className="rounded-xl border border-white/10 bg-background/60 p-4"
+                >
+                  <Icon className="h-5 w-5 text-primary" />
+                  <h3 className="mt-3 text-sm font-semibold">{item.title}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
-        <ul className="mt-10 grid gap-3 sm:grid-cols-2">
-          {SECURITY_POINTS.map((point) => (
-            <li
-              key={point}
-              className="rounded-lg border border-border/60 bg-background/50 px-4 py-3 text-sm"
-            >
-              {point}
-            </li>
-          ))}
-        </ul>
       </div>
     </section>
   );

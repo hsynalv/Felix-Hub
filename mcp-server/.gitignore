@@ -2,6 +2,7 @@ node_modules/
 .env
 cache/
 data/
+logs/
 !data/tool-intent/
 !data/tool-intent/seed.corpus.json
 !data/tool-intent/models/

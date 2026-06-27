@@ -13,4 +13,4 @@ export const MARKETING_LINKS = {
 } as const;
 
 export const LANDING_TAGLINE =
-  "Felix Hub is a personal AI agent OS that connects LLMs with tools, memory, workflows and local automation through a controlled MCP-based runtime.";
+  "A self-hosted control plane that connects language models to tools, memory, and workflows — with policy, approval, and audit at every step.";

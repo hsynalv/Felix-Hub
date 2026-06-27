@@ -1,19 +1,25 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { register } from "@/lib/auth";
+import { useAuth } from "@/providers/AuthProvider";
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const { ready, mode } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (ready && mode !== "login_required") {
+    return <Navigate to="/today" replace />;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

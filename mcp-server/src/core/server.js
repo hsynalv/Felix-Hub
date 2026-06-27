@@ -85,7 +85,7 @@ import { loadSettingsOverlay } from "./settings/effective-config.js";
 import { registerSettingsRoutes } from "./settings/routes.js";
 import { registerReloadHooks } from "./settings/reload-registry.js";
 import { rateLimitMiddleware } from "./ratelimit.js";
-import { skipForHtmlNavigation } from "./http/html-navigation.js";
+import { skipForHtmlNavigation, wantsHtmlNavigation } from "./http/html-navigation.js";
 import { BRAND } from "./branding.js";
 
 import { workspaceContextMiddleware } from "./workspace.js";
@@ -711,7 +711,7 @@ export async function createServer() {
   }
 
   /** GET /tools — list registered MCP tools (optional ?plugin= filter) */
-  app.get("/tools", requireScope("read"), (req, res) => {
+  app.get("/tools", skipForHtmlNavigation, requireScope("read"), (req, res) => {
     const { plugin } = req.query;
     let tools = listTools();
     if (plugin) {
@@ -938,9 +938,7 @@ export async function createServer() {
     app.get("*", (req, res, next) => {
       if (req.method !== "GET" && req.method !== "HEAD") return next();
       if (req.path.includes(".")) return next();
-      const accept = req.headers.accept || "";
-      const wantsHtml = accept.includes("text/html") || accept.includes("*/*") || accept === "";
-      if (!wantsHtml) return next();
+      if (!wantsHtmlNavigation(req)) return next();
       res.setHeader("Cache-Control", "no-store");
       if (req.method === "HEAD") {
         res.setHeader("Content-Type", "text/html; charset=UTF-8");
