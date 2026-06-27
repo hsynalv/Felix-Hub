@@ -30,5 +30,14 @@ export function isPublicSecurityPath(req) {
 
   if (req.method === "POST" && p === "/ui/token") return true;
 
+  if (
+    req.method === "POST" &&
+    (p === "/auth/login" || p === "/auth/register" || p === "/auth/refresh" || p === "/auth/logout")
+  ) {
+    return true;
+  }
+
+  if (req.method === "GET" && p === "/personal/briefing/gmail/oauth/callback") return true;
+
   return false;
 }

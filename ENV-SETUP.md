@@ -156,6 +156,59 @@ Kullanım: `github_*` araçları, release manager, hygiene (stale PR).
 | `TELEGRAM_ALLOWED_CHAT_IDS` | Virgülle ayrılmış izinli chat ID’ler |
 | `TELEGRAM_WEBHOOK_SECRET` | `openssl rand -hex 16` — webhook doğrulama |
 
+### V7 — günlük brifing (mail + haber)
+
+RSS feed’ler **env’de değil** — `POST /personal/briefing/feeds` ile registry’ye eklenir (JSON store).  
+IMAP şifresi **asla store’a yazılmaz** — hesap API ile tanımlanır, şifre env’de kalır.
+
+| Değişken | Amaç | Nasıl girilir |
+|----------|------|----------------|
+| `BRIEFING_IMAP_PASS` | IMAP hesap şifresi / Gmail app password | [Google App Passwords](https://myaccount.google.com/apppasswords) veya sağlayıcı IMAP şifresi |
+| `BRIEFING_SKIP_IMAP` | IMAP poll’u kapat (test/dev) | `true` |
+| `BRIEFING_IMAP_TLS_INSECURE` | Self-signed TLS (sadece dev) | `true` |
+| `BRIEFING_SOURCE_STORE_PATH` | Feed + IMAP + Gmail registry | Opsiyonel; varsayılan `cache/briefing-sources.json` |
+| `BRIEFING_SCHEDULE_PATH` | Sabah brifing cron ayarları | Opsiyonel; varsayılan `cache/briefing-schedule.json` |
+| `GMAIL_OAUTH_CLIENT_ID` | Gmail OAuth client ID | [Google Cloud Console](https://console.cloud.google.com/) |
+| `GMAIL_OAUTH_CLIENT_SECRET` | Gmail OAuth secret | Aynı proje |
+| `GMAIL_OAUTH_REDIRECT_URI` | OAuth callback | Varsayılan `http://localhost:8787/personal/briefing/gmail/oauth/callback` |
+| `BRIEFING_SCHEDULER_ENABLED` | Arka plan scheduler | `false` ile kapat |
+| `PERSONAL_BRIEFING_PATH` | Üretilmiş brifing geçmişi | Opsiyonel |
+| `BRIEFING_FEEDBACK_PATH` | Brifing 👍/👎 feedback | Opsiyonel |
+| `TELEGRAM_OUTBOUND_LOG_PATH` | Telegram giden mesaj logu | Opsiyonel |
+
+**IMAP hesabı ekleme (şifre env’de):**
+
+```bash
+# .env → BRIEFING_IMAP_PASS=xxxx
+
+curl -X POST http://localhost:8787/personal/briefing/imap \
+  -H "Authorization: Bearer $HUB_WRITE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"host":"imap.gmail.com","user":"you@gmail.com","passwordEnvKey":"BRIEFING_IMAP_PASS","label":"Gmail"}'
+```
+
+**RSS feed ekleme:**
+
+```bash
+curl -X POST http://localhost:8787/personal/briefing/feeds \
+  -H "Authorization: Bearer $HUB_WRITE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://feeds.bbci.co.uk/news/rss.xml","label":"BBC"}'
+```
+
+> **UI:** Ayarlar → Kişisel OS — RSS, IMAP, Gmail OAuth, sabah zamanlaması ve Telegram log.
+
+**Sabah brifing zamanlaması:**
+
+```bash
+curl -X PUT http://localhost:8787/personal/briefing/schedule \
+  -H "Authorization: Bearer $HUB_WRITE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":true,"hour":9,"minute":0,"timezone":"Europe/Istanbul","pushTelegram":true}'
+```
+
+**Gmail OAuth:** Ayarlar → Kişisel OS → Gmail bağla (veya `GET /personal/briefing/gmail/oauth/url`).
+
 ### Redis / ek veritabanları (opsiyonel)
 
 | Değişken | Örnek |

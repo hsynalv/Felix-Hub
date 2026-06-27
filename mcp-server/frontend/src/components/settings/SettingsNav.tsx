@@ -1,6 +1,7 @@
 import {
   Bot,
   Database,
+  Flower2,
   Laptop,
   Palette,
   Sparkles,
@@ -13,6 +14,7 @@ export type SettingsSectionId =
   | "appearance"
   | "llm"
   | "integrations"
+  | "personal"
   | "connections"
   | "sidecar"
   | "advanced";
@@ -40,6 +42,12 @@ export const SETTINGS_SECTIONS: Array<{
     label: "Entegrasyonlar",
     description: "API anahtarları ve bağlantılar",
     icon: Variable,
+  },
+  {
+    id: "personal",
+    label: "Kişisel OS",
+    description: "Brifing kaynakları ve Telegram",
+    icon: Flower2,
   },
   {
     id: "connections",

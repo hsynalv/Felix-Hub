@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CalendarClock, Cog, FileText, GitBranch, Play, Shield, Zap } from "lucide-react";
+import { BookOpen, CalendarClock, Cog, FileText, GitBranch, Play, Shield, Timer, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -483,9 +483,10 @@ export function RunbooksPage() {
             ) : slaDashboardQuery.data ? (
               <>
                 <OpsStatGrid>
-                  <OpsStatCard label="Toplam ihlal" value={String(slaDashboardQuery.data.totalViolations)} />
-                  <OpsStatCard label="Son 7 gün" value={String(slaDashboardQuery.data.violationsLast7d)} />
+                  <OpsStatCard icon={Shield} label="Toplam ihlal" value={String(slaDashboardQuery.data.totalViolations)} />
+                  <OpsStatCard icon={CalendarClock} label="Son 7 gün" value={String(slaDashboardQuery.data.violationsLast7d)} />
                   <OpsStatCard
+                    icon={Timer}
                     label="MTTR (tahmini)"
                     value={
                       slaDashboardQuery.data.mttrMinutesEstimate != null

@@ -83,7 +83,7 @@ async function auditTelegramTurn(chatId, operation, success, extra = {}) {
 }
 
 async function replyToChat(chatId, text) {
-  await replyToChatChunks(chatId, text);
+  await replyToChatChunks(chatId, text, { source: "telegram_webhook" });
 }
 
 function toolProgressLabel(toolName) {
@@ -238,7 +238,7 @@ async function processAgentMessage(chatId, text) {
         : "Yanıt üretilemedi.");
 
     await sendChatAction(chatId, "typing");
-    await replyToChatChunks(chatId, answer);
+    await replyToChatChunks(chatId, answer, { source: "telegram_webhook" });
     await appendTelegramHistory(chatId, text, answer);
     await auditTelegramTurn(chatId, "telegram_chat_turn", true, {
       iterations: result.iterations,

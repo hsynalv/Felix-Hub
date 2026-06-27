@@ -13,12 +13,28 @@ import { listBriefingSources } from "./briefing-sources.js";
 import {
   listRssFeeds,
   listImapAccounts,
+  listGmailAccounts,
   addRssFeed,
   removeRssFeed,
   addImapAccount,
   removeImapAccount,
+  removeGmailAccount,
+  addGmailAccount,
   testBriefingSource,
 } from "./briefing-connectors.service.js";
+import {
+  getBriefingSchedule,
+  updateBriefingSchedule,
+  parseCronTime,
+  timeToCron,
+} from "./briefing-schedule-store.js";
+import { tickBriefingSchedule } from "./briefing-scheduler.service.js";
+import {
+  getGmailAuthUrl,
+  exchangeGmailOAuthCode,
+  consumeGmailOAuthState,
+  isGmailOAuthConfigured,
+} from "./gmail-oauth.service.js";
 import {
   listPersonalMemory,
   rememberPersonal,
@@ -79,6 +95,7 @@ import {
   submitBriefingFeedback,
   getBriefingFeedbackHistory,
 } from "./briefing-feedback.service.js";
+import { listTelegramOutbound } from "./telegram-outbound-store.js";
 
 export function registerV7Routes(app) {
   registerPersonalOpsHook();
@@ -172,6 +189,96 @@ export function registerV7Routes(app) {
     } catch (err) {
       res.status(400).json({ ok: false, error: { code: "source_test_failed", message: err.message } });
     }
+  });
+
+  app.get("/personal/briefing/schedule", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: getBriefingSchedule() });
+  });
+
+  app.put("/personal/briefing/schedule", requireScope("write"), (req, res) => {
+    try {
+      const body = req.body || {};
+      const patch = { ...body };
+      if (body.hour != null || body.minute != null) {
+        const current = getBriefingSchedule();
+        const { hour, minute } = parseCronTime(current.cronExpr);
+        patch.cronExpr = timeToCron(body.hour ?? hour, body.minute ?? minute);
+        delete patch.hour;
+        delete patch.minute;
+      }
+      const data = updateBriefingSchedule(patch);
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: { code: "schedule_update_failed", message: err.message } });
+    }
+  });
+
+  app.post("/personal/briefing/schedule/run", requireScope("write"), async (_req, res) => {
+    try {
+      const data = await tickBriefingSchedule(new Date(), { force: true });
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: { code: "schedule_run_failed", message: err.message } });
+    }
+  });
+
+  app.get("/personal/briefing/gmail/oauth/url", requireScope("read"), (_req, res) => {
+    try {
+      if (!isGmailOAuthConfigured()) {
+        return res.status(400).json({
+          ok: false,
+          error: {
+            code: "gmail_oauth_not_configured",
+            message: "Set GMAIL_OAUTH_CLIENT_ID and GMAIL_OAUTH_CLIENT_SECRET",
+          },
+        });
+      }
+      const data = getGmailAuthUrl();
+      res.json({ ok: true, data });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: { code: "gmail_oauth_url_failed", message: err.message } });
+    }
+  });
+
+  app.get("/personal/briefing/gmail/oauth/callback", async (req, res) => {
+    const { code, state, error } = req.query;
+    if (error) {
+      return res.status(400).send(`<html><body><h1>Gmail OAuth hata</h1><p>${String(error)}</p></body></html>`);
+    }
+    if (!code || !state || !consumeGmailOAuthState(String(state))) {
+      return res.status(400).send("<html><body><h1>Geçersiz OAuth state</h1><p>Tekrar deneyin.</p></body></html>");
+    }
+    try {
+      const tokens = await exchangeGmailOAuthCode(String(code));
+      const account = addGmailAccount({
+        email: tokens.email,
+        label: tokens.email,
+        refreshToken: tokens.refreshToken,
+      });
+      res.send(
+        `<html><body><h1>Gmail bağlandı</h1><p>${account.email}</p><p>Ayarlar → Kişisel OS sayfasına dönebilirsiniz.</p></body></html>`,
+      );
+    } catch (err) {
+      res.status(500).send(`<html><body><h1>Gmail bağlantı hatası</h1><p>${err.message}</p></body></html>`);
+    }
+  });
+
+  app.get("/personal/briefing/gmail", requireScope("read"), (_req, res) => {
+    res.json({ ok: true, data: { accounts: listGmailAccounts(), oauthConfigured: isGmailOAuthConfigured() } });
+  });
+
+  app.delete("/personal/briefing/gmail/:id", requireScope("write"), (req, res) => {
+    const removed = removeGmailAccount(req.params.id);
+    if (!removed) {
+      return res.status(404).json({ ok: false, error: { code: "gmail_not_found", message: "Account not found" } });
+    }
+    res.json({ ok: true, data: { removed: true } });
+  });
+
+  app.get("/personal/telegram/outbound", requireScope("read"), (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const chatId = req.query.chatId ? String(req.query.chatId) : null;
+    res.json({ ok: true, data: { messages: listTelegramOutbound({ limit, chatId }) } });
   });
 
   app.get("/personal/briefing/latest", requireScope("read"), (req, res) => {

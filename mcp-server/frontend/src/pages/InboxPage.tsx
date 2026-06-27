@@ -18,7 +18,7 @@ import { useToast } from "@/providers/ToastProvider";
 function priorityVariant(p: string) {
   if (p === "critical" || p === "high") return "destructive" as const;
   if (p === "low") return "outline" as const;
-  return "secondary" as const;
+  return "default" as const;
 }
 
 function InboxRow({ item, onRead, onSnooze }: {
@@ -65,7 +65,7 @@ function InboxRow({ item, onRead, onSnooze }: {
 }
 
 export function InboxPage() {
-  const { toast } = useToast();
+  const toast = useToast();
   const qc = useQueryClient();
 
   const summaryQ = useQuery({ queryKey: ["inbox-summary"], queryFn: fetchInboxSummary, refetchInterval: 15_000 });

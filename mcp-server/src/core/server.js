@@ -38,6 +38,7 @@ import { registerEvalRoutes } from "./eval/eval.routes.js";
 import { registerTeamRoutes } from "./team/team.routes.js";
 import { registerOpsRoutes } from "./ops/routes.js";
 import { startScheduleRunner } from "./ops/schedule-runner.js";
+import { startBriefingSchedulerRunner } from "./v7/briefing-scheduler-runner.js";
 import { registerAgentRoutes } from "./agents/routes.js";
 import { registerBriefingRoutes } from "./reports/briefing.routes.js";
 import { registerSlaRoutes } from "./sla/sla.routes.js";
@@ -843,6 +844,7 @@ export async function createServer() {
   registerV6PhaseCRoutes(app);
   registerV7Routes(app);
   startScheduleRunner();
+  startBriefingSchedulerRunner();
   startSlaRunner();
   registerUsageRoutes(app);
   registerInternalMarketplaceRoutes(app);

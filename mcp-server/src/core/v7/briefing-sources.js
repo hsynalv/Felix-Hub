@@ -43,6 +43,13 @@ export const BRIEFING_SOURCES = {
     kind: "external",
     hint: "V7.2 — Gmail/IMAP bağla",
   },
+  gmail: {
+    id: "gmail",
+    label: "Gmail (OAuth)",
+    status: "not_configured",
+    kind: "external",
+    hint: "V7.3 — Gmail OAuth bağla",
+  },
 };
 
 export function listBriefingSources() {
@@ -64,6 +71,15 @@ export function listBriefingSources() {
         configuredCount: health.imap.count,
         hint: health.imap.status === "not_configured" ? "IMAP hesabı ekle (şifre env'de)" : src.hint,
         errors: health.imap.errors,
+      };
+    }
+    if (src.id === "gmail") {
+      return {
+        ...src,
+        status: health.gmail.status,
+        configuredCount: health.gmail.count,
+        hint: health.gmail.status === "not_configured" ? "Gmail OAuth ile bağla" : src.hint,
+        errors: health.gmail.errors,
       };
     }
     return { ...src };

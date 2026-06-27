@@ -3,6 +3,7 @@
  */
 
 import { getEnvValue } from "../../../core/settings/effective-config.js";
+import { logTelegramOutbound } from "../../../core/v7/telegram-outbound-store.js";
 
 const MDV2_SPECIAL = /[_*[\]()~`>#+\-=|{}.!\\]/g;
 
@@ -93,6 +94,7 @@ export async function replyToChatChunks(chatId, text, opts = {}) {
  * @param {string} [opts.token]
  * @param {string} [opts.chatId]
  * @param {"MarkdownV2"|null} [opts.parseMode]
+ * @param {string} [opts.source] — log kaynağı (telegram_commands, notifications, …)
  */
 export async function sendTelegram({
   title,
@@ -100,6 +102,7 @@ export async function sendTelegram({
   token,
   chatId,
   parseMode = null,
+  source = "notifications",
 }) {
   const cfg = getTelegramConfig();
   const botToken = (token || cfg.token).trim();
@@ -135,13 +138,45 @@ export async function sendTelegram({
   if (!res.ok || data.ok === false) {
     const desc = data.description || "";
     if (res.status === 401 || desc.toLowerCase().includes("unauthorized")) {
-      throw new Error("Invalid Telegram bot token");
+      const err = new Error("Invalid Telegram bot token");
+      logTelegramOutbound({
+        chatId: targetChatId,
+        text: plainText,
+        source,
+        success: false,
+        error: err.message,
+      });
+      throw err;
     }
     if (res.status === 400) {
-      throw new Error(desc || "Invalid Telegram chat ID or message format");
+      const err = new Error(desc || "Invalid Telegram chat ID or message format");
+      logTelegramOutbound({
+        chatId: targetChatId,
+        text: plainText,
+        source,
+        success: false,
+        error: err.message,
+      });
+      throw err;
     }
-    throw new Error(desc || `Telegram API error (${res.status})`);
+    const err = new Error(desc || `Telegram API error (${res.status})`);
+    logTelegramOutbound({
+      chatId: targetChatId,
+      text: plainText,
+      source,
+      success: false,
+      error: err.message,
+    });
+    throw err;
   }
+
+  logTelegramOutbound({
+    chatId: targetChatId,
+    text: plainText,
+    source,
+    messageId: data.result?.message_id ?? null,
+    success: true,
+  });
 
   return {
     success: true,
@@ -154,25 +189,44 @@ export async function sendTelegram({
  * @param {string} chatId
  * @param {string} text
  * @param {{ inline_keyboard?: unknown[] }} [replyMarkup]
+ * @param {string} [source]
  */
-export async function sendTelegramWithMarkup(chatId, text, replyMarkup) {
+export async function sendTelegramWithMarkup(chatId, text, replyMarkup, source = "telegram_commands") {
   const cfg = getTelegramConfig();
   const botToken = cfg.token.trim();
   if (!botToken || !chatId) throw new Error("Telegram not configured");
 
+  const bodyText = String(text).slice(0, 4000);
   const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: String(chatId),
-      text: String(text).slice(0, 4000),
+      text: bodyText,
       reply_markup: replyMarkup,
     }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.ok === false) {
-    throw new Error(data.description || `Telegram API error (${res.status})`);
+    const err = new Error(data.description || `Telegram API error (${res.status})`);
+    logTelegramOutbound({
+      chatId,
+      text: bodyText,
+      source,
+      success: false,
+      error: err.message,
+      hasMarkup: !!replyMarkup,
+    });
+    throw err;
   }
+  logTelegramOutbound({
+    chatId,
+    text: bodyText,
+    source,
+    messageId: data.result?.message_id ?? null,
+    success: true,
+    hasMarkup: !!replyMarkup,
+  });
   return { success: true, messageId: data.result?.message_id ?? null };
 }
 

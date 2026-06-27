@@ -23,6 +23,7 @@ vi.mock("../../src/core/config.js", async (importOriginal) => {
 import { getIntegrationServer } from "../framework/test-server.js";
 import { resetBriefingSourceStoreForTests } from "../../src/core/v7/briefing-source-store.js";
 import { resetBriefingStoreForTests } from "../../src/core/v7/briefing-store.js";
+import { logTelegramOutbound, resetTelegramOutboundStoreForTests } from "../../src/core/v7/telegram-outbound-store.js";
 import { parseFeedXml } from "../../src/core/v7/rss-connector.service.js";
 import { generateDailyBriefing } from "../../src/core/v7/daily-briefing.service.js";
 
@@ -59,6 +60,7 @@ describe("V7 Faz F — briefing connectors", () => {
     storeDir = mkdtempSync(join(tmpdir(), "v7-briefing-src-"));
     process.env.BRIEFING_SOURCE_STORE_PATH = join(storeDir, "sources.json");
     process.env.PERSONAL_BRIEFING_PATH = join(storeDir, "briefings.json");
+    process.env.TELEGRAM_OUTBOUND_LOG_PATH = join(storeDir, "telegram-outbound.json");
     const app = await getIntegrationServer();
     request = supertest(app);
   }, 60000);
@@ -66,6 +68,7 @@ describe("V7 Faz F — briefing connectors", () => {
   beforeEach(() => {
     resetBriefingSourceStoreForTests();
     resetBriefingStoreForTests();
+    resetTelegramOutboundStoreForTests();
   });
 
   function mockRssFetch() {
@@ -158,6 +161,21 @@ describe("V7 Faz F — briefing connectors", () => {
       .get("/personal/briefing/imap")
       .set("Authorization", `Bearer ${READ_KEY}`);
     expect(list.body.data.accounts).toHaveLength(1);
+  });
+
+  it("GET /personal/telegram/outbound lists outbound messages", async () => {
+    logTelegramOutbound({
+      chatId: "12345",
+      text: "Günlük brifing özeti",
+      source: "telegram_commands",
+      success: true,
+    });
+
+    const res = await request
+      .get("/personal/telegram/outbound")
+      .set("Authorization", `Bearer ${READ_KEY}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.messages[0].preview).toContain("Günlük brifing");
   });
 
   it("command center news widget populated when RSS configured", async () => {

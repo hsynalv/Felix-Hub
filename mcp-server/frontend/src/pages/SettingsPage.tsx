@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -7,6 +8,7 @@ import { AppearanceSettingsPanel } from "@/components/settings/AppearanceSetting
 import { ConnectionsSettingsPanel } from "@/components/settings/ConnectionsSettingsPanel";
 import { PluginEnvPanel } from "@/components/settings/PluginEnvPanel";
 import { LlmRoutingPanel } from "@/components/settings/LlmRoutingPanel";
+import { PersonalOsSettingsPanel } from "@/components/settings/PersonalOsSettingsPanel";
 import { SidecarSettingsPanel } from "@/components/settings/SidecarSettingsPanel";
 import { SettingsNav, type SettingsSectionId } from "@/components/settings/SettingsNav";
 import { fetchSettings } from "@/lib/settings-api";
@@ -26,6 +28,10 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
     title: "Entegrasyonlar",
     description: "Eklentilerin ihtiyaç duyduğu API anahtarlarını ve bağlantı bilgilerini yönetin.",
   },
+  personal: {
+    title: "Kişisel OS",
+    description: "Günlük brifing kaynakları (RSS, IMAP) ve Telegram giden mesaj geçmişi.",
+  },
   connections: {
     title: "Bağlantılar",
     description: "Harici servislere ait kayıtlı bağlantı profillerini görüntüleyin.",
@@ -41,7 +47,30 @@ const SECTION_HEADERS: Record<SettingsSectionId, { title: string; description: s
 };
 
 export function SettingsPage() {
-  const [section, setSection] = useState<SettingsSectionId>("integrations");
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialSection: SettingsSectionId =
+    tabParam === "personal" ||
+    tabParam === "appearance" ||
+    tabParam === "llm" ||
+    tabParam === "integrations" ||
+    tabParam === "connections" ||
+    tabParam === "sidecar" ||
+    tabParam === "advanced"
+      ? tabParam
+      : "integrations";
+  const [section, setSection] = useState<SettingsSectionId>(initialSection);
+
+  useEffect(() => {
+    if (tabParam && tabParam !== section) {
+      const next = tabParam as SettingsSectionId;
+      if (
+        ["appearance", "llm", "integrations", "personal", "connections", "sidecar", "advanced"].includes(next)
+      ) {
+        setSection(next);
+      }
+    }
+  }, [tabParam, section]);
 
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -51,7 +80,7 @@ export function SettingsPage() {
 
   const isForbidden = settingsQuery.error instanceof ApiError && settingsQuery.error.status === 403;
   const needsAdmin =
-    section !== "appearance" && section !== "sidecar";
+    section !== "appearance" && section !== "sidecar" && section !== "personal";
   const header = SECTION_HEADERS[section];
 
   return (
@@ -78,6 +107,7 @@ export function SettingsPage() {
         )}
 
         {section === "integrations" && !isForbidden && <PluginEnvPanel />}
+        {section === "personal" && <PersonalOsSettingsPanel />}
         {section === "llm" && !isForbidden && <LlmRoutingPanel />}
         {section === "connections" && !isForbidden && <ConnectionsSettingsPanel />}
         {section === "sidecar" && <SidecarSettingsPanel />}

@@ -1,40 +1,39 @@
 /**
- * V7 — External briefing source orchestration (RSS + IMAP).
+ * V7 — External briefing source orchestration (RSS + IMAP + Gmail OAuth).
  */
 
 import {
   listRssFeeds,
   listImapAccounts,
+  listGmailAccounts,
+  listGmailAccountsForApi,
   hasEnabledRssFeeds,
   hasEnabledImapAccounts,
+  hasEnabledGmailAccounts,
   addRssFeed,
   removeRssFeed,
   addImapAccount,
   removeImapAccount,
+  addGmailAccount,
+  removeGmailAccount,
   getRssFeed,
   getImapAccount,
+  getGmailAccount,
   patchRssFeedMeta,
   patchImapAccountMeta,
+  patchGmailAccountMeta,
 } from "./briefing-source-store.js";
 import { fetchRssFeedItems } from "./rss-connector.service.js";
 import { fetchImapMessages, testImapConnection } from "./imap-connector.service.js";
-
-function dedupBriefingItems(items) {
-  const seen = new Set();
-  return items.filter((item) => {
-    const key = (item.dedupKey || item.title || item.id || "").toLowerCase().trim();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
+import { fetchGmailMessages, testGmailConnection } from "./gmail-connector.service.js";
+import { dedupBriefingItems } from "./briefing-dedup.js";
 
 function summarizeSourceHealth(kind, entries) {
   const enabled = entries.filter((e) => e.enabled);
   if (!enabled.length) {
     return { status: "not_configured", count: 0, errors: [] };
   }
-  const errors = enabled.filter((e) => e.lastError).map((e) => ({ id: e.id, label: e.label, error: e.lastError }));
+  const errors = enabled.filter((e) => e.lastError).map((e) => ({ id: e.id, label: e.label || e.email, error: e.lastError }));
   const healthy = enabled.filter((e) => !e.lastError);
   if (!healthy.length && errors.length) {
     return { status: "error", count: enabled.length, errors };
@@ -48,17 +47,23 @@ function summarizeSourceHealth(kind, entries) {
 export function getExternalSourceHealth() {
   const feeds = listRssFeeds();
   const imap = listImapAccounts();
+  const gmail = listGmailAccountsForApi();
   return {
     rss: summarizeSourceHealth("rss", feeds),
     imap: summarizeSourceHealth("imap", imap),
+    gmail: summarizeSourceHealth("gmail", gmail),
   };
 }
 
 /**
  * Poll all enabled external sources and return normalized briefing items.
- * @param {{ fetchImpl?: typeof fetch, skipImap?: boolean }} opts
+ * @param {{ fetchImpl?: typeof fetch, skipImap?: boolean, skipGmail?: boolean }} opts
  */
-export async function collectExternalBriefingItems({ fetchImpl = fetch, skipImap = false } = {}) {
+export async function collectExternalBriefingItems({
+  fetchImpl = fetch,
+  skipImap = false,
+  skipGmail = false,
+} = {}) {
   const items = [];
   const errors = [];
 
@@ -84,24 +89,39 @@ export async function collectExternalBriefingItems({ fetchImpl = fetch, skipImap
     }
   }
 
+  if (!skipGmail) {
+    for (const account of listGmailAccounts().filter((a) => a.enabled && a.refreshToken)) {
+      try {
+        const mailItems = await fetchGmailMessages(account);
+        items.push(...mailItems);
+      } catch (err) {
+        errors.push({ source: "gmail", id: account.id, error: err.message });
+        patchGmailAccountMeta(account.id, { lastError: err.message, lastFetchedAt: new Date().toISOString() });
+      }
+    }
+  }
+
   return {
     items: dedupBriefingItems(items),
     errors,
   };
 }
 
-export async function getMailNewsPreview({ limit = 6, fetchImpl = fetch, skipImap = false } = {}) {
-  const { items, errors } = await collectExternalBriefingItems({ fetchImpl, skipImap });
-  const mail = items.filter((i) => i.source === "imap").slice(0, limit);
+export async function getMailNewsPreview({ limit = 6, fetchImpl = fetch, skipImap = false, skipGmail = false } = {}) {
+  const { items, errors } = await collectExternalBriefingItems({ fetchImpl, skipImap, skipGmail });
+  const mail = items.filter((i) => i.source === "imap" || i.source === "gmail").slice(0, limit);
   const news = items.filter((i) => i.source === "rss").slice(0, limit);
   const health = getExternalSourceHealth();
 
   return {
     mail: {
-      status: health.imap.status,
+      status: health.gmail.status !== "not_configured" ? health.gmail.status : health.imap.status,
       items: mail,
-      hint: health.imap.status === "not_configured" ? "IMAP hesabı ekleyin" : undefined,
-      errors: health.imap.errors,
+      hint:
+        health.gmail.status === "not_configured" && health.imap.status === "not_configured"
+          ? "Gmail OAuth veya IMAP hesabı ekleyin"
+          : undefined,
+      errors: [...health.imap.errors, ...health.gmail.errors],
     },
     news: {
       status: health.rss.status,
@@ -126,16 +146,26 @@ export async function testBriefingSource({ type, id, fetchImpl = fetch }) {
     await testImapConnection(account);
     return { ok: true };
   }
-  throw new Error("type must be rss or imap");
+  if (type === "gmail") {
+    const account = getGmailAccount(id);
+    if (!account) throw new Error("gmail account not found");
+    await testGmailConnection(account);
+    return { ok: true };
+  }
+  throw new Error("type must be rss, imap, or gmail");
 }
 
 export {
   listRssFeeds,
   listImapAccounts,
+  listGmailAccountsForApi as listGmailAccounts,
   hasEnabledRssFeeds,
   hasEnabledImapAccounts,
+  hasEnabledGmailAccounts,
   addRssFeed,
   removeRssFeed,
   addImapAccount,
   removeImapAccount,
+  addGmailAccount,
+  removeGmailAccount,
 };

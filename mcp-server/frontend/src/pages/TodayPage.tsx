@@ -14,9 +14,11 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  Sun,
   ThumbsDown,
   ThumbsUp,
   HelpCircle,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,7 +35,7 @@ import type { ComponentType } from "react";
 function priorityVariant(p: string) {
   if (p === "critical" || p === "high") return "destructive" as const;
   if (p === "low") return "outline" as const;
-  return "secondary" as const;
+  return "default" as const;
 }
 
 export function TodayPage() {
@@ -330,11 +332,12 @@ export function TodayPage() {
               <FeedCard
                 title="Mail"
                 icon={Mail}
+                href="/settings?tab=personal"
                 empty={data.mail.hint || "Mail yok"}
                 items={(data.mail.items ?? []).map((item) => ({
                   id: item.id,
                   title: item.title,
-                  meta: item.body?.slice(0, 40),
+                  meta: item.body?.slice(0, 40) || "mail",
                   time: item.createdAt,
                 }))}
               />
@@ -345,11 +348,12 @@ export function TodayPage() {
               <FeedCard
                 title="Haber"
                 icon={Newspaper}
+                href="/settings?tab=personal"
                 empty={data.news.hint || "Haber yok"}
                 items={(data.news.items ?? []).map((item) => ({
                   id: item.id,
                   title: item.title,
-                  meta: item.sourceLabel || item.source,
+                  meta: item.sourceLabel || item.source || "rss",
                   time: item.createdAt,
                 }))}
               />
@@ -374,7 +378,7 @@ export function TodayPage() {
                       <span className="text-muted-foreground">Token:</span>{" "}
                       {formatTokenCount(data.usage.totalTokens)}
                     </p>
-                    <Button variant="link" className="h-auto p-0" asChild>
+                    <Button variant="ghost" className="h-auto p-0 text-primary underline-offset-4 hover:underline" asChild>
                       <Link to="/usage">
                         Detay <ArrowRight className="ml-1 inline h-3 w-3" />
                       </Link>
@@ -466,7 +470,7 @@ export function TodayPage() {
                   <p className="w-full text-xs text-muted-foreground">{explainData.explanation}</p>
                 )}
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/v6">Profil (V6)</Link>
+                  <Link to="/v6">Agent Ekosistemi → Profil</Link>
                 </Button>
               </CardContent>
             </Card>

@@ -4,6 +4,7 @@
 
 import { BRAND } from "../branding.js";
 import { generateDailyBriefing } from "./daily-briefing.service.js";
+import { formatBriefingDigestText } from "./briefing-telegram-digest.service.js";
 import { searchProducts } from "./shopping-research.service.js";
 import { setJarvisMode, getJarvisLiveStatus } from "./jarvis-mode.service.js";
 import { listUserLifeAgents } from "./life-agent.service.js";
@@ -60,12 +61,7 @@ export function buildTelegramHelpText() {
 
 async function cmdBrief(chatId, reply) {
   const briefing = await generateDailyBriefing({ scope: "personal", persist: true });
-  const lines = [briefing.summary, ""];
-  for (const item of briefing.items.slice(0, 8)) {
-    lines.push(`• [${item.importance}] ${item.title}`);
-  }
-  if (briefing.items.length > 8) lines.push(`… +${briefing.items.length - 8} madde`);
-  await reply(lines.join("\n"));
+  await reply(formatBriefingDigestText(briefing, { maxItems: 8 }));
 }
 
 async function cmdRuns(chatId, reply) {

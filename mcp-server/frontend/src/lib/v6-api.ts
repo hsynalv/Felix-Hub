@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from "./api-client";
+import { apiGet, apiPost } from "./api-client";
 
 export interface AgentRole {
   id: string;
@@ -79,7 +79,9 @@ export async function fetchWatchers() {
   return data.watchers;
 }
 
-export async function createWatcher(input: Partial<Watcher> & { name: string; skillId?: string; templateId?: string }) {
+export async function createWatcher(
+  input: Partial<Watcher> & { name: string; skillId?: string; templateId?: string; dryRun?: boolean },
+) {
   return apiPost<Watcher>("/watchers", input);
 }
 

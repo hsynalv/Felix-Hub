@@ -13,7 +13,6 @@ import {
   createParentRun,
   createSandboxSession,
   createWatcher,
-  fetchAgentRoles,
   fetchParentAggregate,
   fetchSandboxSessions,
   fetchSkills,
@@ -39,19 +38,19 @@ import {
   uninstallAppProduct,
 } from "@/lib/v6-c-api";
 import { useToast } from "@/providers/ToastProvider";
+import { V6GuideTab } from "@/components/v6/V6GuideTab";
 
 export function V6EcosystemPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [parentId, setParentId] = useState("");
   const [watcherName, setWatcherName] = useState("");
-  const [watcherTemplate, setWatcherTemplate] = useState("incident-triage");
+  const watcherTemplate = "incident-triage";
   const [nlCommand, setNlCommand] = useState("production için L2 autonomy");
   const [conflictTopic, setConflictTopic] = useState("auth jwt");
   const [prefKey, setPrefKey] = useState("pr_review");
   const [prefValue, setPrefValue] = useState("test coverage iste");
 
-  const rolesQ = useQuery({ queryKey: ["v6-roles"], queryFn: fetchAgentRoles });
   const skillsQ = useQuery({ queryKey: ["v6-skills"], queryFn: fetchSkills });
   const watchersQ = useQuery({ queryKey: ["v6-watchers"], queryFn: fetchWatchers });
   const sandboxQ = useQuery({ queryKey: ["v6-sandbox"], queryFn: fetchSandboxSessions });
@@ -183,13 +182,14 @@ export function V6EcosystemPage() {
   return (
     <OpsPageShell>
       <OpsPageHero
-        title="V6 Ekosistem"
-        description="Faz A–C: skills, watchers, app store, compliance, NL admin, conflicts, operating model"
+        title="Agent Ekosistemi"
+        description="Skills, watchers, app store, trust, sandbox ve operating model — ölçeklenebilir agent katmanı"
         icon={Sparkles}
       />
 
-      <Tabs defaultValue="store" className="space-y-4">
+      <Tabs defaultValue="guide" className="space-y-4">
         <TabsList className="flex flex-wrap h-auto gap-1">
+          <TabsTrigger value="guide">Rehber</TabsTrigger>
           <TabsTrigger value="store">App Store</TabsTrigger>
           <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="multi">Multi-Agent</TabsTrigger>
@@ -201,6 +201,10 @@ export function V6EcosystemPage() {
           <TabsTrigger value="conflicts">Conflicts</TabsTrigger>
           <TabsTrigger value="profile">Profil</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="guide">
+          <V6GuideTab />
+        </TabsContent>
 
         <TabsContent value="store">
           <OpsPanel title="Agent App Store" icon={Store}>
@@ -275,11 +279,11 @@ export function V6EcosystemPage() {
                 Child spawn
               </Button>
             </div>
-            {aggregateQ.data && (
+            {aggregateQ.data != null ? (
               <pre className="mt-3 text-xs bg-muted p-3 rounded overflow-auto max-h-48">
                 {JSON.stringify(aggregateQ.data, null, 2)}
               </pre>
-            )}
+            ) : null}
           </OpsPanel>
         </TabsContent>
 
@@ -354,11 +358,11 @@ export function V6EcosystemPage() {
 
         <TabsContent value="compliance">
           <OpsPanel title="Compliance Pack" icon={Shield}>
-            {complianceQ.data && (
+            {complianceQ.data != null ? (
               <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-64">
                 {JSON.stringify(complianceQ.data, null, 2)}
               </pre>
-            )}
+            ) : null}
           </OpsPanel>
         </TabsContent>
 

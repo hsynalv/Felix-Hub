@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "./api-client";
+import { apiGet, apiPost, apiDelete } from "./api-client";
 
 export interface AgentProduct {
   id: string;

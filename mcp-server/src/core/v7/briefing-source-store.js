@@ -18,7 +18,11 @@ function ensureStore() {
   const dir = dirname(STORE_PATH);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   if (!existsSync(STORE_PATH)) {
-    writeFileSync(STORE_PATH, JSON.stringify({ feeds: [], imapAccounts: [] }, null, 2), "utf8");
+    writeFileSync(
+      STORE_PATH,
+      JSON.stringify({ feeds: [], imapAccounts: [], gmailAccounts: [] }, null, 2),
+      "utf8",
+    );
   }
 }
 
@@ -29,9 +33,10 @@ function readStore() {
     return {
       feeds: Array.isArray(raw.feeds) ? raw.feeds : [],
       imapAccounts: Array.isArray(raw.imapAccounts) ? raw.imapAccounts : [],
+      gmailAccounts: Array.isArray(raw.gmailAccounts) ? raw.gmailAccounts : [],
     };
   } catch {
-    return { feeds: [], imapAccounts: [] };
+    return { feeds: [], imapAccounts: [], gmailAccounts: [] };
   }
 }
 
@@ -81,8 +86,41 @@ function normalizeImap(account) {
   };
 }
 
+function normalizeGmail(account) {
+  return {
+    id: account.id,
+    email: account.email,
+    label: account.label || account.email,
+    refreshToken: account.refreshToken,
+    enabled: account.enabled !== false,
+    maxMessages: account.maxMessages ?? 15,
+    lastFetchedAt: account.lastFetchedAt || null,
+    lastError: account.lastError || null,
+    messageCount: account.messageCount ?? 0,
+    createdAt: account.createdAt || new Date().toISOString(),
+    updatedAt: account.updatedAt || new Date().toISOString(),
+  };
+}
+
+function sanitizeGmailForApi(account) {
+  const n = normalizeGmail(account);
+  return {
+    id: n.id,
+    email: n.email,
+    label: n.label,
+    enabled: n.enabled,
+    maxMessages: n.maxMessages,
+    lastFetchedAt: n.lastFetchedAt,
+    lastError: n.lastError,
+    messageCount: n.messageCount,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+    hasRefreshToken: !!n.refreshToken,
+  };
+}
+
 export function resetBriefingSourceStoreForTests() {
-  writeStore({ feeds: [], imapAccounts: [] });
+  writeStore({ feeds: [], imapAccounts: [], gmailAccounts: [] });
 }
 
 export function listRssFeeds() {
@@ -227,4 +265,68 @@ export function hasEnabledRssFeeds() {
 
 export function hasEnabledImapAccounts() {
   return listImapAccounts().some((a) => a.enabled);
+}
+
+export function listGmailAccounts() {
+  return readStore().gmailAccounts.map(normalizeGmail);
+}
+
+export function listGmailAccountsForApi() {
+  return readStore().gmailAccounts.map(sanitizeGmailForApi);
+}
+
+export function getGmailAccount(id) {
+  return listGmailAccounts().find((a) => a.id === id) || null;
+}
+
+export function addGmailAccount({ email, label, refreshToken, maxMessages, enabled = true }) {
+  if (!email || !refreshToken) {
+    throw new Error("email and refreshToken are required");
+  }
+  const store = readStore();
+  if (store.gmailAccounts.some((a) => a.email === email)) {
+    throw new Error("gmail account already registered");
+  }
+  const account = normalizeGmail({
+    id: `gmail-${randomUUID().slice(0, 8)}`,
+    email,
+    label: label || email,
+    refreshToken,
+    maxMessages,
+    enabled,
+    createdAt: new Date().toISOString(),
+  });
+  store.gmailAccounts.push(account);
+  writeStore(store);
+  return sanitizeGmailForApi(account);
+}
+
+export function removeGmailAccount(id) {
+  const store = readStore();
+  const before = store.gmailAccounts.length;
+  store.gmailAccounts = store.gmailAccounts.filter((a) => a.id !== id);
+  if (store.gmailAccounts.length === before) return false;
+  writeStore(store);
+  return true;
+}
+
+export function patchGmailAccountMeta(id, patch) {
+  const store = readStore();
+  const idx = store.gmailAccounts.findIndex((a) => a.id === id);
+  if (idx < 0) return null;
+  const current = store.gmailAccounts[idx];
+  store.gmailAccounts[idx] = normalizeGmail({
+    ...current,
+    ...patch,
+    id: current.id,
+    email: current.email,
+    refreshToken: patch.refreshToken ?? current.refreshToken,
+    updatedAt: new Date().toISOString(),
+  });
+  writeStore(store);
+  return sanitizeGmailForApi(store.gmailAccounts[idx]);
+}
+
+export function hasEnabledGmailAccounts() {
+  return listGmailAccounts().some((a) => a.enabled && a.refreshToken);
 }

@@ -102,3 +102,31 @@ REDIS_PREFIX=mcp-hub:
 ```env
 SENTRY_DSN=https://...
 ```
+
+## V7 Personal briefing (mail + news)
+
+IMAP password stays in env; feed URLs are registered via API (`POST /personal/briefing/feeds`).
+
+```env
+# Required when an IMAP account references this key (passwordEnvKey in API)
+BRIEFING_IMAP_PASS=
+
+# Dev/test only
+BRIEFING_SKIP_IMAP=false
+BRIEFING_IMAP_TLS_INSECURE=false
+
+# Optional store overrides (defaults under cache/)
+# BRIEFING_SOURCE_STORE_PATH=
+# BRIEFING_SCHEDULE_PATH=
+# PERSONAL_BRIEFING_PATH=
+# BRIEFING_FEEDBACK_PATH=
+# TELEGRAM_OUTBOUND_LOG_PATH=
+
+# Gmail OAuth (alternative to IMAP app password)
+GMAIL_OAUTH_CLIENT_ID=
+GMAIL_OAUTH_CLIENT_SECRET=
+# GMAIL_OAUTH_REDIRECT_URI=http://localhost:8787/personal/briefing/gmail/oauth/callback
+
+# Briefing scheduler (60s tick; disable in tests with BRIEFING_SCHEDULER_ENABLED=false)
+# BRIEFING_SCHEDULER_ENABLED=true
+```

@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from "./api-client";
+import { apiGet, apiPost, apiPut, apiDelete } from "./api-client";
 import type { InboxItem, InboxSummary } from "./inbox-api";
 
 export interface PersonalBriefing {
@@ -253,4 +253,128 @@ export async function explainPersonalMemory(id: string) {
 
 export async function updatePersonalMemoryEntry(id: string, key: string, value: string) {
   return apiPut<{ id: string; key: string; value: string }>(`/personal/memory/${id}`, { key, value });
+}
+
+export interface BriefingRssFeed {
+  id: string;
+  url: string;
+  label: string;
+  enabled: boolean;
+  pollIntervalMinutes?: number;
+  lastFetchedAt?: string | null;
+  lastError?: string | null;
+  itemCount?: number;
+}
+
+export interface BriefingImapAccount {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+  user: string;
+  passwordEnvKey: string;
+  mailbox: string;
+  enabled: boolean;
+  lastFetchedAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface BriefingGmailAccount {
+  id: string;
+  email: string;
+  label: string;
+  enabled: boolean;
+  hasRefreshToken: boolean;
+  lastFetchedAt?: string | null;
+  lastError?: string | null;
+  messageCount?: number;
+}
+
+export interface BriefingSchedule {
+  enabled: boolean;
+  cronExpr: string;
+  timezone: string;
+  pushTelegram: boolean;
+  actionRequiredOnly: boolean;
+  scope: string;
+  lastRunAt?: string | null;
+  lastPushAt?: string | null;
+  lastFiredDate?: string | null;
+  nextRunAt?: string | null;
+}
+
+export interface TelegramOutboundMessage {
+  id: string;
+  chatId: string;
+  preview: string;
+  text: string;
+  source: string;
+  success: boolean;
+  error?: string | null;
+  hasMarkup?: boolean;
+  messageId?: number | null;
+  sentAt: string;
+}
+
+export async function fetchBriefingFeeds() {
+  return apiGet<{ feeds: BriefingRssFeed[] }>("/personal/briefing/feeds");
+}
+
+export async function addBriefingFeed(body: { url: string; label?: string; pollIntervalMinutes?: number }) {
+  return apiPost<BriefingRssFeed>("/personal/briefing/feeds", body);
+}
+
+export async function removeBriefingFeed(id: string) {
+  return apiDelete<{ removed: boolean }>(`/personal/briefing/feeds/${id}`);
+}
+
+export async function fetchBriefingImapAccounts() {
+  return apiGet<{ accounts: BriefingImapAccount[] }>("/personal/briefing/imap");
+}
+
+export async function addBriefingImapAccount(body: {
+  host: string;
+  user: string;
+  passwordEnvKey: string;
+  label?: string;
+  port?: number;
+  mailbox?: string;
+}) {
+  return apiPost<BriefingImapAccount>("/personal/briefing/imap", body);
+}
+
+export async function removeBriefingImapAccount(id: string) {
+  return apiDelete<{ removed: boolean }>(`/personal/briefing/imap/${id}`);
+}
+
+export async function testBriefingSource(type: "rss" | "imap" | "gmail", id: string) {
+  return apiPost<{ ok: boolean; itemCount?: number }>("/personal/briefing/sources/test", { type, id });
+}
+
+export async function fetchBriefingSchedule() {
+  return apiGet<BriefingSchedule>("/personal/briefing/schedule");
+}
+
+export async function updateBriefingSchedule(body: Partial<BriefingSchedule> & { hour?: number; minute?: number }) {
+  return apiPut<BriefingSchedule>("/personal/briefing/schedule", body);
+}
+
+export async function runBriefingScheduleNow() {
+  return apiPost<{ fired?: boolean; pushed?: boolean; itemCount?: number }>("/personal/briefing/schedule/run", {});
+}
+
+export async function fetchBriefingGmailAccounts() {
+  return apiGet<{ accounts: BriefingGmailAccount[]; oauthConfigured: boolean }>("/personal/briefing/gmail");
+}
+
+export async function fetchGmailOAuthUrl() {
+  return apiGet<{ url: string; state: string }>("/personal/briefing/gmail/oauth/url");
+}
+
+export async function removeBriefingGmailAccount(id: string) {
+  return apiDelete<{ removed: boolean }>(`/personal/briefing/gmail/${id}`);
+}
+
+export async function fetchTelegramOutbound(limit = 50) {
+  return apiGet<{ messages: TelegramOutboundMessage[] }>(`/personal/telegram/outbound?limit=${limit}`);
 }
