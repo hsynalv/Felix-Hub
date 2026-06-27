@@ -88,6 +88,7 @@ describe("V6 Faz B", () => {
   it("GET /observability-pro/dashboard returns agent metrics", async () => {
     const res = await request
       .get("/observability-pro/dashboard?days=7")
+      .set("Accept", "application/json")
       .set("Authorization", `Bearer ${READ_KEY}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveProperty("failureHotspots");

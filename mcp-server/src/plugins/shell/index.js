@@ -18,6 +18,15 @@ import { auditLog, getAuditManager, generateCorrelationId as coreGenerateCorrela
 import { createMetadata, PluginStatus, RiskLevel } from "../../core/plugins/index.js";
 import { requireScope } from "../../core/auth.js";
 import { mountPluginHealth } from "../../core/plugin-health.js";
+import { redactShellCommand } from "../../core/security/redact-shell-command.js";
+import {
+  getShellAllowlistSet,
+  checkSafeModeOperators,
+  shellSessionsEnabled,
+  shellBackgroundEnabled,
+  shellStreamingEnabled,
+  isSafeShellMode,
+} from "./shell-config.js";
 
 // ── Plugin Metadata ──────────────────────────────────────────────────────────
 
@@ -47,13 +56,7 @@ const execAsync = promisify(exec);
 
 // ── Safety configuration ──────────────────────────────────────────────────────
 
-const ALLOWED_COMMANDS = new Set(
-  (process.env.SHELL_ALLOWLIST ||
-    "ls,cat,echo,grep,find,head,tail,wc,stat,du,df,ps,uname,whoami,pwd,mkdir,cp,mv,git,npm,node,python,python3,pip,which,whereis,date,uptime,curl,wget,jq,sed,awk,sort,uniq,cut,tr,xargs,diff,tar,zip,unzip,touch,file,env,printenv,test")
-    .split(",")
-    .map(s => s.trim().toLowerCase())
-    .filter(Boolean)
-);
+// Allowlist resolved at check time via shell-config (safe vs power mode).
 
 /**
  * Patterns that are ALWAYS blocked regardless of allowlist.
@@ -102,6 +105,15 @@ function generateSessionId() {
 }
 
 function createSession(cwd = process.cwd(), env = {}) {
+  if (!shellSessionsEnabled()) {
+    return {
+      ok: false,
+      error: {
+        code: "sessions_disabled",
+        message: "Shell sessions are disabled in safe mode. Set SHELL_MODE=power for sessions.",
+      },
+    };
+  }
   if (sessions.size >= MAX_SESSIONS) {
     return { ok: false, error: { code: "max_sessions", message: `Max sessions (${MAX_SESSIONS}) reached. Close one first.` } };
   }
@@ -169,9 +181,10 @@ async function auditEntry({ command, cwd, allowed, reason, duration, exitCode, e
     reason: reason || undefined,
     error: error || undefined,
     metadata: {
-      command,
+      command: redactShellCommand(command),
       cwd: cwd || process.cwd(),
       exitCode: exitCode !== undefined ? exitCode : null,
+      shellMode: isSafeShellMode() ? "safe" : "power",
     },
   });
 }
@@ -215,6 +228,11 @@ function parseCommandBinaries(command) {
 function isCommandAllowed(command) {
   const trimmed = command.trim();
 
+  const operatorBlock = checkSafeModeOperators(trimmed);
+  if (operatorBlock) {
+    return { allowed: false, reason: operatorBlock };
+  }
+
   // Always block dangerous patterns first
   for (const pattern of DANGEROUS_PATTERNS) {
     if (pattern.test(trimmed)) {
@@ -222,10 +240,10 @@ function isCommandAllowed(command) {
     }
   }
 
-  // Every binary (before and after pipes/&&/||/;) must be in the allowlist
+  const allowlist = getShellAllowlistSet();
   const binaries = parseCommandBinaries(trimmed);
   for (const bin of binaries) {
-    if (bin && !ALLOWED_COMMANDS.has(bin)) {
+    if (bin && !allowlist.has(bin)) {
       return { allowed: false, reason: `Command not in allowlist: ${bin}`, baseCmd: bin };
     }
   }
@@ -327,6 +345,9 @@ async function executeCommand(command, options = {}) {
  * Execute command with streaming output (async — policy is properly awaited).
  */
 async function executeCommandStream(command, options = {}) {
+  if (!shellStreamingEnabled()) {
+    throw Errors.authorization("Streaming shell is disabled in safe mode (SHELL_MODE=safe)");
+  }
   const {
     cwd          = process.cwd(),
     env          = {},
@@ -417,6 +438,9 @@ async function executeCommandStream(command, options = {}) {
  * Session must exist. Policy and allowlist checked before spawn.
  */
 async function executeCommandBackground(command, sessionId, options = {}) {
+  if (!shellBackgroundEnabled()) {
+    throw Errors.authorization("Background shell is disabled in safe mode (SHELL_MODE=safe)");
+  }
   const session = getSession(sessionId);
   if (!session) throw Errors.validation(`Session ${sessionId} not found`);
   const { correlationId = generateCorrelationId(), actor = null } = options;
@@ -661,7 +685,7 @@ export const tools = [
           cwdAllowed:      cwdOk,
           reason:          cmdCheck.reason,
           detectedBinaries: binaries,
-          allowlist:       Array.from(ALLOWED_COMMANDS),
+          allowlist:       Array.from(getShellAllowlistSet()),
           allowedDirs:     ALLOWED_WORKING_DIRS,
           defaultTimeout:  DEFAULT_TIMEOUT,
           maxTimeout:      MAX_TIMEOUT,
@@ -801,7 +825,7 @@ export function register(app) {
     res.json({
       ok: true,
       data: {
-        allowlist:        Array.from(ALLOWED_COMMANDS),
+        allowlist:        Array.from(getShellAllowlistSet()),
         dangerousPatterns: DANGEROUS_PATTERNS.map(p => p.source),
         allowedDirectories: ALLOWED_WORKING_DIRS,
         defaultTimeout:   DEFAULT_TIMEOUT,

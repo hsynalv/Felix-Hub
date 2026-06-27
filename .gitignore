@@ -1,5 +1,7 @@
 node_modules/
-obsidian-plugin/node_modules/
+/docs/
+/system-prompts-and-models-of-ai-tools/
+mcp-server/integrations/obsidian-plugin/node_modules/
 .env
 .env.*
 *.log

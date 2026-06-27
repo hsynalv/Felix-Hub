@@ -43,6 +43,7 @@
     "prepare": "husky",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:security": "vitest run tests/security",
     "test:coverage": "vitest run --coverage",
     "validate:plugins": "node scripts/validate-plugin-meta.js",
     "validate:tools": "node scripts/validate-tool-schemas.js",

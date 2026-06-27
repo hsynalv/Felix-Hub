@@ -7,6 +7,12 @@ import { cn } from "@/lib/utils";
 import { fetchSettingReveal } from "@/lib/settings-api";
 import { ApiError } from "@/lib/api-client";
 
+/** True when catalog maskedValue is a redacted placeholder (••••), not a plaintext preview. */
+export function isRedactedMask(value: string | null | undefined): boolean {
+  if (!value) return true;
+  return /^•+$/.test(value);
+}
+
 /** Password input with always-visible eye toggle (local value only). */
 export function SecretInput({
   value,
@@ -111,6 +117,11 @@ export function SettingSecretField({
     setRevealLoading(true);
     setRevealError(null);
     try {
+      if (!isRedactedMask(maskedValue)) {
+        setRevealed(maskedValue);
+        setShowRevealed(true);
+        return;
+      }
       const data = await fetchSettingReveal(settingKey);
       setRevealed(data.value);
       setShowRevealed(true);

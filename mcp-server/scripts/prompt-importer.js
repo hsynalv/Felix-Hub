@@ -29,7 +29,14 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv);
   const config = JSON.parse(await readFile(join(__dirname, "importer.providers.json"), "utf8"));
-  const source = args.source || join(__dirname, "..", config.defaultSource);
+  const source =
+    args.source ||
+    process.env.PROMPT_ARCHIVE_PATH ||
+    (config.defaultSource ? join(__dirname, "..", config.defaultSource) : null);
+  if (!source) {
+    console.error("[prompt-importer] --source or PROMPT_ARCHIVE_PATH required");
+    process.exit(1);
+  }
   const outDir = args.out || join(__dirname, "..", config.defaultOut);
 
   console.log(`[prompt-importer] source=${source} provider=${args.provider || "all"}`);

@@ -44,6 +44,17 @@ export const BOOTSTRAP_KEYS = new Set([
   "HUB_SEED_DISPLAY_NAME",
 ]);
 
+/** Secrets that must not be returned via GET /settings/:key/reveal (bootstrap API keys, DB URLs, master key). */
+export const REVEAL_BLOCKED_KEYS = new Set([
+  "HUB_READ_KEY",
+  "HUB_WRITE_KEY",
+  "HUB_ADMIN_KEY",
+  "HUB_MSSQL_URL",
+  "HUB_SETTINGS_MASTER_KEY",
+  "MSSQL_CONNECTION_STRING",
+  "HUB_SEED_PASSWORD",
+]);
+
 export const RESTART_REQUIRED_KEYS = new Set([
   "PORT",
   "HUB_READ_KEY",

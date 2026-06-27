@@ -15,41 +15,44 @@ function isJsonOnlyGetPath(path) {
   }
 
   const prefixes = [
-    "/audit/",
-    "/jobs/",
-    "/plugins/",
-    "/tools/",
-    "/usage/",
-    "/ui/chat/",
-    "/personal/",
-    "/spec/",
-    "/sidecar/",
-    "/settings/",
-    "/multi-agent/",
-    "/skills/",
-    "/watchers/",
-    "/sandbox/",
-    "/trust/",
-    "/inbox/",
+    "/audit",
+    "/jobs",
+    "/plugins",
+    "/tools",
+    "/usage",
+    "/ui/chat",
+    "/personal",
+    "/spec",
+    "/sidecar",
+    "/settings",
+    "/multi-agent",
+    "/skills",
+    "/watchers",
+    "/sandbox",
+    "/trust",
+    "/inbox",
     "/observability",
-    "/eval/",
-    "/team/",
-    "/agents/",
-    "/reports/",
-    "/sla/",
-    "/env/",
-    "/integrations/",
-    "/marketplace/",
-    "/mcp-connectors/",
-    "/compliance/",
-    "/nl-admin/",
-    "/conflicts/",
-    "/app-store/",
-    "/v8/",
+    "/observability-pro",
+    "/eval",
+    "/team",
+    "/agents",
+    "/reports",
+    "/sla",
+    "/env",
+    "/integrations",
+    "/marketplace",
+    "/mcp-connectors",
+    "/compliance",
+    "/nl-admin",
+    "/conflicts",
+    "/app-store",
+    "/v8",
     "/mcp",
+    "/projects",
+    "/ops",
   ];
 
-  return prefixes.some((prefix) => path.startsWith(prefix));
+  return prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 /**
@@ -77,14 +80,9 @@ export function isPublicSecurityPath(req) {
     return true;
   }
 
-  if (
-    req.method === "GET" &&
-    (p === "/admin" || p === "/admin/" || p.startsWith("/admin/"))
-  ) {
+  if (process.env.NODE_ENV !== "production" && req.method === "POST" && p === "/ui/token") {
     return true;
   }
-
-  if (req.method === "POST" && p === "/ui/token") return true;
 
   if (
     req.method === "POST" &&

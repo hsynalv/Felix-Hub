@@ -133,6 +133,7 @@ export interface EnvCatalogVar {
   name: string;
   required: boolean;
   description: string;
+  sensitive?: boolean;
   maskedValue: string | null;
   source: "overlay" | "env" | "unset";
   configured: boolean;

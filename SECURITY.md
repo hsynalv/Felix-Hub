@@ -25,4 +25,4 @@ We will acknowledge your report and work on a fix. We appreciate responsible dis
 - **Network**: Run behind HTTPS in production; avoid exposing MCP-Hub directly to the internet without auth
 - **Plugins**: Review plugin permissions; use `allowedPlugins` and `allowed_operations` for workspace isolation
 
-See [Workspace Security](mcp-server/docs/workspace-security-model.md) and [Security Model](docs/security-model.md) for more details.
+See [Workspace Security](mcp-server/docs/workspace-security-model.md) for more details.

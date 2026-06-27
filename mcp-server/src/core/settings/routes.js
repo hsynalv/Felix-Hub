@@ -23,6 +23,7 @@ import {
   loadSettingsOverlay,
   getEnvValue,
   BOOTSTRAP_KEYS,
+  REVEAL_BLOCKED_KEYS,
   RESTART_REQUIRED_KEYS,
   HOT_RELOAD_KEYS,
 } from "./effective-config.js";
@@ -33,7 +34,7 @@ import { exportSettingsBundle, importSettingsBundle } from "./bundle.service.js"
 import { listTemplates, applyTemplate } from "./templates.js";
 import { computeSettingsDiff } from "./diff.service.js";
 import { validateKeys, validateSingleKey } from "./validate.service.js";
-import { listEnvCatalogEnriched } from "../plugin-env-catalog.js";
+import { listEnvCatalogEnriched, listIntegrationsEnvCatalog } from "../plugin-env-catalog.js";
 import { listConnectors } from "../mcp-connectors/connector.service.js";
 import { getPlugins } from "../plugins.js";
 import { getLlmConfigSnapshot } from "../llm-config.js";
@@ -168,11 +169,14 @@ export function registerSettingsRoutes(app) {
 
   router.get("/env-catalog", requireScope("admin"), async (_req, res) => {
     const connectors = await listConnectors();
-    const enriched = listEnvCatalogEnriched(getPlugins(), connectors);
+    const enriched = listIntegrationsEnvCatalog(getPlugins(), connectors);
     res.json({
       ok: true,
       data: {
-        catalog: enriched.groups.filter((g) => g.plugin !== "hub"),
+        catalog: enriched.groups.map(({ plugin, vars }) => ({
+          plugin,
+          vars: vars.map(({ name, required, description }) => ({ name, required, description })),
+        })),
         groups: enriched.groups,
         unassigned: enriched.unassigned,
       },
@@ -182,10 +186,10 @@ export function registerSettingsRoutes(app) {
   router.get("/:key/reveal", requireScope("admin"), async (req, res) => {
     try {
       const keyName = req.params.key;
-      if (BOOTSTRAP_KEYS.has(keyName)) {
+      if (REVEAL_BLOCKED_KEYS.has(keyName)) {
         return res.status(403).json({
           ok: false,
-          error: { code: "forbidden", message: "Bootstrap keys cannot be revealed via API" },
+          error: { code: "forbidden", message: "This key cannot be revealed via API" },
         });
       }
       const namespace = resolveSettingsNamespace(req);
@@ -346,6 +350,15 @@ export function registerSettingsRoutes(app) {
         return res.status(400).json({ ok: false, error: parsed.error.flatten() });
       }
       const keyName = req.params.key;
+      if (BOOTSTRAP_KEYS.has(keyName)) {
+        return res.status(400).json({
+          ok: false,
+          error: {
+            code: "bootstrap_key",
+            message: "Sunucu bootstrap anahtarları yalnızca .env / Coolify üzerinden yapılandırılır.",
+          },
+        });
+      }
       const namespace = resolveSettingsNamespace(req);
       const value = normalizeNotionIdIfApplicable(keyName, parsed.data.value);
       const result = await upsertSetting(keyName, value, {

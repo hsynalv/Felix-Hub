@@ -22,7 +22,7 @@ import {
 import { buildSystemPrompt } from "../../src/core/chat/chat-system-prompt.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ARCHIVE_DIR = join(__dirname, "../../../system-prompts-and-models-of-ai-tools");
+const ARCHIVE_DIR = join(__dirname, "../fixtures/prompt-archive");
 
 let tempCacheDir;
 

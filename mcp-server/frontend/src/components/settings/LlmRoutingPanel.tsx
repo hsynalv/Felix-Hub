@@ -62,6 +62,7 @@ function ModeCard({
 }
 
 export function LlmRoutingPanel() {
+  const isProdBuild = import.meta.env.PROD;
   const toast = useToast();
   const qc = useQueryClient();
 
@@ -286,7 +287,9 @@ export function LlmRoutingPanel() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">{PROVIDER_LABELS.auto}</SelectItem>
+                    {!isProdBuild && (
+                      <SelectItem value="auto">{PROVIDER_LABELS.auto}</SelectItem>
+                    )}
                     {(snapshot?.routerProviders ?? []).map((p) => (
                       <SelectItem key={p} value={p}>
                         {PROVIDER_LABELS[p] ?? p}

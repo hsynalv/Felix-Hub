@@ -62,7 +62,7 @@ export async function resolveHubPrincipalFromRequest(req) {
   if (token) {
     const ui = validateUiToken(token);
     if (ui.ok) {
-      const scopes = ["read", "write", "admin"];
+      const scopes = ["read", "write"];
       return {
         authenticated: true,
         scopes,

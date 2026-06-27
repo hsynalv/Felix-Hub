@@ -82,8 +82,6 @@ export function extractAuthKey(req) {
   const headerKey =
     req.headers?.["x-hub-api-key"]?.trim() ?? req.headers?.["x-api-key"]?.trim() ?? null;
   if (headerKey) return headerKey;
-  const queryToken = req.query?.access_token || req.query?.token;
-  if (typeof queryToken === "string" && queryToken.trim()) return queryToken.trim();
   return null;
 }
 
@@ -132,7 +130,7 @@ export function resolveApiKeyOrUiToken(key) {
 
   const uiToken = validateUiToken(key);
   if (uiToken.ok) {
-    const scopes = ["read", "write", "admin"];
+    const scopes = ["read", "write"];
     return {
       valid: true,
       scopes,

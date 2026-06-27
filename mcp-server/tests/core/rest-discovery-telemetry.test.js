@@ -35,13 +35,14 @@ describe("REST discovery telemetry", () => {
     delete process.env.HUB_WRITE_KEY;
     delete process.env.HUB_ADMIN_KEY;
 
-    const manager = getAuditManager();
-    if (!manager.initialized) await manager.init();
-
     const app = await createServer();
+    const manager = getAuditManager();
     const request = supertest(app);
 
-    const res = await request.get("/plugins").set("Authorization", "Bearer rest-disc-read-key");
+    const res = await request
+      .get("/plugins")
+      .set("Accept", "application/json")
+      .set("Authorization", "Bearer rest-disc-read-key");
     expect(res.status).toBe(200);
 
     const entries = await manager.getRecentEntries({ limit: 120 });

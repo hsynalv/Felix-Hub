@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { getApiKey } from "./auth";
 import { getProjectHeaders } from "./workspace-context-store";
 
 export interface RunEventPayload {
@@ -22,12 +21,10 @@ export function useRunEvents(runId: string | null, enabled = true) {
       return;
     }
 
-    const key = getApiKey();
     const headers = getProjectHeaders();
     const qs = new URLSearchParams(headers);
-    if (key) qs.set("access_token", key);
 
-    const es = new EventSource(`/runs/${runId}/events?${qs}`);
+    const es = new EventSource(`/runs/${runId}/events?${qs}`, { withCredentials: true });
     esRef.current = es;
 
     es.onopen = () => setConnected(true);

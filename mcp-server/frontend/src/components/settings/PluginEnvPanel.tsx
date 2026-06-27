@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -44,12 +44,29 @@ import {
   type EnvCatalogVar,
 } from "@/lib/settings-api";
 import { useToast } from "@/providers/ToastProvider";
+import { cn } from "@/lib/utils";
 
 const SOURCE_LABELS: Record<EnvCatalogVar["source"], string> = {
   overlay: "Kayıtlı",
   env: "Sistem",
   unset: "Boş",
 };
+
+function EnvPlainValueCell({ envVar }: { envVar: EnvCatalogVar }) {
+  return (
+    <Input
+      readOnly
+      type="text"
+      value={envVar.configured ? envVar.maskedValue ?? "" : ""}
+      placeholder={envVar.configured ? "" : "Ayarlanmadı"}
+      className={cn(
+        "h-8 min-w-[200px] font-mono text-xs",
+        !envVar.configured && "text-muted-foreground italic"
+      )}
+      onFocus={(e) => e.target.blur()}
+    />
+  );
+}
 
 function EnvValueCell({
   envVar,
@@ -60,6 +77,9 @@ function EnvValueCell({
   onSave: (key: string, value: string) => void;
   saving: boolean;
 }) {
+  if (envVar.sensitive === false) {
+    return <EnvPlainValueCell envVar={envVar} />;
+  }
   return (
     <SettingSecretField
       settingKey={envVar.name}
@@ -228,7 +248,7 @@ function PluginEnvGroup({
 export function PluginEnvPanel() {
   const [search, setSearch] = useState("");
   const [showMissingOnly, setShowMissingOnly] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["hub"]));
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -248,6 +268,20 @@ export function PluginEnvPanel() {
     queryFn: fetchEnvCatalog,
     retry: false,
   });
+
+  useEffect(() => {
+    const groups = catalogQuery.data?.groups;
+    if (!groups?.length) return;
+    setExpanded((prev) => {
+      if (prev.size > 0) return prev;
+      const withGaps = groups
+        .filter((g) => g.vars.some((v) => v.required && !v.configured))
+        .map((g) => g.plugin);
+      if (withGaps.length) return new Set(withGaps);
+      const preferred = groups.find((g) => g.plugin === "notifications")?.plugin ?? groups[0]?.plugin;
+      return preferred ? new Set([preferred]) : new Set();
+    });
+  }, [catalogQuery.data?.groups]);
 
   const reloadMutation = useMutation({
     mutationFn: reloadSettings,
@@ -371,9 +405,10 @@ export function PluginEnvPanel() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SettingsInfoBox variant="tip">
-          Göz ikonu kayıtlı değerin gerçek halini gösterir. Kalem ile düzenlersiniz.{" "}
-          <strong>Kayıtlı</strong> değerler MSSQL&apos;de şifreli saklanır; <strong>Sistem</strong> değerleri
-          sunucu ortamından okunur.
+          Eklenti entegrasyon anahtarları (Notion, Telegram, GitHub, n8n…). Göz ikonu kayıtlı değeri gösterir;
+          kalem ile düzenlersiniz. Sunucu <strong>PORT</strong>, <strong>HUB_*_KEY</strong> gibi bootstrap ayarları
+          burada değil — <code className="text-xs">.env</code> / Coolify üzerinden yapılandırılır. LLM anahtarları{" "}
+          <strong>LLM</strong> sekmesindedir.
         </SettingsInfoBox>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={expandAll}>
@@ -451,11 +486,7 @@ export function PluginEnvPanel() {
               onSave={handleSave}
               onDelete={setDeleteTarget}
               savingKey={savingKey}
-              onTest={
-                group.plugin !== "hub"
-                  ? () => testMutation.mutate(group.plugin)
-                  : undefined
-              }
+              onTest={() => testMutation.mutate(group.plugin)}
               testing={testingPlugin === group.plugin}
             />
           ))}

@@ -8,11 +8,30 @@ import { createServer } from "../../src/core/server.js";
 let appPromise = null;
 /** @type {Promise<import('express').Express>|null} */
 let createLock = null;
+/** @type {string|null} */
+let envFingerprint = null;
+
+function hubEnvFingerprint() {
+  return [
+    process.env.HUB_READ_KEY,
+    process.env.HUB_WRITE_KEY,
+    process.env.HUB_ADMIN_KEY,
+    process.env.HUB_ALLOW_OPEN_HUB,
+    process.env.NODE_ENV,
+  ].join("|");
+}
 
 /**
  * @returns {Promise<import('express').Express>}
  */
 export function getIntegrationServer() {
+  const fp = hubEnvFingerprint();
+  if (appPromise && envFingerprint !== fp) {
+    appPromise = null;
+    createLock = null;
+  }
+  envFingerprint = fp;
+
   if (appPromise) return appPromise;
 
   if (!createLock) {
@@ -36,4 +55,5 @@ export function getIntegrationServer() {
 export async function resetIntegrationServer() {
   appPromise = null;
   createLock = null;
+  envFingerprint = null;
 }

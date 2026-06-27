@@ -2,7 +2,7 @@
 
 export const MARKETING_LINKS = {
   github: "https://github.com/hsynalv/Felix-Hub",
-  docs: "https://github.com/hsynalv/Felix-Hub/blob/main/docs/README.md",
+  docs: "https://github.com/hsynalv/Felix-Hub/blob/main/README.md",
   architecture:
     "https://github.com/hsynalv/Felix-Hub/blob/main/mcp-server/ARCHITECTURE.md",
   linkedin: "https://www.linkedin.com/in/hhsynalv/",

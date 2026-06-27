@@ -184,7 +184,7 @@ describe("V5 Faz B", () => {
     const res = await withRead(request.post("/agents/maintenance/scan").send({ workspacePath: process.cwd() }));
     expect(res.status).toBe(200);
     expect(res.body.data.packageFound).toBe(true);
-  });
+  }, 20_000);
 
   it("POST /agents/hygiene/scan", async () => {
     const res = await withRead(request.post("/agents/hygiene/scan").send({

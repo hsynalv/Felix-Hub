@@ -3,10 +3,14 @@
  * Plugins not listed here have no required external configuration.
  */
 
-import { getEnvValue, getOverlay, listOverlayKeys } from "./settings/effective-config.js";
+import { getEnvValue, getOverlay, listOverlayKeys, BOOTSTRAP_KEYS } from "./settings/effective-config.js";
 import { maskSecret } from "./settings/crypto.js";
 
 const SENSITIVE_KEY = /KEY|TOKEN|SECRET|PASSWORD|URL|CONNECTION/i;
+
+export function isSensitiveEnvKey(key) {
+  return SENSITIVE_KEY.test(key);
+}
 
 /** @type {Array<{ name: string, required?: boolean, description: string }>} */
 export const CORE_ENV_CATALOG = [
@@ -23,6 +27,9 @@ export const CORE_ENV_CATALOG = [
   { name: "HUB_SEED_DISPLAY_NAME", required: false, description: "Display name for seeded owner account" },
   { name: "REDIS_URL", required: false, description: "Redis connection URL for jobs and cache" },
 ];
+
+/** Settings tabs that own these plugins — hidden from Entegrasyonlar catalog */
+export const INTEGRATIONS_EXCLUDED_PLUGINS = new Set(["hub", "llm-router", "secrets"]);
 
 /** @type {Record<string, Array<{ name: string, required?: boolean, description: string }>>} */
 export const PLUGIN_ENV_CATALOG = {
@@ -90,6 +97,7 @@ export const PLUGIN_ENV_CATALOG = {
     { name: "HUB_SETTINGS_MASTER_KEY", required: false, description: "Master key for encrypted secret storage" },
   ],
   shell: [
+    { name: "SHELL_MODE", required: false, description: "safe (read-only) or power (full allowlist + sessions); production default safe" },
     { name: "SHELL_ALLOWLIST", required: false, description: "Comma-separated allowed shell command prefixes" },
     { name: "SHELL_DEFAULT_TIMEOUT_MS", required: false, description: "Default command timeout in milliseconds" },
     { name: "SHELL_MAX_TIMEOUT_MS", required: false, description: "Maximum allowed command timeout" },
@@ -135,6 +143,34 @@ export const PLUGIN_ENV_CATALOG = {
     { name: "GITHUB_TOKEN", required: false, description: "GitHub personal access token" },
   ],
 };
+
+const LLM_ROUTER_ENV_KEYS = new Set(
+  (PLUGIN_ENV_CATALOG["llm-router"] ?? []).map((v) => v.name)
+);
+
+/** Keys that may appear in Entegrasyonlar (excludes bootstrap + LLM tab keys). */
+export function isIntegrationsEnvKey(key) {
+  if (BOOTSTRAP_KEYS.has(key)) return false;
+  if (LLM_ROUTER_ENV_KEYS.has(key)) return false;
+  return true;
+}
+
+/**
+ * Env catalog for Settings → Entegrasyonlar (plugin API keys only).
+ */
+export function listIntegrationsEnvCatalog(plugins = [], mcpConnectors = []) {
+  const enriched = listEnvCatalogEnriched(plugins, mcpConnectors);
+  return {
+    groups: enriched.groups
+      .filter((g) => !INTEGRATIONS_EXCLUDED_PLUGINS.has(g.plugin))
+      .map((g) => ({
+        ...g,
+        vars: g.vars.filter((v) => isIntegrationsEnvKey(v.name)),
+      }))
+      .filter((g) => g.vars.length > 0),
+    unassigned: enriched.unassigned.filter((v) => isIntegrationsEnvKey(v.name)),
+  };
+}
 
 /**
  * @param {unknown} envVars
@@ -185,7 +221,7 @@ export function getPluginEnvCompleteness(pluginName) {
 
 function maskKeyValue(key, value) {
   if (!value) return null;
-  if (SENSITIVE_KEY.test(key)) return maskSecret(value);
+  if (isSensitiveEnvKey(key)) return maskSecret(value);
   return value.length > 80 ? `${value.slice(0, 40)}…` : value;
 }
 
@@ -226,6 +262,7 @@ export function listEnvCatalogEnriched(plugins = [], mcpConnectors = []) {
           name: v.name,
           required: !!v.required,
           description: v.description || "",
+          sensitive: isSensitiveEnvKey(v.name),
           ...getVarRuntimeState(v.name),
         };
       }),
@@ -265,6 +302,7 @@ export function listEnvCatalogEnriched(plugins = [], mcpConnectors = []) {
       name: key,
       required: false,
       description: "Şifreli overlay — katalog dışı",
+      sensitive: isSensitiveEnvKey(key),
       ...getVarRuntimeState(key),
     });
   }
@@ -275,10 +313,8 @@ export function listEnvCatalogEnriched(plugins = [], mcpConnectors = []) {
 
 /** Grouped env catalog for settings UI (legacy shape) */
 export function listEnvCatalogGrouped() {
-  return listEnvCatalogEnriched().groups
-    .filter((g) => g.plugin !== "hub")
-    .map(({ plugin, vars }) => ({
-      plugin,
-      vars: vars.map(({ name, required, description }) => ({ name, required, description })),
-    }));
+  return listIntegrationsEnvCatalog().groups.map(({ plugin, vars }) => ({
+    plugin,
+    vars: vars.map(({ name, required, description }) => ({ name, required, description })),
+  }));
 }

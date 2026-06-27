@@ -63,7 +63,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "integrations",
     label: "Entegrasyonlar",
-    description: "API anahtarları",
+    description: "Notion, Telegram, GitHub…",
     icon: Variable,
     group: "hub",
   },

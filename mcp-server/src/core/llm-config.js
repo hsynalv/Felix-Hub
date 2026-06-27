@@ -102,6 +102,11 @@ export function isProviderKeyConfigured(provider) {
 /** Resolved chat backend after applying assignment + auto detection */
 export function getResolvedChatProvider() {
   const pref = getChatProviderPreference();
+  if (process.env.NODE_ENV === "production" && pref === "auto") {
+    throw new Error(
+      "CHAT_LLM_PROVIDER must be set explicitly in production (auto fallback is disabled)"
+    );
+  }
   if (pref !== "auto") {
     if (pref === "openai" && isProviderKeyConfigured("openai")) return "openai";
     if (pref === "vllm" && isProviderKeyConfigured("vllm")) return "vllm";

@@ -95,3 +95,4 @@ npm run validate:tools
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — mimari notlar
 - [`docs/codebase-map.md`](docs/codebase-map.md) — kod haritası
 - [`frontend/README.md`](frontend/README.md) — UI geliştirme
+- [`integrations/obsidian-plugin/README.md`](integrations/obsidian-plugin/README.md) — opsiyonel Obsidian eklentisi (ayrı kurulum)

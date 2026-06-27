@@ -19,6 +19,8 @@ const WORKSPACE_ID_KEYS = new Set([
   "targetWorkspaceId",
 ]);
 
+const GLOBAL_WRITE_BLOCKED_PLUGINS = new Set(["shell", "file-storage", "local-sidecar"]);
+
 function toolRequiresWriteOrHigher(tool) {
   const tags = tool.tags || [];
   return tags.some(
@@ -74,6 +76,31 @@ export async function authorizeToolCall({ name, tool, args, context }) {
   const actorLabel = ctx.user || resolveRequestedBy(ctx);
   const permCtx = permissionContext(ctx, tool, name);
   const runtimeEarly = getSecurityRuntime();
+
+  if (
+    workspaceId === "global" &&
+    toolRequiresWriteOrHigher(tool) &&
+    GLOBAL_WRITE_BLOCKED_PLUGINS.has(tool.plugin || "")
+  ) {
+    await auditToolAuthzDenial({
+      phase: "workspace_boundary",
+      code: "global_workspace_write_forbidden",
+      reason: "global_workspace_read_only",
+      toolName: name,
+      plugin: tool.plugin,
+      actor: actorLabel,
+      workspaceId,
+      correlationId: ctx.requestId,
+    });
+    return {
+      ok: false,
+      error: {
+        code: "global_workspace_write_forbidden",
+        message: "Destructive tools cannot run in the global workspace. Select a registered workspace.",
+      },
+    };
+  }
+
   const hasCredentialInfra =
     runtimeEarly.hubKeysConfigured ||
     !!process.env.OAUTH_INTROSPECTION_ENDPOINT?.trim();

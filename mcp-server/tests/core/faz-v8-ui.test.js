@@ -13,7 +13,7 @@ import {
 import { loadPrompts } from "../../src/plugins/prompt-registry/prompts.store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ARCHIVE = join(__dirname, "../../../system-prompts-and-models-of-ai-tools");
+const ARCHIVE = join(__dirname, "../fixtures/prompt-archive");
 
 let tempCacheDir;
 

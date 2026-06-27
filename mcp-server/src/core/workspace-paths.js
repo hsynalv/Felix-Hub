@@ -11,7 +11,15 @@ import { getWorkspace } from "./workspace.js";
 const WORKSPACE_ROOT_BASE = process.env.WORKSPACE_ROOT_BASE || process.env.WORKSPACE_ROOT || process.env.WORKSPACE_BASE || process.env.REPO_PATH || ".";
 
 function isStrictMode() {
-  return process.env.WORKSPACE_STRICT_BOUNDARIES === "true";
+  if (process.env.WORKSPACE_STRICT_BOUNDARIES === "true") return true;
+  if (process.env.WORKSPACE_STRICT_BOUNDARIES === "false") return false;
+  return process.env.NODE_ENV === "production";
+}
+
+function isWorkspaceIdRequired() {
+  if (process.env.WORKSPACE_REQUIRE_ID === "true") return true;
+  if (process.env.WORKSPACE_REQUIRE_ID === "false") return false;
+  return process.env.NODE_ENV === "production";
 }
 
 const WORKSPACE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -146,7 +154,7 @@ export function resolveAndValidatePath(requestedPath, workspaceId, options = {})
  * @throws {Error} When path is invalid or workspaceId required but missing
  */
 export function resolveWorkspacePath(requestedPath, workspaceId) {
-  if (!workspaceId && process.env.WORKSPACE_REQUIRE_ID === "true") {
+  if (!workspaceId && isWorkspaceIdRequired()) {
     const err = new Error("workspaceId is required for file operations");
     err.code = "WORKSPACE_ID_REQUIRED";
     err.statusCode = 400;
@@ -171,7 +179,7 @@ export function resolveWorkspacePath(requestedPath, workspaceId) {
  * @throws {Error} When workspaceId is missing and required
  */
 export function requireWorkspaceId(workspaceId, operation = "file_operation") {
-  if (process.env.WORKSPACE_REQUIRE_ID !== "true") return;
+  if (!isWorkspaceIdRequired()) return;
   if (!workspaceId || (typeof workspaceId === "string" && workspaceId.trim() === "")) {
     const err = new Error(`workspaceId is required for ${operation}`);
     err.code = "WORKSPACE_ID_REQUIRED";

@@ -202,7 +202,7 @@ if (!ready) {
 
 ## Maturity Matrix Sync
 
-Plugins should maintain consistency between their metadata and the [Plugin Maturity Matrix](../../docs/plugin-maturity-matrix.md).
+Plugins should keep `plugin.meta.json` fields (`status`, `productionReady`, `hasTests`, `hasDocs`) aligned with the runtime metadata below.
 
 | Metadata Field | Matrix Column |
 |----------------|---------------|

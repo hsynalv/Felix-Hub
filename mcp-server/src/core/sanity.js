@@ -65,13 +65,7 @@ export function runStartupChecks() {
     errors.push(`Invalid port configuration: ${config.port}`);
   }
 
-  // Production CORS must be explicit
-  if (process.env.NODE_ENV === "production") {
-    const cors = process.env.CORS_ALLOWED_ORIGINS?.trim();
-    if (!cors) {
-      errors.push("Production requires CORS_ALLOWED_ORIGINS (comma-separated UI origins)");
-    }
-  }
+  // Production CORS — enforced in validate-security-config.js
 
   // Check cache directory writable (if file logging enabled)
   if (process.env.AUDIT_LOG_FILE === "true") {

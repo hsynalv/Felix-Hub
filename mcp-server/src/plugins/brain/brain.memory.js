@@ -139,11 +139,26 @@ export async function addMemory({
     source,
     createdAt:  now,
     updatedAt:  now,
+    namespace:  NS,
   };
+
+  let wroteDb = false;
+  try {
+    const dbMod = await import("../../core/persistence/brain-memory.store.js");
+    const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    if (dbMod.isBrainDbSourceOfTruth() && isPersistenceHealthy()) {
+      await dbMod.insertBrainMemory(mem);
+      wroteDb = true;
+    }
+  } catch {
+    // DB unavailable — cache-only fallback when not production SoT
+  }
 
   await r.setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(mem));
   await r.sadd(MEM_INDEX_KEY, id);
-  await syncMemoryToPersistence(id, "create", content);
+  if (!wroteDb) {
+    await syncMemoryToPersistence(id, "create", content);
+  }
   queueObsidianExport(mem);
   return mem;
 }
@@ -151,8 +166,28 @@ export async function addMemory({
 /** Fetch a single memory by ID. Returns null if missing or expired. */
 export async function getMemory(id) {
   const raw = await getRedis().get(memKey(id));
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      /* fall through to DB */
+    }
+  }
+  try {
+    const dbMod = await import("../../core/persistence/brain-memory.store.js");
+    const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    if (dbMod.isBrainDbSourceOfTruth() && isPersistenceHealthy()) {
+      const fromDb = await dbMod.getBrainMemoryFromDb(id, NS);
+      if (fromDb) {
+        await getRedis().setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(fromDb));
+        await getRedis().sadd(MEM_INDEX_KEY, id);
+        return fromDb;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 /**
@@ -179,7 +214,19 @@ export async function updateMemory(id, fields) {
   };
 
   await r.setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(updated));
-  await syncMemoryToPersistence(id, "update", updated.content);
+
+  try {
+    const dbMod = await import("../../core/persistence/brain-memory.store.js");
+    const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    if (dbMod.isBrainDbSourceOfTruth() && isPersistenceHealthy()) {
+      await dbMod.updateBrainMemoryInDb(id, NS, updated);
+    } else {
+      await syncMemoryToPersistence(id, "update", updated.content);
+    }
+  } catch {
+    await syncMemoryToPersistence(id, "update", updated.content);
+  }
+
   queueObsidianExport(updated);
   return updated;
 }
@@ -187,11 +234,38 @@ export async function updateMemory(id, fields) {
 /** Delete a memory entry and remove it from the index. */
 export async function deleteMemory(id) {
   const existing = await getMemory(id);
+  try {
+    const dbMod = await import("../../core/persistence/brain-memory.store.js");
+    const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    if (dbMod.isBrainDbSourceOfTruth() && isPersistenceHealthy()) {
+      await dbMod.softDeleteBrainMemoryInDb(id, NS);
+    }
+  } catch {
+    /* ignore */
+  }
   await getRedis().del(memKey(id));
   await getRedis().srem(MEM_INDEX_KEY, id);
   await syncMemoryToPersistence(id, "delete");
   if (existing) queueObsidianDelete(existing);
   return { deleted: true, id };
+}
+
+/** Warm Redis cache from MSSQL after flush or cold start. */
+export async function rehydrateBrainMemoriesFromDb(limit = 200) {
+  try {
+    const dbMod = await import("../../core/persistence/brain-memory.store.js");
+    const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    if (!dbMod.isBrainDbSourceOfTruth() || !isPersistenceHealthy()) return { loaded: 0 };
+    const rows = await dbMod.listBrainMemoriesFromDb(NS, limit);
+    const r = getRedis();
+    for (const mem of rows) {
+      await r.setex(memKey(mem.id), MEM_TTL_SECONDS, JSON.stringify(mem));
+      await r.sadd(MEM_INDEX_KEY, mem.id);
+    }
+    return { loaded: rows.length };
+  } catch {
+    return { loaded: 0 };
+  }
 }
 
 /**

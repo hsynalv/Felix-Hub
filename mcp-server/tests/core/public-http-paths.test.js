@@ -29,6 +29,13 @@ describe("isPublicSecurityPath — SPA shell", () => {
     expect(isPublicSecurityPath(req("GET", "/login", "*/*"))).toBe(true);
   });
 
+  it("treats API roots as JSON-only (not public HTML bypass)", () => {
+    const html = "text/html,application/xhtml+xml";
+    expect(isPublicSecurityPath(req("GET", "/jobs", html))).toBe(false);
+    expect(isPublicSecurityPath(req("GET", "/plugins", html))).toBe(false);
+    expect(isPublicSecurityPath(req("GET", "/projects/foo/command-center", html))).toBe(false);
+  });
+
   it("allows Telegram webhook POST without hub auth", () => {
     expect(isPublicSecurityPath(req("POST", "/notifications/telegram/webhook", "application/json"))).toBe(
       true

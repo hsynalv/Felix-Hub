@@ -2,8 +2,6 @@
  * V8 HTTP routes — marketplace, prompt import review.
  */
 
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 import { requireScope } from "../auth.js";
 import { listMarketplacePacks, resolveMarketplacePack } from "../chat/prompt-marketplace.js";
 import {
@@ -14,8 +12,15 @@ import {
   runImportScan,
 } from "./prompt-import.service.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_ARCHIVE = join(__dirname, "../../../../system-prompts-and-models-of-ai-tools");
+function resolvePromptArchiveSource(bodySource) {
+  const source = bodySource || process.env.PROMPT_ARCHIVE_PATH;
+  if (!source) {
+    const err = new Error("Prompt archive path required (body.source or PROMPT_ARCHIVE_PATH)");
+    err.code = "archive_path_required";
+    throw err;
+  }
+  return source;
+}
 
 export function registerV8Routes(app) {
   app.get("/v8/prompt-marketplace", requireScope("read"), (_req, res) => {
@@ -50,13 +55,16 @@ export function registerV8Routes(app) {
 
   app.post("/v8/prompt-import/scan", requireScope("write"), async (req, res) => {
     try {
-      const source = req.body?.source || DEFAULT_ARCHIVE;
+      const source = resolvePromptArchiveSource(req.body?.source);
       const result = await runImportScan(source, {
         providerFilter: req.body?.provider,
         maxFiles: req.body?.maxFiles ?? 30,
       });
       res.json({ ok: true, data: result });
     } catch (err) {
+      if (err.code === "archive_path_required") {
+        return res.status(400).json({ ok: false, error: { code: err.code, message: err.message } });
+      }
       res.status(500).json({ ok: false, error: { code: "import_scan_failed", message: err.message } });
     }
   });

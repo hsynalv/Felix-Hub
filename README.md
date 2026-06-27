@@ -118,7 +118,6 @@ mcp-hub/
 │   ├── src/core/         # Auth, chat, policy, persistence, …
 │   ├── Dockerfile
 │   └── docker-compose.yml
-├── docs/                 # Yol haritaları, mimari notlar
 ├── ENV-SETUP.md          # Ortam değişkenleri rehberi
 └── README.md
 ```
@@ -138,8 +137,6 @@ npm run validate:tools
 | ENV / bootstrap | [ENV-SETUP.md](ENV-SETUP.md) |
 | Docker deploy | [mcp-server/docs/DOCKER-DEPLOY.md](mcp-server/docs/DOCKER-DEPLOY.md) |
 | Server API | [mcp-server/README.md](mcp-server/README.md) |
-| Plugin matrisi | [docs/plugin-maturity-matrix.md](docs/plugin-maturity-matrix.md) |
-| Docs indeksi | [docs/README.md](docs/README.md) |
 | Plugin geliştirme | [mcp-server/docs/plugin-development.md](mcp-server/docs/plugin-development.md) |
 
 ## Lisans

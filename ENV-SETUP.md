@@ -335,6 +335,38 @@ UI: `npm run dev:all` → `http://localhost:5173` → login veya API key.
 
 ---
 
+## 5b. Production güvenlik (NODE_ENV=production)
+
+Sunucu bu değerler eksik veya hatalıysa **başlamaz** (fail-closed):
+
+| Değişken | Zorunlu değer | Açıklama |
+|----------|---------------|----------|
+| `CORS_ALLOWED_ORIGINS` | UI origin(leri) | Virgülle ayrılmış tam URL |
+| `WORKSPACE_STRICT_BOUNDARIES` | `true` | Çapraz workspace erişimi kapalı |
+| `WORKSPACE_REQUIRE_ID` | `true` | Workspace ID zorunlu |
+| `CHAT_LLM_PROVIDER` | `openai`, `anthropic`, … | `auto` production'da yasak |
+| `CHAT_LLM_MODEL` | model adı | Örn. `gpt-4o-mini` |
+| `SHELL_MODE` | `safe` (önerilen) veya `power` | Varsayılan production: `safe` |
+| Policy plugin | yüklü | `POLICY_*_ALLOW_MISSING_EVALUATOR=true` yasak |
+
+Ek öneriler:
+
+- `BRAIN_DB_SOURCE_OF_TRUTH=true` — brain memories MSSQL SoT, Redis cache
+- `/ui/token` production'da kapalı; query-string token desteklenmez
+- `HUB_ALLOW_OPEN_HUB` production'da yasak
+
+```env
+CORS_ALLOWED_ORIGINS=https://asistan.huseyinalav.com
+WORKSPACE_STRICT_BOUNDARIES=true
+WORKSPACE_REQUIRE_ID=true
+CHAT_LLM_PROVIDER=openai
+CHAT_LLM_MODEL=gpt-4o-mini
+SHELL_MODE=safe
+BRAIN_DB_SOURCE_OF_TRUTH=true
+```
+
+---
+
 ## 6. Güvenlik notları
 
 - `.env` dosyasını **asla git’e commit etme** (`.gitignore`’da olmalı).
@@ -347,5 +379,4 @@ UI: `npm run dev:all` → `http://localhost:5173` → login veya API key.
 ## İlgili dosyalar
 
 - Şablon: [`mcp-server/.env.example`](./mcp-server/.env.example)
-- V5 ops notları: [`docs/v5-path/HARDENING-NOTES.md`](./docs/v5-path/HARDENING-NOTES.md)
-- Desktop güvenlik: [`docs/v5-path/DESKTOP-IDE-SECURITY.md`](./docs/v5-path/DESKTOP-IDE-SECURITY.md)
+- Workspace güvenliği: [`mcp-server/docs/workspace-security-model.md`](./mcp-server/docs/workspace-security-model.md)
