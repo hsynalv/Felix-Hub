@@ -44,7 +44,7 @@ export function LifeAgentsPage() {
         description="Günlük hayat agent profilleri — mail, haber, alışveriş, hatırlatıcı."
         actions={
           <Button size="sm" variant="outline" asChild>
-            <Link to="/">← Bugün</Link>
+            <Link to="/today">← Bugün</Link>
           </Button>
         }
       />

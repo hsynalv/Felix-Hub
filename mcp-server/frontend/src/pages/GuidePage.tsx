@@ -43,7 +43,7 @@ const SECTIONS: GuideSection[] = [
       "Kişisel OS: RSS/IMAP/Gmail brifing, sabah digest, Telegram, life agent'lar.",
       "Agent Ekosistemi (V6): mağaza, skill, watcher, sandbox.",
     ],
-    paths: [{ label: "Bugün", href: "/" }],
+    paths: [{ label: "Bugün", href: "/today" }],
   },
   {
     id: "today",
@@ -57,7 +57,7 @@ const SECTIONS: GuideSection[] = [
       "Tercih kaydet — agent'ların kullanacağı kısa hafıza.",
     ],
     paths: [
-      { label: "Bugün", href: "/" },
+      { label: "Bugün", href: "/today" },
       { label: "Kişisel OS", href: "/settings?tab=personal" },
     ],
   },

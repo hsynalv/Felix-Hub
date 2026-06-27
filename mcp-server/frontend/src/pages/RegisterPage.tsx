@@ -25,7 +25,7 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await register(email.trim(), password, displayName.trim() || undefined);
-      navigate("/", { replace: true });
+      navigate("/today", { replace: true });
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kayıt başarısız");

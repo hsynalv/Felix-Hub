@@ -18,9 +18,14 @@ export type AuthUser = {
 export type AuthMode = "open" | "session" | "key" | "login_required";
 
 const AUTH_PATHS = new Set(["/login", "/register"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
 
 export function isAuthRoute(pathname: string) {
   return AUTH_PATHS.has(pathname);
+}
+
+export function isPublicRoute(pathname: string) {
+  return PUBLIC_PATHS.has(pathname);
 }
 
 export function getApiKey(): string {

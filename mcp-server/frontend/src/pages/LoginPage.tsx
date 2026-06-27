@@ -10,7 +10,7 @@ import { login } from "@/lib/auth";
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || "/";
+  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || "/today";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

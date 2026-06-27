@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import {
   clearAuthRefreshTimer,
   ensureAuth,
-  isAuthRoute,
+  isPublicRoute,
   type AuthMode,
   type AuthUser,
   getSession,
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null);
         }
 
-        if (authMode !== "login_required" && !isAuthRoute(pathname)) {
+        if (authMode !== "login_required" && !isPublicRoute(pathname)) {
           await hydrateProjectContext();
         }
 
@@ -74,9 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [queryClient]);
 
-  const onAuthPage = isAuthRoute(window.location.pathname);
+  const onPublicPage = isPublicRoute(window.location.pathname);
 
-  if (!ready && !onAuthPage) {
+  if (!ready && !onPublicPage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ ready, error, mode, user }}>
-      {error && !onAuthPage && (
+      {error && !onPublicPage && (
         <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-100">
           Bağlantı kurulamadı: {error}
         </div>

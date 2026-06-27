@@ -40,7 +40,7 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
     id: "daily",
     label: "Günlük",
     items: [
-      { to: "/", label: "Bugün", icon: Home },
+      { to: "/today", label: "Bugün", icon: Home },
       { to: "/guide", label: "Rehber", icon: BookOpen },
       { to: "/life", label: "Life", icon: Flower2 },
       { to: "/inbox", label: "Inbox", icon: Inbox },
@@ -84,7 +84,7 @@ export const APP_NAV: AppNavItem[] = [
 ];
 
 export const APP_ROUTE_TITLES: Record<string, string> = {
-  "/": "Bugün",
+  "/today": "Bugün",
   "/guide": "Rehber",
   "/life": "Life Agents",
   "/system": "Sistem Paneli",

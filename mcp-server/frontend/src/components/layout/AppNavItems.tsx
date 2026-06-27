@@ -24,7 +24,7 @@ export function AppNavItems({ onNavigate, className, disagreementCount = 0 }: Ap
               <NavLink
                 key={to}
                 to={to}
-                end={to === "/"}
+                end={to === "/today"}
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(

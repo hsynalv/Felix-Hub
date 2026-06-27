@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <Button variant="outline" onClick={() => this.setState({ error: null })}>
               Tekrar dene
             </Button>
-            <Button onClick={() => window.location.assign("/")}>Ana sayfa</Button>
+            <Button onClick={() => window.location.assign("/today")}>Ana sayfa</Button>
           </div>
         </div>
       );
