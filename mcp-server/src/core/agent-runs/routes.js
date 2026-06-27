@@ -45,6 +45,13 @@ function quotaErrorResponse(res, err) {
   });
 }
 
+function normalizeRunsProjectFilter(projectId) {
+  if (!projectId) return undefined;
+  const id = String(projectId).trim();
+  if (!id || id === "default") return undefined;
+  return id;
+}
+
 export function registerAgentRunRoutes(app) {
   app.post("/runs", requireScope("write"), async (req, res) => {
     try {
@@ -101,7 +108,9 @@ export function registerAgentRunRoutes(app) {
       const { status, projectId, conversationId, limit, offset } = req.query;
       const runs = await listRuns({
         status: status ? String(status) : undefined,
-        projectId: projectId ? String(projectId) : req.projectId || undefined,
+        projectId: normalizeRunsProjectFilter(
+          projectId ? String(projectId) : req.projectId
+        ),
         conversationId: conversationId ? String(conversationId) : undefined,
         limit: Math.min(Number(limit) || 50, 100),
         offset: Number(offset) || 0,
@@ -119,27 +128,13 @@ export function registerAgentRunRoutes(app) {
         return res.status(404).json({ ok: false, error: { code: "not_found", message: "Run not found" } });
       }
       let usage = null;
-      let stepUsage = null;
       try {
         const ledger = await queryRunUsage(req.params.id);
         usage = ledger.totals;
       } catch {
         /* ignore */
       }
-      try {
-        const steps = await listRunSteps(req.params.id, { limit: 200 });
-        stepUsage = steps.map((s) => ({
-          stepIndex: s.stepIndex,
-          type: s.type,
-          toolName: s.toolName,
-          status: s.status,
-          durationMs: s.durationMs,
-          usage: s.usage,
-        }));
-      } catch {
-        /* ignore */
-      }
-      res.json({ ok: true, data: { ...run, usage, stepUsage } });
+      res.json({ ok: true, data: { ...run, usage } });
     } catch (err) {
       res.status(500).json({ ok: false, error: { code: "get_failed", message: err.message } });
     }

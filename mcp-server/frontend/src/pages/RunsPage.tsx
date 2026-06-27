@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -53,6 +53,12 @@ import { getProjectId } from "@/lib/project-context";
 import { subscribeWorkspaceContext } from "@/lib/workspace-context-store";
 import { useToast } from "@/providers/ToastProvider";
 import { cn, formatDuration, formatTime } from "@/lib/utils";
+
+/** "default" is a UI placeholder — chat runs often have null project_id. */
+function runsProjectFilter(projectId: string | undefined) {
+  if (!projectId || projectId === "default") return undefined;
+  return projectId;
+}
 
 function statusTone(status?: string) {
   switch (status) {
@@ -158,9 +164,11 @@ function StepRow({
 }
 
 export function RunsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [projectScope, setProjectScope] = useState<"all" | "current">("all");
   const [projectId, setProjectId] = useState(() => getProjectId());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("highlight"));
   const [templateDialog, setTemplateDialog] = useState<WorkflowTemplate | null>(null);
   const qc = useQueryClient();
   const toast = useToast();
@@ -169,14 +177,37 @@ export function RunsPage() {
     return subscribeWorkspaceContext(() => setProjectId(getProjectId()));
   }, []);
 
-  const { data: runsData, isLoading } = useQuery({
-    queryKey: ["runs", statusFilter, projectId],
+  useEffect(() => {
+    const highlight = searchParams.get("highlight");
+    if (highlight) setSelectedId(highlight);
+  }, [searchParams]);
+
+  const selectRun = (runId: string) => {
+    setSelectedId(runId);
+    const next = new URLSearchParams(searchParams);
+    next.set("highlight", runId);
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearSelection = () => {
+    setSelectedId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("highlight");
+    setSearchParams(next, { replace: true });
+  };
+
+  const listProjectId =
+    projectScope === "current" ? runsProjectFilter(projectId) : undefined;
+
+  const { data: runsData, isLoading, isError: listError, error: listErr } = useQuery({
+    queryKey: ["runs", statusFilter, projectScope, listProjectId],
     queryFn: () =>
       listRuns({
         status: statusFilter === "all" ? undefined : statusFilter,
-        projectId: projectId || undefined,
+        projectId: listProjectId,
         limit: 50,
       }),
+    staleTime: 10_000,
     refetchInterval: (query) => {
       const runs = query.state.data?.runs ?? [];
       const hasActive = runs.some((r) => r.status === "running" || r.status === "waiting_approval");
@@ -186,16 +217,18 @@ export function RunsPage() {
 
   const runs = runsData?.runs ?? [];
 
-  const { data: detail, isLoading: detailLoading } = useQuery({
+  const { data: detail, isLoading: detailLoading, isError: detailError, error: detailErr } = useQuery({
     queryKey: ["run", selectedId],
     queryFn: () => getRun(selectedId!),
     enabled: !!selectedId,
+    staleTime: 5_000,
   });
 
-  const { data: stepsData, isLoading: stepsLoading, refetch: refetchSteps } = useQuery({
+  const { data: stepsData, isLoading: stepsLoading, isError: stepsError, error: stepsErr, refetch: refetchSteps } = useQuery({
     queryKey: ["run-steps", selectedId],
     queryFn: () => getRunSteps(selectedId!),
     enabled: !!selectedId,
+    staleTime: 3_000,
     refetchInterval: detail?.status === "running" || detail?.status === "waiting_approval" ? 4000 : false,
   });
 
@@ -322,11 +355,14 @@ export function RunsPage() {
   const steps = stepsData?.steps ?? [];
   const stepUsageByIndex = useMemo(() => {
     const map = new Map<number, { totalTokens?: number; estimatedCostUsd?: number }>();
+    for (const step of steps) {
+      if (step.usage) map.set(step.stepIndex, step.usage);
+    }
     for (const row of detail?.stepUsage ?? []) {
-      if (row.usage) map.set(row.stepIndex, row.usage);
+      if (row.usage && !map.has(row.stepIndex)) map.set(row.stepIndex, row.usage);
     }
     return map;
-  }, [detail?.stepUsage]);
+  }, [steps, detail?.stepUsage]);
   const pendingApproval = steps.find(
     (s) => s.type === "approval" && s.status === "pending" && s.metadata?.approvalId
   );
@@ -371,6 +407,15 @@ export function RunsPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ProjectSwitcher />
+            <Select value={projectScope} onValueChange={(v) => setProjectScope(v as "all" | "current")}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm run&apos;lar</SelectItem>
+                <SelectItem value="current">Bu proje</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Durum" />
@@ -422,7 +467,7 @@ export function RunsPage() {
         }}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <OpsPanel title="Run listesi" className="min-h-[320px]">
           {isLoading ? (
             <div className="space-y-2">
@@ -430,6 +475,10 @@ export function RunsPage() {
                 <Skeleton key={i} className="h-12 rounded-xl" />
               ))}
             </div>
+          ) : listError ? (
+            <p className="py-8 text-center text-sm text-destructive">
+              Liste yüklenemedi: {(listErr as Error)?.message || "Hata"}
+            </p>
           ) : runs.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               Henüz run yok.{" "}
@@ -445,7 +494,7 @@ export function RunsPage() {
                   key={run.id}
                   run={run}
                   selected={selectedId === run.id}
-                  onSelect={() => setSelectedId(run.id)}
+                  onSelect={() => selectRun(run.id)}
                 />
               ))}
             </div>
@@ -455,7 +504,7 @@ export function RunsPage() {
         <OpsPanel
           title={detail ? `Run ${detail.id.slice(0, 8)}…` : "Run detayı"}
           description={detail?.goal || "Bir run seçin"}
-          className="hidden min-h-[320px] lg:flex lg:flex-col"
+          className="min-h-[320px] md:flex md:flex-col"
         >
           {!selectedId ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Timeline görmek için soldan bir run seçin.</p>
@@ -465,6 +514,11 @@ export function RunsPage() {
                 <Skeleton key={i} className="h-12 rounded-xl" />
               ))}
             </div>
+          ) : detailError || stepsError ? (
+            <p className="py-8 text-center text-sm text-destructive">
+              Detay yüklenemedi:{" "}
+              {((detailErr || stepsErr) as Error)?.message || "Run bulunamadı veya erişim yok"}
+            </p>
           ) : (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -609,8 +663,8 @@ export function RunsPage() {
         </OpsPanel>
       </div>
 
-      <Sheet open={!!selectedId} onOpenChange={(open) => !open && setSelectedId(null)}>
-        <SheetContent side="bottom" className="flex h-[min(85vh,720px)] flex-col gap-0 p-0 lg:hidden">
+      <Sheet open={!!selectedId} onOpenChange={(open) => !open && clearSelection()}>
+        <SheetContent side="bottom" className="flex h-[min(85vh,720px)] flex-col gap-0 p-0 md:hidden">
           <SheetHeader className="shrink-0 border-b border-border/60 px-4 py-3 text-left">
             <SheetTitle className="text-sm font-medium">
               {detail ? `Run ${detail.id.slice(0, 8)}…` : "Run detayı"}
@@ -626,6 +680,10 @@ export function RunsPage() {
                     <Skeleton key={i} className="h-12 rounded-xl" />
                   ))}
                 </div>
+              ) : detailError || stepsError ? (
+                <p className="py-8 text-center text-sm text-destructive">
+                  {((detailErr || stepsErr) as Error)?.message || "Detay yüklenemedi"}
+                </p>
               ) : (
                 <div className="space-y-3">
                   {detail?.goal && (

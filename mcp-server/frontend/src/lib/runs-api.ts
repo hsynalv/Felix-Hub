@@ -53,6 +53,12 @@ export interface RunStep {
   input?: unknown;
   output?: unknown;
   durationMs?: number | null;
+  usage?: {
+    totalTokens?: number;
+    estimatedCostUsd?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+  } | null;
   metadata?: Record<string, unknown> | null;
   createdAt?: string;
 }
