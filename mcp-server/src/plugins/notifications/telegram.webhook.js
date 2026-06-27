@@ -28,6 +28,7 @@ import {
 import {
   createTelegramOnApproval,
   registerTelegramSidecarDeliveryHook,
+  deliverSidecarScreenshotToTelegram,
 } from "../../core/v9/telegram-agent-session.js";
 
 const rateLimitBuckets = new Map();
@@ -173,6 +174,13 @@ async function handleCommand(chatId, text) {
   return { handled: false };
 }
 
+const SCREENSHOT_TOOL_NAMES = new Set([
+  "desktop_screenshot",
+  "desktop_region_screenshot",
+  "desktop_window_screenshot",
+  "browser_screenshot",
+]);
+
 async function processAgentMessage(chatId, text) {
   if (isHubPaused()) {
     await replyToChat(
@@ -230,6 +238,14 @@ async function processAgentMessage(chatId, text) {
           statusSent = true;
           await sendChatAction(chatId, "typing");
           await replyToChat(chatId, toolProgressLabel(payload.name));
+        }
+        if (
+          payload.phase === "end" &&
+          payload.name &&
+          SCREENSHOT_TOOL_NAMES.has(payload.name) &&
+          payload.result?.ok
+        ) {
+          await deliverSidecarScreenshotToTelegram(String(chatId), payload.name, payload.result);
         }
       },
       onApproval: createTelegramOnApproval(String(chatId), (msg) => replyToChat(chatId, msg)),

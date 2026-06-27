@@ -253,9 +253,10 @@ export async function sendTelegramPhotoBase64(chatId, base64, opts = {}) {
 
   const buf = Buffer.from(String(base64), "base64");
   const filename = opts.filename || "photo.png";
+  const mime = filename.endsWith(".jpg") || filename.endsWith(".jpeg") ? "image/jpeg" : "image/png";
   const form = new FormData();
   form.append("chat_id", String(chatId));
-  form.append("photo", new Blob([buf]), filename);
+  form.append("photo", new Blob([new Uint8Array(buf)], { type: mime }), filename);
   if (opts.caption) form.append("caption", String(opts.caption).slice(0, 1024));
 
   const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
@@ -290,7 +291,7 @@ export async function sendTelegramDocumentBase64(chatId, base64, opts = {}) {
   const filename = opts.filename || "file.bin";
   const form = new FormData();
   form.append("chat_id", String(chatId));
-  form.append("document", new Blob([buf]), filename);
+  form.append("document", new Blob([new Uint8Array(buf)]), filename);
   if (opts.caption) form.append("caption", String(opts.caption).slice(0, 1024));
 
   const res = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {

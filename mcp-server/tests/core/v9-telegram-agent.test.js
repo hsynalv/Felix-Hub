@@ -16,6 +16,7 @@ import { resolveChatApproval } from "../../src/core/chat-orchestrator.js";
 import {
   createTelegramOnApproval,
   resolveTelegramToolApproval,
+  deliverSidecarScreenshotToTelegram,
   resetTelegramV9HooksForTests,
 } from "../../src/core/v9/telegram-agent-session.js";
 
@@ -56,5 +57,15 @@ describe("v9 telegram agent session", () => {
     const result = await resolveTelegramToolApproval("apr-2", true);
     expect(resolveChatApproval).toHaveBeenCalledWith("apr-2", true);
     expect(result).toEqual({ status: "approved" });
+  });
+
+  it("deliverSidecarScreenshotToTelegram sends photo", async () => {
+    const { sendTelegramPhotoBase64 } = await import("../../src/plugins/notifications/channels/telegram.js");
+    const result = await deliverSidecarScreenshotToTelegram("12345", "desktop_screenshot", {
+      ok: true,
+      data: { format: "png", imageBase64: Buffer.from("hello").toString("base64"), width: 100, height: 50 },
+    });
+    expect(result.delivered).toBe(true);
+    expect(sendTelegramPhotoBase64).toHaveBeenCalled();
   });
 });

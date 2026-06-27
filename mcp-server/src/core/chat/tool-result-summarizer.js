@@ -82,7 +82,7 @@ export function summarizeToolResult({ toolName, result, maxChars = DEFAULT_MAX, 
     const parts = [dims, format.toUpperCase(), sizeKb].filter(Boolean);
     return {
       ok: true,
-      summary: `Screenshot captured${parts.length ? ` (${parts.join(", ")})` : ""}. Image delivered to the user — do not output base64 or repeat raw image data.`,
+      summary: `Screenshot captured${parts.length ? ` (${parts.join(", ")})` : ""}. Image is delivered automatically as a separate visual in chat/Telegram — do not search the filesystem for a saved file or output base64. If the user asks to see it again, tell them to scroll up for the image message.`,
       keyFacts: [
         data.window?.app ? `window: ${data.window.app}` : null,
         data.url ? `url: ${data.url}` : null,

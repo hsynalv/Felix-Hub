@@ -77,7 +77,17 @@ function extractTelegramChatId(context) {
   return actor.slice("telegram:".length);
 }
 
-async function deliverScreenshotToTelegram(chatId, result, label = "Felix Desktop screenshot") {
+/**
+ * Send screenshot PNG to Telegram (photo, with document fallback).
+ * @param {string} chatId
+ * @param {string} toolName
+ * @param {object} result
+ * @returns {Promise<{ delivered: boolean; error?: string }>}
+ */
+export async function deliverSidecarScreenshotToTelegram(chatId, toolName, result) {
+  if (!chatId || !result?.ok) return { delivered: false, error: "invalid_payload" };
+  if (result.__telegramScreenshotDelivered) return { delivered: true };
+
   if (result.data?.deliveryBlocked || result.data?.sensitiveContext) {
     await sendTelegramWithMarkup(
       chatId,
@@ -85,17 +95,56 @@ async function deliverScreenshotToTelegram(chatId, result, label = "Felix Deskto
       undefined,
       "telegram_sidecar_sensitive_block",
     ).catch(() => {});
-    return;
+    return { delivered: false, error: "sensitive_context" };
   }
 
   const b64 = result.data?.imageBase64 || result.data?.base64;
-  if (!b64) return;
+  if (!b64) {
+    return { delivered: false, error: "missing_image_base64" };
+  }
+
+  const label =
+    toolName === "browser_screenshot"
+      ? `Felix Browser — ${result.data?.url || "page"}`
+      : toolName === "desktop_region_screenshot"
+        ? "Felix Desktop — bölge ekran görüntüsü"
+        : toolName === "desktop_window_screenshot"
+          ? `Felix Desktop — ${result.data?.window?.app || "pencere"}`
+          : "Felix Desktop — ekran görüntüsü";
+  const filename = `screenshot.${result.data?.format || "png"}`;
+
   await sendChatAction(chatId, "upload_photo").catch(() => {});
-  await sendTelegramPhotoBase64(chatId, b64, {
-    caption: label,
-    filename: `screenshot.${result.data?.format || "png"}`,
-    source: "telegram_sidecar_delivery",
-  }).catch(() => {});
+
+  try {
+    await sendTelegramPhotoBase64(chatId, b64, {
+      caption: label,
+      filename,
+      source: "telegram_sidecar_delivery",
+    });
+    result.__telegramScreenshotDelivered = true;
+    return { delivered: true };
+  } catch (photoErr) {
+    try {
+      await sendChatAction(chatId, "upload_document").catch(() => {});
+      await sendTelegramDocumentBase64(chatId, b64, {
+        caption: label,
+        filename,
+        source: "telegram_sidecar_delivery_document",
+      });
+      result.__telegramScreenshotDelivered = true;
+      return { delivered: true, mode: "document" };
+    } catch (docErr) {
+      const msg = docErr?.message || photoErr?.message || "send_failed";
+      console.error("[telegram-sidecar] screenshot delivery failed:", msg);
+      await sendTelegramWithMarkup(
+        chatId,
+        `Ekran görüntüsü Telegram'a gönderilemedi: ${msg}`,
+        undefined,
+        "telegram_sidecar_delivery_error",
+      ).catch(() => {});
+      return { delivered: false, error: msg };
+    }
+  }
 }
 
 export function registerTelegramSidecarDeliveryHook() {
@@ -108,15 +157,7 @@ export function registerTelegramSidecarDeliveryHook() {
     if (!chatId) return;
 
     if (SCREENSHOT_TOOLS.has(toolName)) {
-      const label =
-        toolName === "browser_screenshot"
-          ? `Felix Browser — ${result.data?.url || "page"}`
-          : toolName === "desktop_region_screenshot"
-          ? "Felix Desktop — bölge ekran görüntüsü"
-          : toolName === "desktop_window_screenshot"
-            ? `Felix Desktop — ${result.data?.window?.app || "pencere"}`
-            : "Felix Desktop screenshot";
-      await deliverScreenshotToTelegram(chatId, result, label);
+      await deliverSidecarScreenshotToTelegram(chatId, toolName, result);
       return;
     }
 
