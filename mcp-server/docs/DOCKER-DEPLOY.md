@@ -99,6 +99,19 @@ docker compose up --build
 
 Geliştirmede günlük iş için Docker şart değil; `hub:live` yeterli.
 
+## Coolify
+
+| Ayar | Değer |
+|------|--------|
+| Base Directory | `mcp-server` |
+| Dockerfile | `Dockerfile` |
+| Port | `8787` |
+| Health check | `GET /health` |
+
+**Environment variables:** Tüm secret'ları **Runtime only** işaretle (Buildtime kapalı). Özellikle `NODE_ENV=production` buildtime'da açıksa UI build `tsc: not found` ile düşer — Dockerfile bunu artık override ediyor ama yine de runtime-only önerilir.
+
+**Buildtime açık kalacaksa:** yalnızca `PORT=8787` yeterli; `NODE_ENV` ve auth/MSSQL değişkenleri runtime'da kalsın.
+
 ## PM2
 
 Sunucuda PM2 kullanmayın — `felix-hub` PM2 süreci varsa:

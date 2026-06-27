@@ -5,6 +5,9 @@
 # ── API dependencies (pnpm) ───────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS api-deps
 
+# Isolate from host/Coolify build-time NODE_ENV (we install prod deps explicitly).
+ENV NODE_ENV=development
+
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /build
@@ -15,10 +18,14 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts && pnpm store prune
 # ── React UI ──────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS ui-builder
 
+# Platforms (Coolify, etc.) inject NODE_ENV=production at build time — that skips
+# devDependencies and breaks `tsc` / `vite`. Force development for this stage only.
+ENV NODE_ENV=development
+
 WORKDIR /build
 
 COPY frontend/package.json frontend/package-lock.json ./frontend/
-RUN npm ci --prefix frontend --ignore-scripts
+RUN npm ci --prefix frontend --include=dev --ignore-scripts
 
 COPY frontend ./frontend
 RUN npm run build --prefix frontend
