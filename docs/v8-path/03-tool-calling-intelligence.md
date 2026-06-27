@@ -1,6 +1,6 @@
 # 03 — Tool Calling Intelligence
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Bağımlılık:** 02 Mode Profiles
 
 ---

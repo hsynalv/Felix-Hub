@@ -33,7 +33,7 @@ V8:    Prompt intelligence — registry, modlar, spec, eval, importer
 | 06 | [06-agent-loop-contract.md](./06-agent-loop-contract.md) | observe–plan–act–reflect |
 | 07 | [07-prompt-eval-studio.md](./07-prompt-eval-studio.md) | Prompt A/B regression |
 | 08 | [08-prompt-importer.md](./08-prompt-importer.md) | Arşiv tarayıcı → registry draft |
-| 09 | [09-prompt-marketplace.md](./09-prompt-marketplace.md) | Cursor-like / Kiro-like profiller |
+| 09 | [09-prompt-marketplace.md](./09-prompt-marketplace.md) | Focused Coder / Spec Planner profiller |
 | 10 | [10-provenance-safety.md](./10-provenance-safety.md) | Lisans, risk, review |
 
 ---
@@ -53,6 +53,6 @@ V8:    Prompt intelligence — registry, modlar, spec, eval, importer
 1. [EXECUTION-ORDER.md](./EXECUTION-ORDER.md) — aktif fazı seç
 2. Pillar maddelerini issue/PR’lara böl
 3. Her pattern için provenance + eval notu ekle
-4. `Status:` satırını güncelle
+4. `Status:` satırını güncelle — bkz. [HARDENING-NOTES.md](./HARDENING-NOTES.md)
 
 İlgili: [v7-path](../v7-path/README.md), [v4-path](../v4-path/README.md), [v6-path](../v6-path/README.md).

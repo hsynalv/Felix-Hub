@@ -2,7 +2,8 @@
 
 > **Son güncelleme:** 2026-06-26  
 > **Önkoşul:** V4 Eval Studio, `prompt-registry` v2, V6 operating model  
-> **Paralel olabilir:** V7 personal OS (desktop/telegram) — V8 prompt katmanı her iki yolu besler
+> **Paralel olabilir:** V7 personal OS (desktop/telegram) — V8 prompt katmanı her iki yolu besler  
+> **Semantik:** Tablodaki **done** = MVP exit gate karşılandı; pillar checklist’lerinin tamamı değil. Açık işler: [REMAINING-WORK.md](./REMAINING-WORK.md). Bkz. [HARDENING-NOTES.md](./HARDENING-NOTES.md).
 
 ---
 

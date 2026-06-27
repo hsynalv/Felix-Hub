@@ -10,18 +10,27 @@ import { withStore } from "../../plugins/prompt-registry/prompts.store.js";
 import { auditLog, generateCorrelationId } from "../audit/index.js";
 
 const CACHE = process.env.CATALOG_CACHE_DIR || "./cache";
-const DRAFTS_DIR = join(CACHE, "prompt-intelligence/drafts");
-const REJECTED_DIR = join(CACHE, "prompt-intelligence/rejected");
-const MANIFEST_PATH = join(CACHE, "prompt-intelligence/import-manifest.json");
+
+function getDraftsDir() {
+  return join(process.env.CATALOG_CACHE_DIR || CACHE, "prompt-intelligence/drafts");
+}
+
+function getRejectedDir() {
+  return join(process.env.CATALOG_CACHE_DIR || CACHE, "prompt-intelligence/rejected");
+}
+
+function getManifestPath() {
+  return join(process.env.CATALOG_CACHE_DIR || CACHE, "prompt-intelligence/import-manifest.json");
+}
 
 async function ensureDirs() {
-  await mkdir(DRAFTS_DIR, { recursive: true });
-  await mkdir(REJECTED_DIR, { recursive: true });
+  await mkdir(getDraftsDir(), { recursive: true });
+  await mkdir(getRejectedDir(), { recursive: true });
 }
 
 async function readManifest() {
   try {
-    const raw = await readFile(MANIFEST_PATH, "utf8");
+    const raw = await readFile(getManifestPath(), "utf8");
     return JSON.parse(raw);
   } catch {
     return { approved: [], rejected: [] };
@@ -29,12 +38,13 @@ async function readManifest() {
 }
 
 async function writeManifest(manifest) {
-  await mkdir(join(CACHE, "prompt-intelligence"), { recursive: true });
-  await writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2), "utf8");
+  const cache = process.env.CATALOG_CACHE_DIR || CACHE;
+  await mkdir(join(cache, "prompt-intelligence"), { recursive: true });
+  await writeFile(getManifestPath(), JSON.stringify(manifest, null, 2), "utf8");
 }
 
 async function readDraftFile(id) {
-  const path = join(DRAFTS_DIR, `${id}.json`);
+  const path = join(getDraftsDir(), `${id}.json`);
   const raw = await readFile(path, "utf8");
   return JSON.parse(raw);
 }
@@ -49,7 +59,7 @@ export async function listImportDrafts() {
 
   let files = [];
   try {
-    files = (await readdir(DRAFTS_DIR)).filter((f) => f.endsWith(".json") && f !== "import-report.json");
+    files = (await readdir(getDraftsDir())).filter((f) => f.endsWith(".json") && f !== "import-report.json");
   } catch {
     return [];
   }
@@ -98,7 +108,7 @@ export async function getImportDraft(id) {
 export async function runImportScan(sourceDir, opts = {}) {
   const drafts = await scanPromptArchive(sourceDir, opts);
   if (drafts.length) {
-    await writeDraftReport(DRAFTS_DIR, drafts);
+    await writeDraftReport(getDraftsDir(), drafts);
   }
   return { count: drafts.length, drafts: drafts.map((d) => ({ id: d.id, risk: d.provenance?.risk })) };
 }
@@ -178,8 +188,8 @@ export async function rejectImportDraft(id, { actor, reason } = {}) {
   if (!draftResult.ok) return draftResult;
 
   await ensureDirs();
-  const src = join(DRAFTS_DIR, `${id}.json`);
-  const dest = join(REJECTED_DIR, `${id}.json`);
+  const src = join(getDraftsDir(), `${id}.json`);
+  const dest = join(getRejectedDir(), `${id}.json`);
   try {
     await rename(src, dest);
   } catch {

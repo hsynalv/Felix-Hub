@@ -1,6 +1,6 @@
 # 02 — Mode-Based Chat Profiles
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Bağımlılık:** 01 Pattern Library
 
 ---

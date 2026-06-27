@@ -7,16 +7,16 @@ import { DEFAULT_PROMPT_BUNDLE_ID } from "../chat/prompt-constants.js";
 /** Derived section overlays — Felix-authored, not verbatim vendor dumps. */
 export const MARKETPLACE_SECTION_OVERLAYS = {
   "felix-coder-cursor": {
-    code_style: `## Cursor-like coding discipline (derived)
+    code_style: `## Focused coding discipline (derived)
 - Prefer minimal diffs; avoid drive-by refactors.
 - Read files before editing; cite paths in feedback.
 - Do not name internal tool names to the user — describe actions plainly.`,
-    tool_calling: `## Coding tool flow (derived)
+    tool_calling: `## Focused coding tool flow (derived)
 - Gather context with read/search tools before write.
 - One focused change set per turn when possible.`,
   },
   "felix-spec-kiro": {
-    completion_spec: `## Kiro-like spec flow (derived)
+    completion_spec: `## Spec planner flow (derived)
 - Clarify scope before large specs.
 - Produce requirements → design → tasks in order.
 - Keep artifacts markdown-ready for export.`,
@@ -43,7 +43,7 @@ export const PROMPT_MARKETPLACE_CATALOG = [
   },
   {
     id: "felix-spec-kiro",
-    label: "Kiro Spec",
+    label: "Spec Planner",
     description: "Spec planlama — requirements / design / tasks",
     chatProfile: "spec_planner",
     chatMode: "spec",
@@ -52,7 +52,7 @@ export const PROMPT_MARKETPLACE_CATALOG = [
   },
   {
     id: "felix-coder-cursor",
-    label: "Cursor-like Coder",
+    label: "Focused Coder",
     description: "Kod odaklı agent + inceleme disiplini",
     chatProfile: "code_editing",
     chatMode: "agent",

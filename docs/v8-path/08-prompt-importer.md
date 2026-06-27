@@ -1,7 +1,8 @@
 # 08 — Prompt Importer
 
-> **Status:** not_started  
-> **Bağımlılık:** [SOURCE-ARCHIVE.md](./SOURCE-ARCHIVE.md), 10 Provenance
+> **Status:** done (MVP)  
+> **Bağımlılık:** [SOURCE-ARCHIVE.md](./SOURCE-ARCHIVE.md), 10 Provenance  
+> **Backlog:** [REMAINING-WORK.md](./REMAINING-WORK.md)
 
 ---
 
@@ -36,12 +37,16 @@ npm run prompt:import -- --provider Kiro --out cache/prompt-intelligence/drafts/
 
 ## Deliverables
 
-- [ ] `mcp-server/scripts/prompt-importer.js`
-- [ ] Provider map config (`importer.providers.json`)
-- [ ] Human review queue UI veya markdown report
+- [x] `mcp-server/scripts/prompt-importer.js` + `npm run prompt:import`
+- [x] Provider map (`importer.providers.json` / path heuristic)
+- [x] Settings approval queue (`PromptImportSettingsPanel`, `POST /v8/import/*`)
+- [x] Test izolasyonu: `CATALOG_CACHE_DIR` temp (`tests/helpers/temp-cache-env.js`)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Kiro + Cursor örneklerinden ≥2 draft pattern, provenance etiketli
+- [x] Dry-run / scan → draft JSON + provenance
+- [x] Approve → `prompts.json` registry (low-risk veya force)
+
+- [x] Arşivden ≥2 draft pattern, provenance etiketli

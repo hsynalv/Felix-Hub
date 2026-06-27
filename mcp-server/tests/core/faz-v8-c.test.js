@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { installTempCacheDir, restoreCacheDir } from "../helpers/temp-cache-env.js";
 import {
   startSpecSession,
   advanceSpecSession,
@@ -22,6 +23,17 @@ import { buildSystemPrompt } from "../../src/core/chat/chat-system-prompt.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ARCHIVE_DIR = join(__dirname, "../../../system-prompts-and-models-of-ai-tools");
+
+let tempCacheDir;
+
+beforeEach(() => {
+  tempCacheDir = installTempCacheDir();
+});
+
+afterEach(() => {
+  restoreCacheDir(tempCacheDir);
+  tempCacheDir = null;
+});
 
 describe("V8 Faz C — spec workflow", () => {
   it("creates session and advances through artifacts", async () => {
@@ -81,13 +93,13 @@ describe("V8 Faz C — marketplace", () => {
     expect(PROMPT_MARKETPLACE_CATALOG.some((p) => p.id === "felix-spec-kiro")).toBe(true);
   });
 
-  it("applies cursor overlay to system prompt", () => {
+  it("applies focused coder overlay to system prompt", () => {
     const prompt = buildSystemPrompt("", {
       chatProfile: "code_editing",
       chatMode: "agent",
       marketplacePackId: "felix-coder-cursor",
     });
-    expect(prompt).toContain("Cursor-like coding discipline");
+    expect(prompt).toContain("Focused coding discipline");
   });
 
   it("resolves pack settings", () => {

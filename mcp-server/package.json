@@ -40,6 +40,7 @@
     "test:integration:stable": "vitest run --config vitest.integration.stable.config.js",
     "eval:smoke": "vitest run tests/eval/trace-regression.test.js",
     "eval:prompt": "vitest run tests/core/faz-v8-c.test.js && node -e \"import('./src/core/eval/prompt-eval.service.js').then(m=>{const r=m.runPromptEvalSuite(); console.log(JSON.stringify(r.summary)); process.exit(r.pass?0:1)}).catch(e=>{console.error(e);process.exit(1)})\"",
+    "eval:prompt:llm": "vitest run tests/eval/prompt-conversation-regression.test.js",
     "prompt:import": "node scripts/prompt-importer.js",
     "eval:ci": "vitest run tests/eval/trace-regression.test.js tests/core/faz3-v4.test.js",
     "eval:run": "node bin/run-retrieval-evals.js run",

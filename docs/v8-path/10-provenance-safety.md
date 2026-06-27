@@ -1,6 +1,6 @@
 # 10 — Provenance & Safety
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Bağımlılık:** [SOURCE-ARCHIVE.md](./SOURCE-ARCHIVE.md)
 
 ---

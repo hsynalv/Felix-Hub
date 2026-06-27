@@ -1,6 +1,6 @@
 # 01 — Prompt Pattern Library
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Bağımlılık:** `prompt-registry` v2
 
 ---

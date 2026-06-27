@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
  * Validate all plugin tool definitions under STRICT_TOOL_SCHEMA.
- * Mirrors registerTool validation (ensureWriteToolExplanation + validateTool + validateTags).
+ * Uses the same path as registerTool: prepareToolForRegistration + validateTool + validateTags.
  */
 
 import { readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
-import { validateTool, validateTags } from "../src/core/tool-registry.js";
-import { ensureWriteToolExplanation } from "../src/core/tool-schema.js";
+import {
+  prepareToolForRegistration,
+  validateTool,
+  validateTags,
+} from "../src/core/tool-registry.js";
 
 process.env.STRICT_TOOL_SCHEMA = "true";
 
@@ -37,12 +40,7 @@ for (const dir of dirs.sort()) {
   const toolDefs = Array.isArray(mod.tools) ? mod.tools : [];
   for (const t of toolDefs) {
     try {
-      let tool = { ...t, plugin: mod.name || dir };
-      if (tool.parameters && !tool.inputSchema) {
-        tool.inputSchema = tool.parameters;
-        delete tool.parameters;
-      }
-      tool = ensureWriteToolExplanation(tool);
+      const tool = prepareToolForRegistration({ ...t, plugin: mod.name || dir });
       validateTool(tool);
       validateTags(tool.tags || []);
       ok++;
@@ -55,4 +53,4 @@ for (const dir of dirs.sort()) {
 
 console.log(`\nvalidate:tools — ${ok} tools ok, ${errors} errors`);
 
-if (errors > 0) process.exit(1);
+process.exit(errors > 0 ? 1 : 0);

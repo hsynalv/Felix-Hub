@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { installTempCacheDir, restoreCacheDir } from "../helpers/temp-cache-env.js";
 import { buildSystemPrompt } from "../../src/core/chat/chat-system-prompt.js";
 import { BRAND } from "../../src/core/branding.js";
 import { CHAT_MODES } from "../../src/core/chat/prompt-constants.js";
@@ -8,6 +9,16 @@ import { resolveChatProfile, resolvePromptRender } from "../../src/core/chat/cha
 import { validateProvenance } from "../../src/core/chat/provenance.js";
 import { ensureBuiltinPrompts } from "../../src/plugins/prompt-registry/prompts.seed.js";
 import { loadPrompts } from "../../src/plugins/prompt-registry/prompts.store.js";
+
+let tempCacheDir;
+
+beforeEach(() => {
+  tempCacheDir = installTempCacheDir();
+});
+
+afterEach(() => {
+  restoreCacheDir(tempCacheDir);
+});
 
 describe("V8 Faz A — prompt registry", () => {
   it("defines 7 chat modes including ops and desktop", () => {

@@ -1,39 +1,44 @@
 # 09 — Prompt Marketplace (System Prompt Profiles)
 
-> **Status:** not_started  
-> **Bağımlılık:** 02 Mode Profiles, V6 App Store (opsiyonel UI köprüsü)
+> **Status:** done (MVP)  
+> **Bağımlılık:** 02 Mode Profiles, V6 App Store (opsiyonel UI köprüsü)  
+> **Backlog:** [REMAINING-WORK.md](./REMAINING-WORK.md)
 
 ---
 
 ## Amaç
 
-Kullanıcının UI’dan davranış profili seçmesi — “Cursor-like coder”, “Kiro spec”, “Manus long-run”, “Telegram Felix”, “Jarvis desktop”.
+Kullanıcının UI’dan davranış profili seçmesi — nötr isimlerle: **Focused Coder**, **Spec Planner**, **Ops Runbook**, **Telegram Felix**, **Felix Desktop**.
+
+> Production prompt overlay’lerinde üçüncü taraf ürün adı kullanılmaz ([REVIEW.md](./REVIEW.md)). Paket id’leri (`felix-coder-cursor`, `felix-spec-kiro`) geriye dönük uyumluluk için korunur.
 
 ---
 
-## MVP katalog (örnek)
+## MVP katalog
 
-| Paket id | Mod | Açıklama |
-|----------|-----|----------|
-| `felix-default` | agent | Dengeli Felix |
-| `felix-spec-kiro` | spec | Spec workflow |
-| `felix-coder-cursor` | agent/review | Coding + review |
-| `felix-ops-v5` | ops | Runbook/incident |
-| `felix-telegram` | chat/agent | Kısa, tool-disiplinli |
-| `felix-desktop` | desktop | Felix Desktop kuralları |
+| Paket id | Mod | UI etiketi |
+|----------|-----|------------|
+| `felix-default` | agent | Felix Default |
+| `felix-spec-kiro` | spec | Spec Planner |
+| `felix-coder-cursor` | agent/review | Focused Coder |
+| `felix-ops-v5` | ops | Ops / Runbook |
+| `felix-telegram` | chat/agent | Telegram Felix |
+| `felix-desktop` | desktop | Felix Desktop |
 
-V6 App Store ile ortak install/uninstall UX düşünülebilir; veri modeli `prompt-registry` prompt kayıtları.
+Kod: `mcp-server/src/core/chat/prompt-marketplace.js` — `GET /v8/prompt-marketplace`, Chat Instructions picker.
 
 ---
 
 ## Deliverables
 
-- [ ] Settings veya Chat: “Agent behavior” picker
-- [ ] `prompt_list?tag=marketplace`
+- [x] Chat: “Agent behavior” / marketplace picker
+- [x] `listMarketplacePacks()` + `resolveMarketplacePack()`
 - [ ] Export/import bundle (settings advanced)
+- [ ] V6 App Store ortak install UX
 
 ---
 
 ## Başarı kriteri
 
-- [ ] Kullanıcı profil değiştirince aynı oturumda system prompt render değişir (audit log)
+- [x] Profil değişince system prompt render değişir (marketplace overlay)
+- [ ] Audit log’da `marketplacePackId` her render’da (kısmi — conversation metadata)

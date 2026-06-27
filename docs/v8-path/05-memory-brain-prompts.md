@@ -1,6 +1,6 @@
 # 05 — Memory / Brain Prompt Hardening
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Bağımlılık:** 01 Pattern Library, brain plugin
 
 ---

@@ -1,6 +1,6 @@
 # 06 — Agent Loop Contract
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Bağımlılık:** 03 Tool Intelligence, V4 run orchestrator
 
 ---

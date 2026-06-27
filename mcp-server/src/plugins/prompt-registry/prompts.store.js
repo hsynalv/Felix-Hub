@@ -8,23 +8,23 @@
 import { readFile, writeFile, mkdir, access } from "fs/promises";
 import { join } from "path";
 
-const DEFAULT_DIR = process.env.CATALOG_CACHE_DIR || "./cache";
-const FILENAME   = "prompts.json";
+const FILENAME = "prompts.json";
 
-let storePath = null;
+function getCacheDir() {
+  return process.env.CATALOG_CACHE_DIR || "./cache";
+}
 
 function getStorePath() {
-  if (storePath) return storePath;
-  storePath = join(DEFAULT_DIR, FILENAME);
-  return storePath;
+  return join(getCacheDir(), FILENAME);
 }
 
 /** Ensure cache directory exists (fully async) */
 async function ensureDir() {
+  const dir = getCacheDir();
   try {
-    await access(DEFAULT_DIR);
+    await access(dir);
   } catch {
-    await mkdir(DEFAULT_DIR, { recursive: true });
+    await mkdir(dir, { recursive: true });
   }
 }
 

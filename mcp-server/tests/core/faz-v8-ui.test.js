@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { installTempCacheDir, restoreCacheDir } from "../helpers/temp-cache-env.js";
 import { updateSpecArtifact } from "../../src/core/spec/spec-session.service.js";
 import { startSpecSession } from "../../src/core/spec/spec-session.service.js";
 import {
@@ -14,6 +15,17 @@ import { loadPrompts } from "../../src/plugins/prompt-registry/prompts.store.js"
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ARCHIVE = join(__dirname, "../../../system-prompts-and-models-of-ai-tools");
 
+let tempCacheDir;
+
+beforeAll(async () => {
+  tempCacheDir = installTempCacheDir();
+  await runImportScan(ARCHIVE, { providerFilter: "Kiro", maxFiles: 2 });
+});
+
+afterAll(() => {
+  restoreCacheDir(tempCacheDir);
+});
+
 describe("V8 UI follow-up — spec artifact edit", () => {
   it("updates artifact via PUT flow", async () => {
     const session = await startSpecSession({ title: "Edit test", idea: "x" });
@@ -24,10 +36,6 @@ describe("V8 UI follow-up — spec artifact edit", () => {
 });
 
 describe("V8 UI follow-up — import approve", () => {
-  beforeAll(async () => {
-    await runImportScan(ARCHIVE, { providerFilter: "Kiro", maxFiles: 2 });
-  });
-
   it("lists pending drafts after scan", async () => {
     const drafts = await listImportDrafts();
     expect(drafts.length).toBeGreaterThanOrEqual(1);

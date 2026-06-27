@@ -1,6 +1,6 @@
 # 00 — V8 Vision: Prompt Intelligence & Agent Behavior
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Önkoşul:** V4 Eval Studio + `prompt-registry` v2, V6 operating model, V7 chat channels (kısmi)  
 > **Kaynak arşiv:** [SOURCE-ARCHIVE.md](./SOURCE-ARCHIVE.md) (`system-prompts-and-models-of-ai-tools/`)
 

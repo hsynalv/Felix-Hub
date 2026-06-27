@@ -1,6 +1,6 @@
 # 04 — Spec Driven Development
 
-> **Status:** not_started  
+> **Status:** done (MVP)  
 > **Bağımlılık:** 02 Mode (`spec`), V3–V7 path docs
 
 ---

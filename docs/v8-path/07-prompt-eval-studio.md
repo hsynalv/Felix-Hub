@@ -1,7 +1,8 @@
 # 07 — Prompt Eval Studio
 
-> **Status:** not_started  
-> **Bağımlılık:** V4 Eval Studio, 01 Pattern Library
+> **Status:** done (MVP)  
+> **Bağımlılık:** V4 Eval Studio, 01 Pattern Library  
+> **Backlog:** [REMAINING-WORK.md](./REMAINING-WORK.md) §3 (LLM golden suite, CI gate)
 
 ---
 
@@ -26,12 +27,14 @@
 
 ## Deliverables
 
-- [ ] `eval:prompt` script veya Eval Studio sekmesi
-- [ ] Fixture: mevcut `tests/eval/trace-regression` + prompt-only cases
+- [x] `eval:prompt` script + Eval Studio “Prompt eval” sekmesi (heuristic smoke)
+- [x] `eval:prompt:llm` stub + `tests/eval/conversations/` golden dizini
+- [ ] Fixture: gerçek LLM golden JSON senaryoları
 - [ ] Rapor: variant × metric matrix (HTML/JSON)
 
 ---
 
 ## Başarı kriteri
 
-- [ ] CI’da en az 1 prompt regression job (smoke seviyesi)
+- [x] CI smoke: `eval:prompt` (heuristic)
+- [ ] CI LLM regression job (`OPENAI_API_KEY` gated)

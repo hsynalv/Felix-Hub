@@ -6,18 +6,21 @@ import { readFile, writeFile, mkdir, access, readdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
 
-const BASE_DIR = join(process.env.CATALOG_CACHE_DIR || "./cache", "spec-sessions");
+function getBaseDir() {
+  return join(process.env.CATALOG_CACHE_DIR || "./cache", "spec-sessions");
+}
 
 async function ensureDir() {
+  const base = getBaseDir();
   try {
-    await access(BASE_DIR);
+    await access(base);
   } catch {
-    await mkdir(BASE_DIR, { recursive: true });
+    await mkdir(base, { recursive: true });
   }
 }
 
 function sessionPath(id) {
-  return join(BASE_DIR, `${id}.json`);
+  return join(getBaseDir(), `${id}.json`);
 }
 
 /**
@@ -60,11 +63,12 @@ export async function saveSpecSession(session) {
 
 export async function listSpecSessions({ projectId = null, limit = 50 } = {}) {
   await ensureDir();
-  const files = (await readdir(BASE_DIR)).filter((f) => f.endsWith(".json"));
+  const base = getBaseDir();
+  const files = (await readdir(base)).filter((f) => f.endsWith(".json"));
   const sessions = [];
   for (const file of files) {
     try {
-      const raw = await readFile(join(BASE_DIR, file), "utf8");
+      const raw = await readFile(join(base, file), "utf8");
       const s = JSON.parse(raw);
       if (projectId && s.projectId !== projectId) continue;
       sessions.push({

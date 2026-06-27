@@ -21,11 +21,38 @@ import { ToolTags, VALID_TAGS as TOOL_TAG_VALUES } from "./tool-tags.js";
 import { emitHubAuditEvent } from "./audit/emit-hub-event.js";
 import { HubEventTypes, HubOutcomes } from "./audit/event-types.js";
 import { resolveActorString } from "./audit/base-envelope.js";
+import { ensureWriteToolExplanation } from "./tool-schema.js";
 
 const tools = new Map();
 
 export { ToolTags } from "./tool-tags.js";
 export const VALID_TAGS = TOOL_TAG_VALUES;
+
+/**
+ * Map legacy `parameters` to `inputSchema` before validation.
+ * @param {Object} tool
+ * @returns {Object}
+ */
+export function normalizeToolDefinition(tool) {
+  const normalized = { ...tool };
+  if (normalized.parameters && !normalized.inputSchema) {
+    console.warn(
+      `[tool-registry] Tool '${normalized.name || "unknown"}' uses deprecated 'parameters'. Mapping to 'inputSchema'.`
+    );
+    normalized.inputSchema = normalized.parameters;
+    delete normalized.parameters;
+  }
+  return normalized;
+}
+
+/**
+ * Same normalization path as {@link registerTool} before validation.
+ * @param {Object} tool
+ * @returns {Object}
+ */
+export function prepareToolForRegistration(tool) {
+  return ensureWriteToolExplanation(normalizeToolDefinition(tool));
+}
 
 /**
  * Validate tool according to MCP contract
@@ -59,13 +86,6 @@ export function validateTool(tool) {
     if (isWriteTool && !hasExplanation) {
       console.warn(`[tool-registry] Warning: Tool '${tool.name}' is a write/destructive tool but lacks 'explanation' field in inputSchema. Consider adding it so LLM can explain why it runs this tool.`);
     }
-  }
-
-  // Map legacy 'parameters' to 'inputSchema' if present
-  if (tool.parameters && !tool.inputSchema) {
-    console.warn(`[tool-registry] Tool '${tool.name}' uses deprecated 'parameters'. Mapping to 'inputSchema'.`);
-    tool.inputSchema = tool.parameters;
-    delete tool.parameters;
   }
 
   if (errors.length > 0) {
@@ -128,7 +148,7 @@ export function listToolsByTags(includeTags = [], excludeTags = []) {
  * @param {string} tool.plugin - Plugin name that owns this tool
  */
 export function registerTool(tool) {
-  // Validate according to MCP contract
+  tool = prepareToolForRegistration(tool);
   validateTool(tool);
 
   if (!tool.handler || typeof tool.handler !== "function") {
