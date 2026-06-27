@@ -326,7 +326,8 @@ async function pollOnce(offset) {
 
 export function startTelegramPolling() {
   if (pollingActive) return;
-  if (process.env.TELEGRAM_POLLING !== "true") return;
+  if (process.env.NODE_ENV === "production") return;
+  if (getEnvValue("TELEGRAM_POLLING") !== "true") return;
   if (!isTelegramConfigured()) {
     console.warn("[telegram] TELEGRAM_POLLING=true but bot not configured");
     return;

@@ -4,7 +4,7 @@
 
 import { closeRedis } from "../redis.js";
 import { reconnectPersistence } from "../persistence/index.js";
-import { HOT_RELOAD_KEYS, RESTART_REQUIRED_KEYS, getOverlay } from "./effective-config.js";
+import { HOT_RELOAD_KEYS, RESTART_REQUIRED_KEYS, getOverlay, loadOwnerIntegrationOverlay } from "./effective-config.js";
 
 let invalidateLlmClients = async () => {};
 let reloadDatabasePool = async () => {};
@@ -113,12 +113,26 @@ export async function runSettingsReload(changedKeys = null) {
     }
   }
 
-  if (
-    hotKeys.includes("TELEGRAM_BOT_TOKEN") ||
-    hotKeys.includes("TELEGRAM_CHAT_ID") ||
-    hotKeys.includes("TELEGRAM_ALLOWED_CHAT_IDS")
-  ) {
-    results.reloaded.push("telegram");
+  const telegramHotKeys = new Set([
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+    "TELEGRAM_ALLOWED_CHAT_IDS",
+    "TELEGRAM_WEBHOOK_SECRET",
+    "TELEGRAM_NOTIFY_UI_TOKEN",
+    "TELEGRAM_POLLING",
+    "TELEGRAM_CHAT_PROFILE",
+    "TELEGRAM_AUTO_APPROVE_TOOLS",
+    "TELEGRAM_RATE_LIMIT_PER_MIN",
+    "TELEGRAM_WORKING_ACK_DELAY_MS",
+  ]);
+
+  if (hotKeys.some((k) => telegramHotKeys.has(k))) {
+    try {
+      await loadOwnerIntegrationOverlay();
+      results.reloaded.push("telegram");
+    } catch (e) {
+      results.errors.push({ target: "telegram", message: e.message });
+    }
   }
 
   return results;

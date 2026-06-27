@@ -5,11 +5,29 @@
 import { config as baseConfig } from "../config.js";
 import { sanitizeConfig } from "../config-schema.js";
 import { listAllSettingsDecrypted } from "./settings.service.js";
-import { getRequestContext } from "../auth/request-context.js";
+import { getRequestContext, userNamespaceForId } from "../auth/request-context.js";
 import { getTenantOverlaySync } from "../auth/tenant-overlay.js";
+import { isPersistenceHealthy, persistenceQuery } from "../persistence/index.js";
 
 /** @type {Map<string, string>} */
 const overlay = new Map();
+
+/** @type {Map<string, string>} */
+const ownerIntegrationOverlay = new Map();
+
+/** Loaded from owner user namespace for webhooks, schedulers, and outbound without request context */
+export const OWNER_INTEGRATION_KEYS = new Set([
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_CHAT_ID",
+  "TELEGRAM_ALLOWED_CHAT_IDS",
+  "TELEGRAM_WEBHOOK_SECRET",
+  "TELEGRAM_NOTIFY_UI_TOKEN",
+  "TELEGRAM_CHAT_PROFILE",
+  "TELEGRAM_AUTO_APPROVE_TOOLS",
+  "TELEGRAM_RATE_LIMIT_PER_MIN",
+  "TELEGRAM_WORKING_ACK_DELAY_MS",
+  "TELEGRAM_POLLING",
+]);
 
 export const BOOTSTRAP_KEYS = new Set([
   "PORT",
@@ -67,6 +85,9 @@ export const HOT_RELOAD_KEYS = new Set([
   "TELEGRAM_ALLOWED_CHAT_IDS",
   "TELEGRAM_WEBHOOK_SECRET",
   "TELEGRAM_NOTIFY_UI_TOKEN",
+  "TELEGRAM_POLLING",
+  "TELEGRAM_CHAT_PROFILE",
+  "TELEGRAM_AUTO_APPROVE_TOOLS",
 ]);
 
 export function getOverlay() {
@@ -91,6 +112,7 @@ export function getEnvValue(key) {
     if (tenant?.has(key)) return tenant.get(key);
   }
   if (overlay.has(key)) return overlay.get(key);
+  if (ownerIntegrationOverlay.has(key)) return ownerIntegrationOverlay.get(key);
   return process.env[key];
 }
 
@@ -115,6 +137,38 @@ export async function loadSettingsOverlay() {
     applyToProcessEnv(keyName, value);
   }
   return overlay.size;
+}
+
+/**
+ * Owner-scoped integration keys (Telegram, …) for webhooks and background jobs without tenant context.
+ */
+export async function loadOwnerIntegrationOverlay() {
+  ownerIntegrationOverlay.clear();
+  if (!isPersistenceHealthy()) return 0;
+
+  const result = await persistenceQuery(
+    `SELECT TOP 1 id FROM hub_users ORDER BY CASE WHEN role = 'owner' THEN 0 ELSE 1 END, created_at ASC`
+  );
+  const ownerId = result?.recordset?.[0]?.id;
+  if (!ownerId) return 0;
+
+  const namespace = userNamespaceForId(ownerId);
+  const rows = await listAllSettingsDecrypted(namespace);
+  let count = 0;
+  for (const { keyName, value } of rows) {
+    if (!OWNER_INTEGRATION_KEYS.has(keyName)) continue;
+    ownerIntegrationOverlay.set(keyName, value);
+    applyToProcessEnv(keyName, value);
+    count++;
+  }
+  if (count > 0) {
+    console.log(`[settings] Loaded ${count} owner integration key(s) (webhook/background)`);
+  }
+  return count;
+}
+
+export function clearOwnerIntegrationOverlayForTests() {
+  ownerIntegrationOverlay.clear();
 }
 
 export function applyOverlayEntry(key, value) {

@@ -98,5 +98,8 @@ export function isPublicSecurityPath(req) {
 
   if (req.method === "GET" && p === "/personal/briefing/gmail/oauth/callback") return true;
 
+  // Telegram Bot API webhook (auth via X-Telegram-Bot-Api-Secret-Token in handler)
+  if (req.method === "POST" && p === "/notifications/telegram/webhook") return true;
+
   return false;
 }

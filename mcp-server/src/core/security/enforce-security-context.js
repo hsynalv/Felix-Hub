@@ -64,8 +64,15 @@ export async function enforceSecurityContext(req, res, next) {
     };
     req.authScopes = principal.scopes;
     req.actor = principal.actor;
-    if (principal.user) {
-      req.user = principal.user;
+    // authenticateSession sets req.user (object with namespace). principal.user is a display string — do not overwrite.
+    if (!req.user?.userId && principal.actor?.type === "user" && principal.actor?.userId) {
+      req.user = {
+        userId: principal.actor.userId,
+        email: principal.actor.email,
+        displayName: principal.actor.displayName,
+        namespace: principal.actor.namespace,
+        scopes: principal.actor.scopes,
+      };
     }
 
     return next();

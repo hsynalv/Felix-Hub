@@ -28,4 +28,10 @@ describe("isPublicSecurityPath — SPA shell", () => {
   it("treats wildcard Accept as browser navigation", () => {
     expect(isPublicSecurityPath(req("GET", "/login", "*/*"))).toBe(true);
   });
+
+  it("allows Telegram webhook POST without hub auth", () => {
+    expect(isPublicSecurityPath(req("POST", "/notifications/telegram/webhook", "application/json"))).toBe(
+      true
+    );
+  });
 });

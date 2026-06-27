@@ -81,7 +81,7 @@ import { registerWorkspacePreferencesRoutes } from "./workspace-preferences.rout
 import { purgeOlderThan } from "./usage/usage-ledger.service.js";
 import { initPersistence, getPersistenceStatus, isPersistenceHealthy } from "./persistence/index.js";
 import { initMasterKey } from "./settings/crypto.js";
-import { loadSettingsOverlay } from "./settings/effective-config.js";
+import { loadSettingsOverlay, loadOwnerIntegrationOverlay } from "./settings/effective-config.js";
 import { registerSettingsRoutes } from "./settings/routes.js";
 import { registerReloadHooks } from "./settings/reload-registry.js";
 import { rateLimitMiddleware } from "./ratelimit.js";
@@ -869,6 +869,7 @@ export async function createServer() {
     await refreshAuthEnabledState();
     const count = await loadSettingsOverlay();
     if (count > 0) console.log(`[settings] Loaded ${count} encrypted setting(s) from MSSQL`);
+    await loadOwnerIntegrationOverlay();
 
     await refreshIntentTrainConfigCache();
     ensureNlpLoaded().catch((err) => console.warn("[intent-nlp] preload failed:", err.message));

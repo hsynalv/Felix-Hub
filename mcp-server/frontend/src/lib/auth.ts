@@ -96,6 +96,8 @@ export async function login(email: string, password: string): Promise<AuthUser> 
     throw new Error((json as { error?: { message?: string } })?.error?.message || "Giriş başarısız");
   }
   const data = unwrapApiData<{ user: AuthUser }>(json);
+  setApiKey("");
+  sessionStorage.removeItem(EXPIRES_KEY);
   return data.user;
 }
 
@@ -115,6 +117,8 @@ export async function register(
     throw new Error((json as { error?: { message?: string } })?.error?.message || "Kayıt başarısız");
   }
   const data = unwrapApiData<{ user: AuthUser }>(json);
+  setApiKey("");
+  sessionStorage.removeItem(EXPIRES_KEY);
   return data.user;
 }
 
