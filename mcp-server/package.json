@@ -62,7 +62,13 @@
     "create-plugin": "node bin/create-plugin.js",
     "sidecar:daemon": "node bin/sidecar-daemon.js",
     "sidecar:install": "bash scripts/install-sidecar-local.sh",
-    "sidecar:tunnel": "bash scripts/sidecar-tunnel-cloudflared.sh"
+    "sidecar:tunnel": "bash scripts/sidecar-tunnel-cloudflared.sh",
+    "sidecar:pm2:start": "bash scripts/pm2-sidecar-start.sh",
+    "sidecar:pm2:stop": "pm2 stop felix-sidecar",
+    "sidecar:pm2:restart": "pm2 restart felix-sidecar",
+    "sidecar:pm2:delete": "pm2 delete felix-sidecar",
+    "sidecar:pm2:logs": "pm2 logs felix-sidecar --lines 150",
+    "sidecar:pm2:status": "pm2 status felix-sidecar"
   },
   "keywords": [
     "ai",
