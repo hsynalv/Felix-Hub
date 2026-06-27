@@ -84,7 +84,7 @@ export function V6GuideTab() {
             <strong>Ayarlar → Kişisel OS</strong> — RSS/IMAP brifing kaynakları, Telegram giden mesajlar
           </li>
           <li>
-            <strong>Bugün</strong> — günlük özet, mail/haber widget'ları, Jarvis modları
+            <strong>Bugün</strong> — günlük özet, mail/haber widget'ları, Felix modları
           </li>
           <li>
             <strong>Life</strong> — günlük hayat agent profilleri

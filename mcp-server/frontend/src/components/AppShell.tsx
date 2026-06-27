@@ -33,6 +33,7 @@ import { APP_ROUTE_TITLES, IMMERSIVE_APP_PATHS } from "@/components/layout/app-n
 import { AppNavBrand, AppNavItems } from "@/components/layout/AppNavItems";
 import { AppShellNavContext } from "@/components/layout/AppShellNavContext";
 import { MainNavMenuButton } from "@/components/layout/MainNavMenuButton";
+import { AppFooter } from "@/components/layout/AppFooter";
 import { BRAND } from "@/lib/branding";
 
 function PageLoader() {
@@ -117,14 +118,11 @@ export function AppShell() {
     <AppShellNavContext.Provider value={navContextValue}>
       <TooltipProvider>
         <div className="flex h-dvh min-h-0 overflow-hidden bg-background">
-          <aside className="hidden w-56 shrink-0 border-r border-border bg-card/50 md:flex md:flex-col">
-            <div className="flex h-14 items-center gap-2 border-b border-border px-4">
+          <aside className="hidden w-60 shrink-0 border-r border-border/80 bg-gradient-to-b from-card/80 to-card/40 md:flex md:flex-col">
+            <div className="flex h-14 items-center gap-2 border-b border-border/60 px-4">
               <AppNavBrand />
             </div>
-            <div className="flex-1 overflow-y-auto px-2 py-3">
-              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Menü
-              </p>
+            <div className="flex-1 overflow-y-auto px-2 py-4">
               <AppNavItems disagreementCount={disagreementCount} onNavigate={onGlobalNav} />
             </div>
           </aside>
@@ -171,7 +169,7 @@ export function AppShell() {
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {!isImmersive && (
-              <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur sm:px-4">
+              <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border/80 bg-background/85 px-3 backdrop-blur-md sm:px-5">
                 <MainNavMenuButton className="md:hidden" />
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <h1 className="truncate text-sm font-semibold sm:text-base">{pageTitle}</h1>
@@ -211,6 +209,14 @@ export function AppShell() {
                       <DropdownMenuItem
                         onClick={() => {
                           onGlobalNav();
+                          navigate("/settings?tab=account");
+                        }}
+                      >
+                        Hesabım
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          onGlobalNav();
                           navigate("/settings");
                         }}
                       >
@@ -243,16 +249,19 @@ export function AppShell() {
               </header>
             )}
 
-            <main
-              className={cn(
-                "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-                isImmersive ? "p-0" : "overflow-auto p-3 sm:p-4 md:p-6"
-              )}
-            >
-              <ErrorBoundary>
-                <RoutedPage fullBleed={isImmersive} />
-              </ErrorBoundary>
-            </main>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <main
+                className={cn(
+                  "flex min-h-0 min-w-0 flex-1 flex-col",
+                  isImmersive ? "overflow-hidden p-0" : "overflow-auto p-3 sm:p-4 md:p-6 lg:p-8"
+                )}
+              >
+                <ErrorBoundary>
+                  <RoutedPage fullBleed={isImmersive} />
+                </ErrorBoundary>
+              </main>
+              {!isImmersive && <AppFooter />}
+            </div>
           </div>
           {connected && location.pathname !== "/login" && location.pathname !== "/register" && (
             <JarvisOverlay />

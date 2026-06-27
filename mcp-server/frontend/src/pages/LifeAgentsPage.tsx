@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Bot, Play, Plus, ShoppingBag, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { PAGE_SHELL_WIDE } from "@/components/layout/page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,7 @@ export function LifeAgentsPage() {
   });
 
   return (
-    <div className="mx-auto min-w-0 max-w-5xl space-y-6">
+    <div className={`${PAGE_SHELL_WIDE} space-y-6`}>
       <PageHeader
         title="Life Agents"
         description="Günlük hayat agent profilleri — mail, haber, alışveriş, hatırlatıcı."
@@ -48,14 +49,15 @@ export function LifeAgentsPage() {
         }
       />
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ShoppingBag className="h-4 w-4" />
-            Alışveriş araştırması
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <Card className="xl:col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShoppingBag className="h-4 w-4" />
+              Alışveriş araştırması
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Input
               placeholder="Ürün ara (ör. kablosuz kulaklık)"
@@ -120,7 +122,7 @@ export function LifeAgentsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="xl:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Bot className="h-4 w-4" />
@@ -153,6 +155,7 @@ export function LifeAgentsPage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

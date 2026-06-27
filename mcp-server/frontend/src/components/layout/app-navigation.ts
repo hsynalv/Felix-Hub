@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   BarChart3,
+  BookOpen,
   Bot,
   Brain,
   BrainCircuit,
@@ -15,6 +16,7 @@ import {
   Shield,
   ShieldCheck,
   Timer,
+  User,
   Wand2,
   Wrench,
   Sparkles,
@@ -27,31 +29,63 @@ export type AppNavItem = {
   icon: LucideIcon;
 };
 
+export type AppNavGroup = {
+  id: string;
+  label: string;
+  items: AppNavItem[];
+};
+
+export const APP_NAV_GROUPS: AppNavGroup[] = [
+  {
+    id: "daily",
+    label: "Günlük",
+    items: [
+      { to: "/", label: "Bugün", icon: Home },
+      { to: "/guide", label: "Rehber", icon: BookOpen },
+      { to: "/life", label: "Life", icon: Flower2 },
+      { to: "/inbox", label: "Inbox", icon: Inbox },
+      { to: "/approvals", label: "Onaylar", icon: ShieldCheck },
+    ],
+  },
+  {
+    id: "agents",
+    label: "Agent",
+    items: [
+      { to: "/chat", label: "Sohbet", icon: Bot },
+      { to: "/runs", label: "Runs", icon: GitBranch },
+      { to: "/workflows/designer", label: "Workflow", icon: Wand2 },
+      { to: "/projects", label: "Projeler", icon: FolderKanban },
+      { to: "/brain", label: "Brain", icon: Brain },
+      { to: "/v6", label: "Ekosistem", icon: Sparkles },
+    ],
+  },
+  {
+    id: "ops",
+    label: "Operasyon",
+    items: [
+      { to: "/usage", label: "Kullanım", icon: BarChart3 },
+      { to: "/eval", label: "Eval", icon: FlaskConical },
+      { to: "/ops", label: "Runbooks", icon: Timer },
+      { to: "/tools", label: "Araçlar", icon: Wrench },
+      { to: "/plugins", label: "Plugins", icon: LayoutGrid },
+      { to: "/audit", label: "Audit", icon: Shield },
+      { to: "/admin", label: "Admin", icon: ShieldCheck },
+      { to: "/observability", label: "Observability", icon: Activity },
+      { to: "/intent-training", label: "Intent Eğitimi", icon: BrainCircuit },
+    ],
+  },
+];
+
+/** Flat list for route titles and legacy use */
 export const APP_NAV: AppNavItem[] = [
-  { to: "/", label: "Bugün", icon: Home },
-  { to: "/life", label: "Life", icon: Flower2 },
-  { to: "/chat", label: "Sohbet", icon: Bot },
-  { to: "/runs", label: "Runs", icon: GitBranch },
-  { to: "/workflows/designer", label: "Workflow", icon: Wand2 },
-  { to: "/projects", label: "Projeler", icon: FolderKanban },
-  { to: "/approvals", label: "Onaylar", icon: ShieldCheck },
-  { to: "/inbox", label: "Inbox", icon: Inbox },
-  { to: "/usage", label: "Kullanım", icon: BarChart3 },
-  { to: "/eval", label: "Eval", icon: FlaskConical },
-  { to: "/ops", label: "Ops", icon: Timer },
-  { to: "/v6", label: "Ekosistem", icon: Sparkles },
-  { to: "/brain", label: "Brain", icon: Brain },
-  { to: "/tools", label: "Araçlar", icon: Wrench },
-  { to: "/plugins", label: "Plugins", icon: LayoutGrid },
-  { to: "/audit", label: "Audit", icon: Shield },
-  { to: "/admin", label: "Admin", icon: ShieldCheck },
-  { to: "/observability", label: "Observability", icon: Activity },
-  { to: "/intent-training", label: "Intent Eğitimi", icon: BrainCircuit },
+  ...APP_NAV_GROUPS.flatMap((g) => g.items),
   { to: "/settings", label: "Ayarlar", icon: Settings },
+  { to: "/settings?tab=account", label: "Hesabım", icon: User },
 ];
 
 export const APP_ROUTE_TITLES: Record<string, string> = {
   "/": "Bugün",
+  "/guide": "Rehber",
   "/life": "Life Agents",
   "/system": "Sistem Paneli",
   "/chat": "Sohbet",

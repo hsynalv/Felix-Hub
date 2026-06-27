@@ -90,3 +90,43 @@ export async function verifyUserCredentials(email, password) {
   const { passwordHash: _ph, ...safe } = user;
   return safe;
 }
+
+export async function updateUserDisplayName(userId, displayName) {
+  const name = String(displayName || "").trim().slice(0, 128);
+  if (!name) {
+    throw Object.assign(new Error("Görünen ad boş olamaz"), { code: "invalid_display_name" });
+  }
+  if (!isPersistenceHealthy()) {
+    throw Object.assign(new Error("Persistence not available"), { code: "persistence_unavailable" });
+  }
+  await persistenceQuery(
+    `UPDATE hub_users SET display_name = @displayName, updated_at = SYSUTCDATETIME() WHERE id = @id`,
+    { id: userId, displayName: name },
+  );
+  return findUserById(userId);
+}
+
+export async function changeUserPassword(userId, currentPassword, newPassword) {
+  const policy = validatePasswordPolicy(newPassword);
+  if (!policy.ok) {
+    throw Object.assign(new Error(policy.message), { code: "invalid_password" });
+  }
+  const profile = await findUserById(userId);
+  if (!profile) {
+    throw Object.assign(new Error("Kullanıcı bulunamadı"), { code: "not_found" });
+  }
+  const user = await findUserByEmail(profile.email);
+  if (!user) {
+    throw Object.assign(new Error("Kullanıcı bulunamadı"), { code: "not_found" });
+  }
+  const ok = await verifyPassword(currentPassword, user.passwordHash);
+  if (!ok) {
+    throw Object.assign(new Error("Mevcut şifre hatalı"), { code: "invalid_credentials" });
+  }
+  const passwordHash = await hashPassword(newPassword);
+  await persistenceQuery(
+    `UPDATE hub_users SET password_hash = @passwordHash, updated_at = SYSUTCDATETIME() WHERE id = @id`,
+    { id: userId, passwordHash },
+  );
+  return { ok: true };
+}

@@ -5,7 +5,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rateLimitMiddleware } from "../ratelimit.js";
-import { createUser, verifyUserCredentials, findUserById, invalidateUsersExistCache } from "./users.service.js";
+import {
+  createUser,
+  verifyUserCredentials,
+  findUserById,
+  invalidateUsersExistCache,
+  changeUserPassword,
+  updateUserDisplayName,
+} from "./users.service.js";
 import {
   createSession,
   rotateSessionByRefresh,
@@ -39,6 +46,26 @@ const loginSchema = z.object({
   email: z.string().email().max(256),
   password: z.string().min(1).max(256),
 });
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(256),
+  newPassword: z.string().min(8).max(256),
+});
+
+const profileSchema = z.object({
+  displayName: z.string().min(1).max(128),
+});
+
+function requireSessionUser(req, res) {
+  if (!req.user?.userId) {
+    res.status(401).json({
+      ok: false,
+      error: { code: "unauthorized", message: "Oturum gerekli" },
+    });
+    return null;
+  }
+  return req.user;
+}
 
 function clientMeta(req) {
   return {
@@ -187,6 +214,71 @@ export function registerAuthRoutes(app) {
     }
     clearAuthCookies(res);
     res.json({ ok: true, data: { loggedOut: true } });
+  });
+
+  router.put("/profile", async (req, res) => {
+    const sessionUser = requireSessionUser(req, res);
+    if (!sessionUser) return;
+    try {
+      const parsed = profileSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          ok: false,
+          error: { code: "validation_error", message: parsed.error.errors[0]?.message },
+        });
+      }
+      const user = await updateUserDisplayName(sessionUser.userId, parsed.data.displayName);
+      res.json({
+        ok: true,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName,
+            namespace: user.namespace,
+          },
+        },
+      });
+    } catch (err) {
+      res.status(err.code === "invalid_display_name" ? 400 : 500).json({
+        ok: false,
+        error: { code: err.code || "profile_update_failed", message: err.message },
+      });
+    }
+  });
+
+  router.post("/change-password", authRateLimit, async (req, res) => {
+    const sessionUser = requireSessionUser(req, res);
+    if (!sessionUser) return;
+    try {
+      const parsed = changePasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          ok: false,
+          error: { code: "validation_error", message: parsed.error.errors[0]?.message },
+        });
+      }
+      await changeUserPassword(
+        sessionUser.userId,
+        parsed.data.currentPassword,
+        parsed.data.newPassword,
+      );
+      await auditLog({
+        eventType: "auth",
+        operation: "password_change",
+        plugin: "hub",
+        actor: `user:${sessionUser.email}`,
+        success: true,
+      });
+      res.json({ ok: true, data: { changed: true } });
+    } catch (err) {
+      const status =
+        err.code === "invalid_credentials" ? 401 : err.code === "invalid_password" ? 400 : 500;
+      res.status(status).json({
+        ok: false,
+        error: { code: err.code || "password_change_failed", message: err.message },
+      });
+    }
   });
 
   router.post("/refresh", authRateLimit, async (req, res) => {

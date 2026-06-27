@@ -20,6 +20,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { PAGE_SHELL_WIDE } from "@/components/layout/page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -124,7 +125,7 @@ export function TodayPage() {
   ];
 
   return (
-    <div className="mx-auto min-w-0 max-w-7xl space-y-4 sm:space-y-6">
+    <div className={`${PAGE_SHELL_WIDE} space-y-4 sm:space-y-6`}>
       <PageHeader
         title="Bugün"
         description={`${BRAND.assistantName} kişisel komuta merkezi — ne önemli, ne bekliyor, agent ne istiyor.`}
@@ -160,7 +161,7 @@ export function TodayPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Sparkles className="h-4 w-4" />
-                  Jarvis — {data.jarvis.mode.label}
+                  {BRAND.assistantName} — {data.jarvis.mode.label}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
@@ -199,8 +200,8 @@ export function TodayPage() {
             <StatChip label="Projeler" value={stats?.projects ?? 0} icon={FolderKanban} href="/projects" />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
+          <div className="grid gap-4 xl:grid-cols-12">
+            <Card className="xl:col-span-8">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Sun className="h-4 w-4 text-amber-500" />
@@ -224,7 +225,7 @@ export function TodayPage() {
             </Card>
 
             {(dailyBriefing?.items?.length ?? 0) > 0 && (
-              <Card className="lg:col-span-2">
+              <Card className="xl:col-span-12">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Brifing maddeleri</CardTitle>
                 </CardHeader>
@@ -271,7 +272,7 @@ export function TodayPage() {
               </Card>
             )}
 
-            <Card>
+            <Card className="xl:col-span-4">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Sparkles className="h-4 w-4 text-primary" />
@@ -300,7 +301,7 @@ export function TodayPage() {
             </Card>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <FeedCard
               title="Inbox"
               icon={Bell}

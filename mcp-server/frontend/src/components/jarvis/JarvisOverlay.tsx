@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bot, ChevronDown, ChevronUp, ShieldAlert } from "lucide-react";
+import { BRAND } from "@/lib/branding";
 import { cn } from "@/lib/utils";
 import { fetchJarvisOverlay } from "@/lib/personal-api";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export function JarvisOverlay() {
         ) : (
           <Bot className="h-4 w-4" />
         )}
-        <span className="max-w-[10rem] truncate">{busy ? data.message : "Jarvis"}</span>
+        <span className="max-w-[10rem] truncate">{busy ? data.message : BRAND.assistantName}</span>
         {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
       </button>
     </div>

@@ -125,6 +125,34 @@ export async function refreshSession(): Promise<boolean> {
   return res.ok;
 }
 
+export async function updateProfile(displayName: string): Promise<AuthUser> {
+  const res = await fetch("/auth/profile", {
+    method: "PUT",
+    ...fetchOpts,
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ displayName }),
+  });
+  const json = await parseJsonResponse(res);
+  if (!res.ok) {
+    throw new Error((json as { error?: { message?: string } })?.error?.message || "Profil güncellenemedi");
+  }
+  const data = unwrapApiData<{ user: AuthUser }>(json);
+  return data.user;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const res = await fetch("/auth/change-password", {
+    method: "POST",
+    ...fetchOpts,
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const json = await parseJsonResponse(res);
+  if (!res.ok) {
+    throw new Error((json as { error?: { message?: string } })?.error?.message || "Şifre değiştirilemedi");
+  }
+}
+
 export async function requestUiToken(options?: { silent?: boolean }): Promise<{
   token: string;
   expiresAt?: string;

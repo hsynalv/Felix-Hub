@@ -40,6 +40,7 @@ const InboxPage = lazy(() => import("@/pages/InboxPage").then((m) => ({ default:
 const LifeAgentsPage = lazy(() =>
   import("@/pages/LifeAgentsPage").then((m) => ({ default: m.LifeAgentsPage }))
 );
+const GuidePage = lazy(() => import("@/pages/GuidePage").then((m) => ({ default: m.GuidePage })));
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
 
@@ -52,6 +53,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route index element={<TodayPage />} />
+            <Route path="guide" element={<GuidePage />} />
             <Route path="life" element={<LifeAgentsPage />} />
             <Route path="system" element={<SystemDashboardPage />} />
             <Route path="chat" element={<ChatPage />} />
