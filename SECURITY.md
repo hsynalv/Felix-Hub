@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in MCP-Hub, please report it responsibly:
+If you discover a security vulnerability in Felix-Hub, please report it responsibly:
 
 1. **Do not** open a public GitHub issue for security vulnerabilities
 2. Email the maintainers or use GitHub Security Advisories if available
