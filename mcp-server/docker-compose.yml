@@ -1,0 +1,43 @@
+# Felix Hub — production stack
+#
+# Sunucuda:
+#   cp .env.example .env   # değerleri doldur
+#   docker compose up -d --build
+#
+# Güncelleme:
+#   git pull && docker compose up -d --build
+
+services:
+  felix-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: felix-hub:latest
+    container_name: felix-hub
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HUB_BIND_HOST: "0.0.0.0"
+      PORT: "8787"
+    ports:
+      # Yalnızca localhost — önde nginx/caddy TLS sonlandırır
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - felix-cache:/app/cache
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+volumes:
+  felix-cache:

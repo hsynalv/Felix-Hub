@@ -13,9 +13,18 @@ cp .env.example .env
 ## Çalıştırma
 
 ```bash
-npm run dev     # Geliştirme (auto-reload)
-npm start       # Production
+npm run hub:live   # Geliştirme (API watch + UI rebuild)
+npm start          # API only (UI önceden build edilmiş olmalı)
 ```
+
+## Docker (sunucu production)
+
+```bash
+cp .env.example .env   # production değerleri
+docker compose up -d --build
+```
+
+Ayrıntı: [`docs/DOCKER-DEPLOY.md`](docs/DOCKER-DEPLOY.md)
 
 ## API Endpoints
 
