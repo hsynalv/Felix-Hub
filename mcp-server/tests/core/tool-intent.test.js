@@ -61,4 +61,10 @@ describe("tool-intent", () => {
     expect(toolMatchesIntent("agent_workflow", "agent_workflow_create")).toBe(true);
     expect(toolMatchesIntent("automation", "n8n_list_workflows")).toBe(true);
   });
+
+  it("classifies Mac documents list as desktop_local", () => {
+    const r = classifyToolIntentRegex("Mac de dokümanlar klasörümü listeler misin");
+    expect(r.intent).toBe("desktop_local");
+    expect(toolMatchesIntent("desktop_local", "fs_list")).toBe(true);
+  });
 });

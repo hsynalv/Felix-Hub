@@ -25,6 +25,10 @@ import {
   buildTelegramHelpText,
   isHubPaused,
 } from "../../core/v7/telegram-commands.js";
+import {
+  createTelegramOnApproval,
+  registerTelegramSidecarDeliveryHook,
+} from "../../core/v9/telegram-agent-session.js";
 
 const rateLimitBuckets = new Map();
 
@@ -228,6 +232,7 @@ async function processAgentMessage(chatId, text) {
           await replyToChat(chatId, toolProgressLabel(payload.name));
         }
       },
+      onApproval: createTelegramOnApproval(String(chatId), (msg) => replyToChat(chatId, msg)),
     });
 
     workingAck.cancel();
@@ -285,6 +290,7 @@ export async function handleTelegramUpdate(update) {
 }
 
 export function registerTelegramWebhook(app) {
+  registerTelegramSidecarDeliveryHook();
   const router = Router();
 
   router.post("/telegram/webhook", async (req, res) => {

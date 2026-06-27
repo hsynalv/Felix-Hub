@@ -8,6 +8,13 @@ const DEFAULT_AUTO_APPROVE = [
   "notion_setup_project",
   "notion_add_row",
   "notion_create_task",
+  "fs_list",
+  "fs_read",
+  "fs_hash",
+  "desktop_screenshot",
+  "desktop_active_window",
+  "desktop_ocr",
+  "local_notify",
 ];
 
 /**
@@ -33,6 +40,19 @@ export function shouldAutoApproveTelegramTool(context, toolName) {
   if (!context || context.channel !== "telegram") return false;
   const actor = String(context.actor || "");
   const chatId = actor.startsWith("telegram:") ? actor.slice("telegram:".length) : "";
-  if (!chatId || !getAllowedChatIds().has(chatId)) return false;
+  if (!chatId) return false;
+
+  const readLocal = new Set([
+    "fs_list",
+    "fs_read",
+    "fs_hash",
+    "desktop_screenshot",
+    "desktop_active_window",
+    "desktop_ocr",
+    "local_notify",
+  ]);
+  if (readLocal.has(toolName)) return true;
+
+  if (!getAllowedChatIds().has(chatId)) return false;
   return getTelegramAutoApproveTools().has(toolName);
 }

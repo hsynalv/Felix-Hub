@@ -91,7 +91,7 @@ import { BRAND } from "../branding.js";
 import { registerBaseMiddleware } from "./register-middlewares.js";
 import { bootstrapSchedulersAndConnectors } from "./bootstrap-schedulers.js";
 
-import { workspaceContextMiddleware } from "../workspace.js";
+import { workspaceContextMiddleware, tenantContextMiddleware } from "../workspace.js";
 import {
   discoveryVisibilityContextFromRequest,
   filterPluginsForDiscovery,
@@ -340,6 +340,7 @@ export async function createServer() {
   app.use(correlationIdMiddleware);
   app.use(projectContextMiddleware);
   app.use(workspaceContextMiddleware);
+  app.use(tenantContextMiddleware);
   app.use(auditMiddleware);
   app.use(httpHubAuditLifecycleMiddleware);
   app.use(sessionMiddleware);

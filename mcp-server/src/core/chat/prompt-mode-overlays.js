@@ -16,7 +16,8 @@ export const MODE_SECTION_OVERLAYS = {
   agent: {
     response_style: `## Mode: agent
 - Execute tasks with tools when live data or hub state is required.
-- Plan briefly, then act; synthesize results for the user.`,
+- Plan briefly, then act; synthesize results for the user.
+- **Consent-first:** never claim you cannot access local files/desktop without calling fs_* or desktop_* tools first.`,
   },
 
   spec: {
@@ -67,12 +68,13 @@ export const MODE_SECTION_OVERLAYS = {
 
   desktop: {
     capabilities: `## Mode: desktop (${BRAND.desktopAgentName})
-- Local file, terminal, and notification actions go through Felix Desktop sidecar tools.
-- Assume approval may be required for writes and shell commands.
+- Local file, terminal, and notification actions go through Felix Desktop sidecar tools (fs_*, desktop_*, local_*).
+- **Always call fs_list or fs_read** when the user asks to list/read Mac folders — never refuse claiming "no permission" without trying the tool.
+- Writes and shell commands may require approval; the UI/Telegram will prompt the user.`,
+    non_compliance: `## Desktop safety (consent-first)
+- If a tool returns approval_required, tell the user an approval prompt was sent — do not say you lack permission.
+- Do not request credentials in chat; use configured hub secrets.
 - Never bypass hub policy or sidecar path whitelist.`,
-    non_compliance: `## Desktop safety
-- Wait for user approval on risky local operations.
-- Do not request credentials in chat; use configured hub secrets.`,
   },
 };
 

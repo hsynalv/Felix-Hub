@@ -24,6 +24,7 @@ import {
   formatToolResultForModel,
 } from "./chat/tool-result-summarizer.js";
 import { resolveChatProfile, applyProfileToToolIntent } from "./chat/chat-profiles.js";
+import { resolveEffectiveTenantId } from "./authorization/assert-tenant-boundary.js";
 import { shouldDisableChatTools } from "./chat/intent-decision.js";
 import { getRequestContext } from "./auth/request-context.js";
 import { loadTenantOverlay } from "./auth/tenant-overlay.js";
@@ -167,6 +168,13 @@ export async function checkProviderAvailable() {
 const MAX_CHAT_TOOLS = 128;
 
 const CHAT_TOOL_PRIORITY = new Set([
+  "fs_list",
+  "fs_read",
+  "fs_write",
+  "desktop_screenshot",
+  "desktop_active_window",
+  "local_terminal_exec",
+  "local_notify",
   "policy_list_rules",
   "policy_evaluate",
   "policy_list_approvals",
@@ -757,6 +765,7 @@ export async function runChatTurn({
   context = {},
   allowWriteTools = false,
   onToolCall,
+  onApproval,
   chatProfile = "balanced",
   chatMode = null,
   marketplacePackId = null,
@@ -779,11 +788,25 @@ export async function runChatTurn({
     source: context.source || "telegram",
     conversationId: context.conversationId,
     runId: context.runId || null,
+    workspaceId: context.workspaceId ?? "global",
+    tenantId: resolveEffectiveTenantId(context),
     brainToolCounts: context.brainToolCounts || createBrainToolCounts(),
     readToolsUsed: false,
+    personalScope: context.personalScope,
+    scope: context.scope,
   };
 
   const profile = resolveChatProfile(chatProfile);
+  const channel = chatContext.channel || "telegram";
+  if (
+    channel === "telegram" ||
+    profile.mode === "desktop" ||
+    profile.id === "telegram_assistant" ||
+    profile.id === "desktop_assistant"
+  ) {
+    chatContext.personalScope = true;
+    chatContext.scope = "personal";
+  }
   const effectiveChatMode = chatMode || context.chatMode || null;
   chatContext.chatMode = effectiveChatMode || profile.mode;
   chatContext.marketplacePackId = marketplacePackId || context.marketplacePackId || null;
@@ -846,7 +869,7 @@ export async function runChatTurn({
     maxIterations,
     onDelta: () => {},
     onToolCall: onToolCall || (() => {}),
-    onApproval: () => {},
+    onApproval: onApproval || (() => {}),
   };
 
   const result = useOpenAi

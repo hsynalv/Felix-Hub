@@ -14,6 +14,7 @@ export const TOOL_INTENTS = [
   "read_repo",
   "modify_files",
   "run_command",
+  "desktop_local",
   "external_api",
   "automation",
   "agent_workflow",
@@ -76,6 +77,19 @@ const LIVE_LOOKUP_PATTERNS = [
 
 const N8N_AUTOMATION_PATTERNS = [/\bn8n\b/i];
 
+const DESKTOP_LOCAL_PATTERNS = [
+  /\b(?:mac(?:'|')?im|mac\b|masaüstü|bilgisayar(?:ı|im)?)\b/i,
+  /\b(?:documents|dokümanlar|downloads|indirilenler)\b/i,
+  /\b(?:klasör|dizin|folder|directory)\b/i,
+  /\bliste(?:le|ler|leyebilir)\b/i,
+  /\b(?:screenshot|ekran\s*görüntü|screen\s*shot)\b/i,
+  /\b(?:sidecar|felix\s*desktop)\b/i,
+  /\b(?:dosya(?:yı|yi)?\s*(?:oku|gönder|aç|listele))\b/i,
+  /\/file\b/i,
+  /\/desktop\b/i,
+];
+
+
 /** Hub agent workflow templates (Workflow Designer / runbooks) — not n8n */
 const AGENT_WORKFLOW_PATTERNS = [
   /\bworkflow\b/i,
@@ -137,6 +151,24 @@ export const INTENT_TOOL_MAP = {
     "shell_session_create",
     "shell_session_output",
     "tests_run",
+    "local_terminal_exec",
+    "local_terminal_session_create",
+    "local_terminal_session_exec",
+  ],
+  desktop_local: [
+    "fs_list",
+    "fs_read",
+    "fs_write",
+    "fs_hash",
+    "local_terminal_exec",
+    "local_terminal_session_create",
+    "local_terminal_session_exec",
+    "local_notify",
+    "desktop_screenshot",
+    "desktop_active_window",
+    "desktop_ocr",
+    "desktop_click",
+    "desktop_type",
   ],
   external_api: [
     "tavily__",
@@ -184,6 +216,9 @@ export function classifyToolIntentRegex(message) {
   }
   if (AGENT_WORKFLOW_PATTERNS.some((p) => p.test(text))) {
     return { intent: "agent_workflow", confidence: 0.88, reasons: ["agent_workflow_pattern"] };
+  }
+  if (DESKTOP_LOCAL_PATTERNS.some((p) => p.test(text))) {
+    return { intent: "desktop_local", confidence: 0.9, reasons: ["desktop_local_pattern"] };
   }
   if (COMMAND_PATTERNS.some((p) => p.test(text))) {
     return { intent: "run_command", confidence: 0.8, reasons: ["command_pattern"] };
@@ -329,6 +364,13 @@ export function buildToolIntentHint(classification) {
   }
   if (intent === "automation") {
     lines.push("- User asked for **n8n** automation — use n8n_* tools, not Hub agent_workflow_* tools.");
+  }
+  if (intent === "desktop_local") {
+    lines.push(
+      "- Use **fs_list** / **fs_read** for Mac folders (e.g. ~/Documents). Never claim missing permission without calling a tool."
+    );
+    lines.push("- Paths: `~/Documents`, `~/Downloads`, or whitelisted dirs. Writes need user approval.");
+    lines.push("- Screenshots: **desktop_screenshot**; active window: **desktop_active_window**.");
   }
   lines.push("- Use the smallest sufficient tool set. Read before write.");
 

@@ -337,6 +337,15 @@ export function workspaceContextMiddleware(req, res, next) {
 }
 
 /**
+ * Attach tenant id from x-tenant-id header or HUB_TENANT_ID env.
+ */
+export function tenantContextMiddleware(req, res, next) {
+  const headerId = req.headers["x-tenant-id"]?.toString().trim();
+  req.tenantId = headerId || process.env.HUB_TENANT_ID?.trim() || null;
+  next();
+}
+
+/**
  * Get workspace-scoped storage key
  */
 export function getWorkspaceKey(workspaceId, type, id) {

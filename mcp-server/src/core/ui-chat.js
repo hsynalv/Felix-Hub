@@ -44,6 +44,7 @@ import { resolveChatProfile } from "./chat/chat-profiles.js";
 import { createAgentLoopState } from "./chat/agent-loop.js";
 import { TOOL_INTENTS } from "./chat/tool-intent.js";
 import { resolveChatNamespace } from "./auth/tenant-middleware.js";
+import { toolContextFromRequest } from "./authorization/http-tool-context.js";
 
 const DEFAULT_TASK = "general";
 
@@ -267,18 +268,19 @@ export function registerUiChatRoutes(app) {
     }
 
     const context = {
-      guardBlocks: [],
-      method: "UI_CHAT",
-      user: req.actor?.type || "ui",
-      scopes: req.authScopes || [],
+      ...toolContextFromRequest(req, {
+        guardBlocks: [],
+        method: "UI_CHAT",
+        user: req.actor?.type || "ui",
+        scopes: req.authScopes || [],
+        source: "chat_ui",
+        channel: "web",
+        conversationId: conversationId || null,
+        brainToolCounts: createBrainToolCounts(),
+        readToolsUsed: false,
+      }),
       projectId: projectId || req.projectId,
       projectEnv: req.projectEnv,
-      requestId: req.requestId,
-      source: "chat_ui",
-      channel: "web",
-      conversationId: conversationId || null,
-      brainToolCounts: createBrainToolCounts(),
-      readToolsUsed: false,
     };
 
     let activeConversationId = conversationId || null;

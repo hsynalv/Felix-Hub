@@ -70,13 +70,13 @@ export function registerPersonalOpsHook() {
 
     const policy = evaluatePersonalToolPolicy(toolName, context);
     if (!policy.allowed) {
+      if (policy.action === "require_approval") {
+        return null;
+      }
       return {
         ok: false,
         error: {
-          code:
-            policy.action === "require_approval"
-              ? "personal_approval_required"
-              : "personal_policy_denied",
+          code: "personal_policy_denied",
           message: policy.reasons?.[0] || "Personal autonomy policy denied",
           details: { policy },
         },

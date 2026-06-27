@@ -240,3 +240,73 @@ export async function answerCallbackQuery(callbackQueryId, text) {
     body: JSON.stringify({ callback_query_id: callbackQueryId, text: text?.slice(0, 200) }),
   }).catch(() => {});
 }
+
+/**
+ * @param {string} chatId
+ * @param {string} base64
+ * @param {{ filename?: string; caption?: string; source?: string }} [opts]
+ */
+export async function sendTelegramPhotoBase64(chatId, base64, opts = {}) {
+  const cfg = getTelegramConfig();
+  const botToken = cfg.token.trim();
+  if (!botToken || !chatId) throw new Error("Telegram not configured");
+
+  const buf = Buffer.from(String(base64), "base64");
+  const filename = opts.filename || "photo.png";
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("photo", new Blob([buf]), filename);
+  if (opts.caption) form.append("caption", String(opts.caption).slice(0, 1024));
+
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.description || `Telegram sendPhoto failed (${res.status})`);
+  }
+  logTelegramOutbound({
+    chatId,
+    text: opts.caption || "[photo]",
+    source: opts.source || "telegram_photo",
+    messageId: data.result?.message_id ?? null,
+    success: true,
+  });
+  return { success: true, messageId: data.result?.message_id ?? null };
+}
+
+/**
+ * @param {string} chatId
+ * @param {string} base64
+ * @param {{ filename?: string; caption?: string; source?: string }} [opts]
+ */
+export async function sendTelegramDocumentBase64(chatId, base64, opts = {}) {
+  const cfg = getTelegramConfig();
+  const botToken = cfg.token.trim();
+  if (!botToken || !chatId) throw new Error("Telegram not configured");
+
+  const buf = Buffer.from(String(base64), "base64");
+  const filename = opts.filename || "file.bin";
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("document", new Blob([buf]), filename);
+  if (opts.caption) form.append("caption", String(opts.caption).slice(0, 1024));
+
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.description || `Telegram sendDocument failed (${res.status})`);
+  }
+  logTelegramOutbound({
+    chatId,
+    text: opts.caption || `[document:${filename}]`,
+    source: opts.source || "telegram_document",
+    messageId: data.result?.message_id ?? null,
+    success: true,
+  });
+  return { success: true, messageId: data.result?.message_id ?? null };
+}

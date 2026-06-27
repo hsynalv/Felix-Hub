@@ -24,7 +24,11 @@ import {
   listPersonalMemory,
 } from "./personal-memory.service.js";
 import { isHubPaused, setHubPause, clearHubPause, getHubPauseState } from "./telegram-pause.js";
-import { sendTelegramWithMarkup, answerCallbackQuery } from "../../plugins/notifications/channels/telegram.js";
+import { sendTelegramWithMarkup, answerCallbackQuery, sendTelegramPhotoBase64, sendTelegramDocumentBase64 } from "../../plugins/notifications/channels/telegram.js";
+import { resolveTelegramToolApproval } from "../v9/telegram-agent-session.js";
+import { isLocalFsOnServer } from "../sidecar/pairing.service.js";
+import { delegateDesktopScreenshot } from "../sidecar/sidecar-proxy.js";
+import { captureScreenshot } from "../../plugins/local-sidecar/desktop.core.js";
 
 function parseArgs(text) {
   const trimmed = text.trim();
@@ -51,6 +55,7 @@ export function buildTelegramHelpText() {
     "/desktop window — aktif pencere",
     "/file <path> — sidecar dosya oku (kısa)",
     "/file list <dir> — dizin listele",
+    "/file send <path> — dosyayı Telegram'a gönder",
     "/shopping <ürün> — ürün araştır",
     "/mode <work|personal|shopping|…> — Jarvis modu",
     "/life — life agent listesi",
@@ -162,6 +167,11 @@ async function cmdForget(chatId, id, reply) {
   await reply(ok ? `Silindi: ${id}` : `Bulunamadı: ${id}`);
 }
 
+async function rawDesktopScreenshot() {
+  if (isLocalFsOnServer()) return captureScreenshot({ format: "png" });
+  return delegateDesktopScreenshot({ format: "png" });
+}
+
 async function cmdDesktop(chatId, args, reply) {
   const sub = (args.split(/\s+/)[0] || "window").toLowerCase();
   if (sub === "screenshot" || sub === "screen") {
@@ -191,6 +201,22 @@ async function cmdDesktop(chatId, args, reply) {
       preview.preview ? `\n${preview.preview.slice(0, 500)}` : "",
     ];
     await reply(lines.filter(Boolean).join("\n"));
+
+    if (shot?.captured && shot?.hasImage) {
+      const full = await rawDesktopScreenshot();
+      const b64 = full?.data?.imageBase64;
+      if (full?.ok && b64) {
+        try {
+          await sendTelegramPhotoBase64(chatId, b64, {
+            caption: win ? `${win.app} — ${win.title}` : "Screenshot",
+            filename: "desktop.png",
+            source: "telegram_desktop_cmd",
+          });
+        } catch (err) {
+          await reply(`Foto gönderilemedi: ${err.message}`);
+        }
+      }
+    }
     return;
   }
   const preview = await capturePersonalDesktopPreview();
@@ -205,7 +231,37 @@ async function cmdDesktop(chatId, args, reply) {
 async function cmdFile(chatId, args, reply) {
   const trimmed = args.trim();
   if (!trimmed) {
-    await reply("Kullanım: /file <path> veya /file list <dir>");
+    await reply("Kullanım: /file <path> | /file list <dir> | /file send <path>");
+    return;
+  }
+  if (trimmed.toLowerCase().startsWith("send ")) {
+    const path = trimmed.slice(5).trim();
+    if (!path) {
+      await reply("Kullanım: /file send <path>");
+      return;
+    }
+    const result = await readPersonalSidecarFile(path, { maxChars: 2_000_000 });
+    if (!result?.ok) {
+      await reply(`Gönderilemedi: ${result?.error?.message || "sidecar gerekli"}`);
+      return;
+    }
+    const content = result.data?.preview || "";
+    const buf = Buffer.from(content, "utf8");
+    if (buf.length > 45 * 1024 * 1024) {
+      await reply("Dosya Telegram limitinden büyük (45MB).");
+      return;
+    }
+    const baseName = path.split("/").pop() || "file.txt";
+    try {
+      await sendTelegramDocumentBase64(chatId, buf.toString("base64"), {
+        filename: baseName,
+        caption: path,
+        source: "telegram_file_send",
+      });
+      await reply(`Gönderildi: ${path} (${Math.round(buf.length / 1024)} KB)`);
+    } catch (err) {
+      await reply(`Gönderilemedi: ${err.message}`);
+    }
     return;
   }
   if (trimmed.toLowerCase().startsWith("list ")) {
@@ -374,10 +430,20 @@ export async function handleTelegramCallbackQuery(callbackQuery) {
     await answerCallbackQuery(queryId, result.ok ? "Onaylandı" : "Onay başarısız");
     return { ok: result.ok };
   }
+  if (action === "tapprove") {
+    const result = await resolveTelegramToolApproval(id, true);
+    await answerCallbackQuery(queryId, result?.status === "approved" ? "Onaylandı" : "Onay başarısız");
+    return { ok: result?.status === "approved" };
+  }
   if (action === "deny") {
     const approval = updateApprovalStatus(id, "rejected", `telegram:${chatId}`);
     await answerCallbackQuery(queryId, approval ? "Reddedildi" : "Bulunamadı");
     return { ok: !!approval };
+  }
+  if (action === "tdeny") {
+    const result = await resolveTelegramToolApproval(id, false);
+    await answerCallbackQuery(queryId, result?.status === "rejected" ? "Reddedildi" : "Bulunamadı");
+    return { ok: result?.status === "rejected" };
   }
 
   await answerCallbackQuery(queryId, "Bilinmeyen işlem");
