@@ -352,6 +352,9 @@ Sunucu bu değerler eksik veya hatalıysa **başlamaz** (fail-closed):
 Ek öneriler:
 
 - `BRAIN_DB_SOURCE_OF_TRUTH=true` — brain memories MSSQL SoT, Redis cache
+- `BRAIN_FAIL_CLOSED_ON_DB=true` — brain writes fail when MSSQL is down (no Redis-only fallback)
+- `GLOBAL_WORKSPACE_READ_ONLY=true` — global workspace write tools blocked (default in production)
+- `SHELL_MODE=power` — **admin-only** full shell; requires `HUB_ADMIN_KEY` + policy approval per command
 - `/ui/token` production'da kapalı; query-string token desteklenmez
 - `HUB_ALLOW_OPEN_HUB` production'da yasak
 

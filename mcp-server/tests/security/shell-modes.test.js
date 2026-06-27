@@ -64,3 +64,44 @@ describe("shell modes", () => {
     expect(shellBackgroundEnabled()).toBe(true);
   });
 });
+
+describe("safe git subcommands", () => {
+  const envBackup = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...envBackup };
+  });
+
+  it("allows git status and git diff in safe mode", async () => {
+    const { checkSafeGitSubcommand } = await import("../../src/plugins/shell/shell-config.js");
+    process.env.SHELL_MODE = "safe";
+    expect(checkSafeGitSubcommand("git status")).toBeNull();
+    expect(checkSafeGitSubcommand("git diff HEAD~1")).toBeNull();
+    expect(checkSafeGitSubcommand("git log --oneline -5")).toBeNull();
+  });
+
+  it("blocks git config and git push in safe mode", async () => {
+    const { checkSafeGitSubcommand } = await import("../../src/plugins/shell/shell-config.js");
+    process.env.SHELL_MODE = "safe";
+    expect(checkSafeGitSubcommand("git config user.email x@y.com")).toMatch(/blocked/i);
+    expect(checkSafeGitSubcommand("git push origin main")).toMatch(/blocked/i);
+  });
+
+  it("power mode does not restrict git subcommands at config layer", async () => {
+    const { checkSafeGitSubcommand } = await import("../../src/plugins/shell/shell-config.js");
+    process.env.SHELL_MODE = "power";
+    expect(checkSafeGitSubcommand("git push origin main")).toBeNull();
+  });
+});
+
+describe("power shell admin scope", () => {
+  it("requires admin scope in power mode", async () => {
+    const { checkPowerShellAdminScope, shellWriteRequiredScope } = await import(
+      "../../src/plugins/shell/shell-config.js"
+    );
+    process.env.SHELL_MODE = "power";
+    expect(shellWriteRequiredScope()).toBe("admin");
+    expect(checkPowerShellAdminScope(["read", "write"])).toMatch(/admin/i);
+    expect(checkPowerShellAdminScope(["admin"])).toBeNull();
+  });
+});

@@ -3,15 +3,16 @@ import { Settings, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/branding";
-import { APP_NAV_GROUPS } from "@/components/layout/app-navigation";
+import { APP_NAV_GROUPS, ADMIN_ONLY_NAV_PATHS } from "@/components/layout/app-navigation";
 
 type AppNavItemsProps = {
   onNavigate?: () => void;
   className?: string;
   disagreementCount?: number;
+  isAdmin?: boolean;
 };
 
-export function AppNavItems({ onNavigate, className, disagreementCount = 0 }: AppNavItemsProps) {
+export function AppNavItems({ onNavigate, className, disagreementCount = 0, isAdmin = false }: AppNavItemsProps) {
   return (
     <nav className={cn("flex flex-col gap-5", className)}>
       {APP_NAV_GROUPS.map((group) => (
@@ -20,7 +21,9 @@ export function AppNavItems({ onNavigate, className, disagreementCount = 0 }: Ap
             {group.label}
           </p>
           <div className="flex flex-col gap-0.5">
-            {group.items.map(({ to, label, icon: Icon }) => (
+            {group.items
+              .filter(({ to }) => isAdmin || !ADMIN_ONLY_NAV_PATHS.has(to))
+              .map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}

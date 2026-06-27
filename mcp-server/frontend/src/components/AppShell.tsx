@@ -87,6 +87,7 @@ export function AppShell() {
   });
 
   const disagreementCount = intentStatus?.counts?.disagreement ?? 0;
+  const isAdmin = whoami?.auth?.scopes?.includes("admin") ?? false;
   const authDisabled = whoami?.auth?.enabled === false;
   const connected =
     !authError &&
@@ -123,7 +124,7 @@ export function AppShell() {
               <AppNavBrand />
             </div>
             <div className="flex-1 overflow-y-auto px-2 py-4">
-              <AppNavItems disagreementCount={disagreementCount} onNavigate={onGlobalNav} />
+              <AppNavItems disagreementCount={disagreementCount} isAdmin={isAdmin} onNavigate={onGlobalNav} />
             </div>
           </aside>
 
@@ -156,6 +157,7 @@ export function AppShell() {
                     </p>
                     <AppNavItems
                       disagreementCount={disagreementCount}
+                      isAdmin={isAdmin}
                       onNavigate={() => {
                         onGlobalNav();
                         closeMainNav();

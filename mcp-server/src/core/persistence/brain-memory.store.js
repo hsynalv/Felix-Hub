@@ -10,6 +10,28 @@ export function isBrainDbSourceOfTruth() {
   return process.env.NODE_ENV === "production";
 }
 
+/** When true, brain writes fail if MSSQL is unhealthy (no Redis-only fallback). */
+export function isBrainFailClosedOnDb() {
+  if (process.env.BRAIN_FAIL_CLOSED_ON_DB === "false") return false;
+  if (process.env.BRAIN_FAIL_CLOSED_ON_DB === "true") return true;
+  return isBrainDbSourceOfTruth();
+}
+
+export class BrainPersistenceUnavailableError extends Error {
+  constructor(message = "Brain persistence unavailable (fail-closed)") {
+    super(message);
+    this.name = "BrainPersistenceUnavailableError";
+    this.code = "brain_persistence_unavailable";
+  }
+}
+
+export function assertBrainPersistenceForWrite() {
+  if (!isBrainFailClosedOnDb()) return;
+  if (!isPersistenceHealthy()) {
+    throw new BrainPersistenceUnavailableError();
+  }
+}
+
 /**
  * @param {object} mem
  */

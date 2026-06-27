@@ -35,6 +35,9 @@ export type AppNavGroup = {
   items: AppNavItem[];
 };
 
+/** Routes that require admin scope (hidden from nav when user is not admin). */
+export const ADMIN_ONLY_NAV_PATHS = new Set(["/admin", "/intent-training"]);
+
 export const APP_NAV_GROUPS: AppNavGroup[] = [
   {
     id: "daily",

@@ -146,12 +146,25 @@ export async function addMemory({
   try {
     const dbMod = await import("../../core/persistence/brain-memory.store.js");
     const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    dbMod.assertBrainPersistenceForWrite();
     if (dbMod.isBrainDbSourceOfTruth() && isPersistenceHealthy()) {
       await dbMod.insertBrainMemory(mem);
       wroteDb = true;
     }
-  } catch {
-    // DB unavailable — cache-only fallback when not production SoT
+  } catch (err) {
+    if (err?.code === "brain_persistence_unavailable") throw err;
+    // DB unavailable — cache-only fallback when fail-closed is off
+  }
+
+  if (!wroteDb) {
+    try {
+      const dbMod = await import("../../core/persistence/brain-memory.store.js");
+      if (dbMod.isBrainFailClosedOnDb()) {
+        throw new dbMod.BrainPersistenceUnavailableError();
+      }
+    } catch (err) {
+      if (err?.code === "brain_persistence_unavailable") throw err;
+    }
   }
 
   await r.setex(memKey(id), MEM_TTL_SECONDS, JSON.stringify(mem));
@@ -218,12 +231,14 @@ export async function updateMemory(id, fields) {
   try {
     const dbMod = await import("../../core/persistence/brain-memory.store.js");
     const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    dbMod.assertBrainPersistenceForWrite();
     if (dbMod.isBrainDbSourceOfTruth() && isPersistenceHealthy()) {
       await dbMod.updateBrainMemoryInDb(id, NS, updated);
-    } else {
+    } else if (!dbMod.isBrainFailClosedOnDb()) {
       await syncMemoryToPersistence(id, "update", updated.content);
     }
-  } catch {
+  } catch (err) {
+    if (err?.code === "brain_persistence_unavailable") throw err;
     await syncMemoryToPersistence(id, "update", updated.content);
   }
 
@@ -237,11 +252,12 @@ export async function deleteMemory(id) {
   try {
     const dbMod = await import("../../core/persistence/brain-memory.store.js");
     const { isPersistenceHealthy } = await import("../../core/persistence/index.js");
+    dbMod.assertBrainPersistenceForWrite();
     if (dbMod.isBrainDbSourceOfTruth() && isPersistenceHealthy()) {
       await dbMod.softDeleteBrainMemoryInDb(id, NS);
     }
-  } catch {
-    /* ignore */
+  } catch (err) {
+    if (err?.code === "brain_persistence_unavailable") throw err;
   }
   await getRedis().del(memKey(id));
   await getRedis().srem(MEM_INDEX_KEY, id);

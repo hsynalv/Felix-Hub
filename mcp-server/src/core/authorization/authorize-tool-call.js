@@ -12,6 +12,15 @@ import { resolvePrincipalScopes, maxScopeRank, resolveRequestedBy } from "./reso
 import { assertTenantBoundary } from "./assert-tenant-boundary.js";
 import { assertRegisteredWorkspaceBoundary } from "./assert-workspace-boundary.js";
 
+let getShellModeFn;
+async function loadShellConfig() {
+  if (!getShellModeFn) {
+    const mod = await import("../../plugins/shell/shell-config.js");
+    getShellModeFn = mod;
+  }
+  return getShellModeFn;
+}
+
 const WORKSPACE_ID_KEYS = new Set([
   "workspaceId",
   "workspace_id",
@@ -19,7 +28,18 @@ const WORKSPACE_ID_KEYS = new Set([
   "targetWorkspaceId",
 ]);
 
-const GLOBAL_WRITE_BLOCKED_PLUGINS = new Set(["shell", "file-storage", "local-sidecar"]);
+
+function isGlobalWorkspaceReadOnly() {
+  if (process.env.GLOBAL_WORKSPACE_READ_ONLY === "false") return false;
+  if (process.env.GLOBAL_WORKSPACE_READ_ONLY === "true") return true;
+  return process.env.NODE_ENV === "production";
+}
+
+const SHELL_POWER_WRITE_TOOLS = new Set([
+  "shell_execute",
+  "shell_session_create",
+  "shell_session_close",
+]);
 
 function toolRequiresWriteOrHigher(tool) {
   const tags = tool.tags || [];
@@ -79,8 +99,8 @@ export async function authorizeToolCall({ name, tool, args, context }) {
 
   if (
     workspaceId === "global" &&
-    toolRequiresWriteOrHigher(tool) &&
-    GLOBAL_WRITE_BLOCKED_PLUGINS.has(tool.plugin || "")
+    isGlobalWorkspaceReadOnly() &&
+    toolRequiresWriteOrHigher(tool)
   ) {
     await auditToolAuthzDenial({
       phase: "workspace_boundary",
@@ -96,9 +116,38 @@ export async function authorizeToolCall({ name, tool, args, context }) {
       ok: false,
       error: {
         code: "global_workspace_write_forbidden",
-        message: "Destructive tools cannot run in the global workspace. Select a registered workspace.",
+        message:
+          "The global workspace is read-only in production. Select a registered workspace for write operations.",
       },
     };
+  }
+
+  const shellCfg = await loadShellConfig();
+  if (
+    (tool.plugin === "shell" || SHELL_POWER_WRITE_TOOLS.has(name)) &&
+    shellCfg.isPowerShellMode()
+  ) {
+    const powerDeny = shellCfg.checkPowerShellAdminScope(scopes);
+    if (powerDeny) {
+      await auditToolAuthzDenial({
+        phase: "scope",
+        code: "insufficient_scope",
+        reason: "power_shell_admin_required",
+        toolName: name,
+        plugin: tool.plugin,
+        actor: actorLabel,
+        workspaceId,
+        correlationId: ctx.requestId,
+        metadata: { shellMode: "power", requiresAdmin: true },
+      });
+      return {
+        ok: false,
+        error: {
+          code: "insufficient_scope",
+          message: powerDeny,
+        },
+      };
+    }
   }
 
   const hasCredentialInfra =

@@ -2,6 +2,7 @@ import { lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { AdminRoute } from "@/components/auth/AdminRoute";
 
 const TodayPage = lazy(() => import("@/pages/TodayPage").then((m) => ({ default: m.TodayPage })));
 const SystemDashboardPage = lazy(() =>
@@ -62,7 +63,10 @@ export default function App() {
             <Route path="tools" element={<ToolsPage />} />
             <Route path="plugins" element={<PluginsPage />} />
             <Route path="audit" element={<AuditPage />} />
-            <Route path="admin" element={<AdminPage />} />
+            <Route element={<AdminRoute />}>
+              <Route path="admin" element={<AdminPage />} />
+              <Route path="intent-training" element={<IntentTrainingPage />} />
+            </Route>
             <Route path="approvals" element={<ApprovalCenterPage />} />
             <Route path="inbox" element={<InboxPage />} />
             <Route path="observability" element={<ObservabilityPage />} />
@@ -76,7 +80,6 @@ export default function App() {
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="projects/:projectKey" element={<ProjectsPage />} />
             <Route path="brain" element={<BrainPage />} />
-            <Route path="intent-training" element={<IntentTrainingPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Route>

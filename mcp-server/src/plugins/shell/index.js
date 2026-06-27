@@ -22,10 +22,13 @@ import { redactShellCommand } from "../../core/security/redact-shell-command.js"
 import {
   getShellAllowlistSet,
   checkSafeModeOperators,
+  checkSafeGitSubcommand,
   shellSessionsEnabled,
   shellBackgroundEnabled,
   shellStreamingEnabled,
   isSafeShellMode,
+  shellWriteRequiredScope,
+  checkPowerShellAdminScope,
 } from "./shell-config.js";
 
 // ── Plugin Metadata ──────────────────────────────────────────────────────────
@@ -49,7 +52,7 @@ export const metadata = createMetadata({
   tags: ["execution", "shell", "commands", "system"],
   dependencies: [],
   since: "1.0.0",
-  notes: "Shell execution is highly restricted. Sessions allow stateful runs (same cwd, background commands). Pipes and compound operators allowed when all binaries are in the allowlist. SHELL_MAX_SESSIONS env limits concurrent sessions.",
+  notes: "Shell execution is highly restricted. Safe mode: read-only allowlist + git subcommand policy. Power mode: admin-only, sessions, full allowlist — every command requires policy approval.",
 });
 
 const execAsync = promisify(exec);
@@ -233,6 +236,11 @@ function isCommandAllowed(command) {
     return { allowed: false, reason: operatorBlock };
   }
 
+  const gitBlock = checkSafeGitSubcommand(trimmed);
+  if (gitBlock) {
+    return { allowed: false, reason: gitBlock };
+  }
+
   // Always block dangerous patterns first
   for (const pattern of DANGEROUS_PATTERNS) {
     if (pattern.test(trimmed)) {
@@ -279,6 +287,12 @@ async function executeCommand(command, options = {}) {
     correlationId = generateCorrelationId(),
     actor        = null,
   } = options;
+
+  const powerScopeBlock = checkPowerShellAdminScope(actor?.scopes);
+  if (powerScopeBlock) {
+    await auditEntry({ command, cwd, allowed: false, reason: powerScopeBlock, correlationId, actor });
+    throw Errors.authorization(powerScopeBlock);
+  }
 
   const allowedCheck = isCommandAllowed(command);
   if (!allowedCheck.allowed) {
@@ -562,7 +576,10 @@ export const tools = [
           timeout: args.timeout || DEFAULT_TIMEOUT,
           env: session ? { ...session.env, ...args.env } : args.env,
           correlationId: generateCorrelationId(),
-          actor: context?.actor || null,
+          actor: {
+            ...(context?.actor || {}),
+            scopes: context?.authScopes || context?.actor?.scopes || [],
+          },
         });
 
         if (session) {
@@ -712,6 +729,10 @@ export const tools = [
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 
+function requireShellWriteScope(req, res, next) {
+  return requireScope(shellWriteRequiredScope())(req, res, next);
+}
+
 export function register(app) {
   const router = Router();
   mountPluginHealth(router, { name, version });
@@ -720,7 +741,7 @@ export function register(app) {
    * POST /shell/execute
    * Execute a shell command and return output.
    */
-  router.post("/execute", requireScope("write"), async (req, res) => {
+  router.post("/execute", requireShellWriteScope, async (req, res) => {
     const { command, cwd, timeout = DEFAULT_TIMEOUT, env, explanation } = req.body || {};
 
     if (!command) {
@@ -733,7 +754,7 @@ export function register(app) {
         timeout,
         env,
         correlationId: generateCorrelationId(),
-        actor: req.actor || null,
+        actor: { ...(req.actor || {}), scopes: req.authScopes || req.securityContext?.scopes || [] },
       });
 
       res.json({
@@ -759,7 +780,7 @@ export function register(app) {
    * POST /shell/execute/stream
    * Execute with SSE streaming output. Policy is properly awaited before spawn.
    */
-  router.post("/execute/stream", requireScope("write"), async (req, res) => {
+  router.post("/execute/stream", requireShellWriteScope, async (req, res) => {
     const { command, cwd, env } = req.body || {};
 
     if (!command) {
@@ -837,7 +858,7 @@ export function register(app) {
   });
 
   /** POST /shell/session — create session */
-  router.post("/session", requireScope("write"), (req, res) => {
+  router.post("/session", requireShellWriteScope, (req, res) => {
     const { cwd, env } = req.body || {};
     const result = createSession(cwd, env);
     res.status(result.ok ? 201 : 400).json(result);
@@ -865,7 +886,7 @@ export function register(app) {
   });
 
   /** DELETE /shell/sessions/:id — close session */
-  router.delete("/sessions/:id", requireScope("write"), (req, res) => {
+  router.delete("/sessions/:id", requireShellWriteScope, (req, res) => {
     const result = closeSession(req.params.id);
     res.status(result.ok ? 200 : 404).json(result);
   });

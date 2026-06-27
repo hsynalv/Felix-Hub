@@ -97,7 +97,7 @@ export const PLUGIN_ENV_CATALOG = {
     { name: "HUB_SETTINGS_MASTER_KEY", required: false, description: "Master key for encrypted secret storage" },
   ],
   shell: [
-    { name: "SHELL_MODE", required: false, description: "safe (read-only) or power (full allowlist + sessions); production default safe" },
+    { name: "SHELL_MODE", required: false, description: "safe (read-only) or power (admin-only full shell + sessions); production default safe" },
     { name: "SHELL_ALLOWLIST", required: false, description: "Comma-separated allowed shell command prefixes" },
     { name: "SHELL_DEFAULT_TIMEOUT_MS", required: false, description: "Default command timeout in milliseconds" },
     { name: "SHELL_MAX_TIMEOUT_MS", required: false, description: "Maximum allowed command timeout" },

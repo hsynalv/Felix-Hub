@@ -51,9 +51,15 @@ Production-hardened shell command execution with **safe** and **power** modes.
 
 **Blocked in safe mode:** `curl`, `wget`, `python`, `node`, `npm`, `pip`, `env`, `printenv`, pipes, redirects, subshells, background jobs, sessions.
 
-## Power mode
+**Git in safe mode:** only read-only subcommands — `status`, `diff`, `log`, `show`, `branch` (list), `rev-parse`, `describe`, `shortlog`, `stash list/show`.
 
-Uses an extended default allowlist (includes `curl`, `python`, `npm`, …). Sessions, streaming, and background execution are enabled. Destructive execution still flows through policy approval.
+## Power mode (admin-only)
+
+`SHELL_MODE=power` enables the extended allowlist, `shell: true` spawn, sessions, streaming, and background jobs.
+
+**Requires `HUB_ADMIN_KEY` scope** for all shell write endpoints and MCP tools. Every command still flows through policy approval (`destructive_requires_approval`).
+
+Use only when you explicitly need full shell automation in a controlled production environment.
 
 ## Blocked dangerous patterns (all modes)
 
