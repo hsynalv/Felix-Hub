@@ -22,6 +22,10 @@ import {
   assertChatQuota,
 } from "./chat-orchestrator.js";
 import { getChatContext } from "./chat/chat-context.js";
+import {
+  buildScreenshotAttachment,
+  sanitizeToolStreamPayload,
+} from "./chat/tool-result-media.js";
 import { isPersistenceHealthy } from "./persistence/index.js";
 import {
   listConversations,
@@ -466,8 +470,12 @@ export function registerUiChatRoutes(app) {
                 toolSummary: payload.summary || null,
               },
             });
+            const attachment = buildScreenshotAttachment(payload.name, payload.result);
+            if (attachment) {
+              sseWrite(res, "attachment", attachment);
+            }
           }
-          sseWrite(res, "tool", payload);
+          sseWrite(res, "tool", sanitizeToolStreamPayload(payload));
           if (context.runId) {
             sseWrite(res, "run_step", {
               runId: context.runId,

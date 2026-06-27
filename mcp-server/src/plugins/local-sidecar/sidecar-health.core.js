@@ -72,6 +72,26 @@ async function probeAccessibility() {
   }
 }
 
+async function probeAutomation() {
+  if (process.platform !== "darwin") {
+    return { granted: null, status: "unknown", hint: "Automation check is macOS-only" };
+  }
+  try {
+    await execFileAsync("osascript", ["-e", 'tell application "Finder" to activate'], { timeout: 5000 });
+    return { granted: true, status: "ok" };
+  } catch (err) {
+    const msg = String(err.message || err);
+    const needs = /not authorized to send apple events|apple event/i.test(msg);
+    return {
+      granted: false,
+      status: needs ? "denied" : "error",
+      hint: needs
+        ? "Sistem Ayarları → Gizlilik → Otomasyon → node → Finder izni verin"
+        : msg,
+    };
+  }
+}
+
 /**
  * Check optional/recommended sidecar CLI dependencies.
  */
@@ -140,14 +160,16 @@ export async function checkSidecarDependencies() {
  * Probe macOS Screen Recording + Accessibility permissions.
  */
 export async function checkDesktopPermissions() {
-  const [screenRecording, accessibility] = await Promise.all([
+  const [screenRecording, accessibility, automation] = await Promise.all([
     probeScreenRecording(),
     probeAccessibility(),
+    probeAutomation(),
   ]);
 
   const blockers = [];
   if (screenRecording.granted === false) blockers.push("screen_recording");
   if (accessibility.granted === false) blockers.push("accessibility");
+  if (automation.granted === false) blockers.push("automation");
 
   return {
     ok: true,
@@ -155,6 +177,7 @@ export async function checkDesktopPermissions() {
       platform: process.platform,
       screenRecording,
       accessibility,
+      automation,
       ready: blockers.length === 0,
       blockers,
     },

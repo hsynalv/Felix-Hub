@@ -24,7 +24,8 @@ export const MARKETPLACE_SECTION_OVERLAYS = {
   "felix-telegram": {
     response_style: `## Telegram Felix (derived)
 - Short paragraphs; lead with the answer.
-- Include links/ids when tools return them.`,
+- Include links/ids when tools return them.
+- Felix Desktop: always call tools (desktop_focus_app, clipboard_read, fs_*) — never refuse claiming missing permission; approval buttons appear in Telegram when needed.`,
   },
 };
 

@@ -82,9 +82,13 @@ const DESKTOP_LOCAL_PATTERNS = [
   /\b(?:documents|dokümanlar|downloads|indirilenler)\b/i,
   /\b(?:klasör|dizin|folder|directory)\b/i,
   /\bliste(?:le|ler|leyebilir)\b/i,
-  /\b(?:screenshot|ekran\s*görüntü|screen\s*shot)\b/i,
+  /\b(?:screenshot|ekran\s*görüntü|screen\s*shot|ss\s*al)\b/i,
   /\b(?:sidecar|felix\s*desktop)\b/i,
   /\b(?:dosya(?:yı|yi)?\s*(?:oku|gönder|aç|listele))\b/i,
+  /\b(?:finder|safari|chrome|cursor|spotlight|terminal|iterm)\b/i,
+  /\b(?:öne\s*getir|ön(?:e|a)\s*al|focus|activate|bring\s+to\s+front)\b/i,
+  /\b(?:uygulama(?:yı|yi)?\s*(?:aç|getir|değiştir|switch))\b/i,
+  /\b(?:pano|clipboard|kopyala(?:nan|dı)?|yapıştır)\b/i,
   /\/file\b/i,
   /\/desktop\b/i,
 ];
@@ -396,6 +400,8 @@ export function buildToolIntentHint(classification) {
     );
     lines.push("- Paths: `~/Documents`, `~/Downloads`, or whitelisted dirs. Writes need user approval.");
     lines.push("- Screenshots: **desktop_screenshot**, **desktop_region_screenshot**, **desktop_window_screenshot**.");
+    lines.push("- App focus: **desktop_focus_app** (e.g. Finder, Safari) — always call it; never refuse without trying.");
+    lines.push("- Clipboard: **clipboard_read** / **clipboard_write** — call the tool; Telegram shows approval buttons when required.");
     lines.push("- File tools: **fs_search**, **fs_recent**, **fs_stat**; copy/move/delete need approval.");
     lines.push("- Desktop control: **desktop_hotkey**, **desktop_scroll**, **desktop_drag** (approval required).");
     lines.push("- Clipboard: **clipboard_read** / **clipboard_write** (approval + sensitive guard).");

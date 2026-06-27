@@ -517,6 +517,18 @@ export function ChatPage() {
             },
           ]);
         },
+        onAttachment: (attachment) => {
+          if (!mountedRef.current) return;
+          const targetId = assistantIdRef.current;
+          if (!targetId) return;
+          setMessages((m) =>
+            m.map((row) =>
+              row.id === targetId
+                ? { ...row, attachments: [...(row.attachments || []), attachment] }
+                : row
+            )
+          );
+        },
         onApproval: async (payload) => {
           setMessages((m) => [
             ...m,

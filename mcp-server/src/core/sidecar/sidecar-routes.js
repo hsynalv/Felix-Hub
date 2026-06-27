@@ -10,6 +10,7 @@ import {
   removeSidecarDevice,
   rotateSidecarDeviceToken,
   updateSidecarDeviceCapabilities,
+  updateSidecarDevice,
   isLocalFsOnServer,
 } from "./pairing.service.js";
 import { auditLog } from "../audit/index.js";
@@ -175,6 +176,23 @@ export function registerSidecarRoutes(app) {
       allowed: true,
       success: true,
       metadata: { deviceId: result.deviceId, capabilities: result.capabilities },
+    }).catch(() => {});
+    res.json({ ok: true, data: result });
+  });
+
+  app.patch("/sidecar/devices/:id", requireScope("admin"), async (req, res) => {
+    const { baseUrl, capabilities } = req.body ?? {};
+    const result = await updateSidecarDevice(req.params.id, { baseUrl, capabilities });
+    if (!result.ok) {
+      return res.status(404).json({ ok: false, error: { code: result.error, message: result.error } });
+    }
+    void auditLog({
+      plugin: "local-sidecar",
+      operation: "sidecar_device_update",
+      actor: req.user?.id || "admin",
+      allowed: true,
+      success: true,
+      metadata: result,
     }).catch(() => {});
     res.json({ ok: true, data: result });
   });

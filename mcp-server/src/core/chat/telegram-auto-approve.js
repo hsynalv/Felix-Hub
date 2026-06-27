@@ -24,6 +24,7 @@ const DEFAULT_AUTO_APPROVE = [
   "browser_find_text",
   "desktop_active_window",
   "desktop_ocr",
+  "desktop_focus_app",
   "local_notify",
 ];
 
@@ -70,6 +71,7 @@ export function shouldAutoApproveTelegramTool(context, toolName) {
     "browser_find_text",
     "desktop_active_window",
     "desktop_ocr",
+    "desktop_focus_app",
     "local_notify",
   ]);
   if (readLocal.has(toolName)) return true;

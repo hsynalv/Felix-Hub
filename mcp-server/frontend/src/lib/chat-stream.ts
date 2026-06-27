@@ -13,8 +13,10 @@ export interface ChatMessage {
     summary?: string;
     keyFacts?: string[];
     truncated?: boolean;
+    imageAttached?: boolean;
     rawRef?: { runId?: string; toolName?: string };
   };
+  attachments?: ChatImageAttachment[];
   usage?: {
     promptTokens?: number;
     completionTokens?: number;
@@ -22,6 +24,16 @@ export interface ChatMessage {
     estimatedCostUsd?: number;
     iterations?: number;
   };
+}
+
+export interface ChatImageAttachment {
+  kind: "image";
+  toolName?: string;
+  mimeType: string;
+  dataUrl: string;
+  width?: number | null;
+  height?: number | null;
+  caption?: string;
 }
 
 export interface ApprovalPayload {
@@ -55,6 +67,7 @@ export interface ChatStreamCallbacks {
     result?: unknown;
     summary?: ChatMessage["toolSummary"];
   }) => void;
+  onAttachment?: (attachment: ChatImageAttachment) => void;
   onRunStep?: (data: Record<string, unknown>) => void;
   onApproval?: (payload: ApprovalPayload) => void | Promise<void>;
   onDone?: (data: Record<string, unknown>) => void;
@@ -150,6 +163,9 @@ export async function streamChat(
           break;
         case "tool":
           callbacks.onTool?.(payload as Parameters<NonNullable<ChatStreamCallbacks["onTool"]>>[0]);
+          break;
+        case "attachment":
+          callbacks.onAttachment?.(payload as ChatImageAttachment);
           break;
         case "run_step":
           callbacks.onRunStep?.(payload);

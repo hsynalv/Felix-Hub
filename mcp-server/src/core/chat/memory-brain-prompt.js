@@ -36,7 +36,8 @@ const PROFILE_MEMORY_OVERLAYS = {
 - Do not save spec drafts to brain unless user asks — keep artifacts in the reply.`,
 
   telegram_assistant: `### Profile: Telegram
-- Keep brain saves brief; confirm with one line after **brain_remember**.`,
+- Keep brain saves brief; confirm with one line after **brain_remember**.
+- Felix Desktop: **always call** desktop_focus_app / clipboard_read / fs_* — never refuse without trying; approval uses inline Onayla/Reddet buttons.`,
 };
 
 /**

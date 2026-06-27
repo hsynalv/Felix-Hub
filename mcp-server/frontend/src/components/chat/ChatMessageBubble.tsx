@@ -7,6 +7,37 @@ import { cn, formatTime } from "@/lib/utils";
 import { formatCostUsd, formatTokenCount } from "@/lib/usage-api";
 import type { ChatMessage } from "@/lib/chat-stream";
 
+function ChatMessageAttachments({
+  attachments,
+}: {
+  attachments: NonNullable<ChatMessage["attachments"]>;
+}) {
+  if (!attachments.length) return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {attachments.map((attachment, index) => (
+        <figure
+          key={`${attachment.toolName || "image"}-${index}`}
+          className="overflow-hidden rounded-xl border border-border/60 bg-muted/20"
+        >
+          <img
+            src={attachment.dataUrl}
+            alt={attachment.caption || "Ekran görüntüsü"}
+            className="max-h-[min(70vh,32rem)] w-full object-contain bg-black/5"
+            loading="lazy"
+          />
+          {attachment.caption && (
+            <figcaption className="border-t border-border/40 px-3 py-2 text-[11px] text-muted-foreground">
+              {attachment.caption}
+            </figcaption>
+          )}
+        </figure>
+      ))}
+    </div>
+  );
+}
+
 type ChatMessageBubbleProps = {
   message: ChatMessage & { id: string; createdAt?: string };
   isStreaming?: boolean;
@@ -44,6 +75,8 @@ export function ChatMessageBubble({ message, isStreaming, embedded }: ChatMessag
   const isPlaceholder = message.content === "…";
   const showCursor = isStreaming && !isPlaceholder;
   const showPlainStream = isStreaming && !isPlaceholder;
+  const attachments = message.attachments || [];
+  const hasAttachments = attachments.length > 0;
 
   const bubble = (
     <>
@@ -83,6 +116,8 @@ export function ChatMessageBubble({ message, isStreaming, embedded }: ChatMessag
           <span className="whitespace-pre-wrap">{message.content}</span>
         )}
       </div>
+
+      {hasAttachments && <ChatMessageAttachments attachments={attachments} />}
 
       {(message.createdAt || message.usage?.totalTokens != null) && (
         <motion.span

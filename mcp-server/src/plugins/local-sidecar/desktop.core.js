@@ -524,9 +524,17 @@ export async function desktopFocusApp({ appName } = {}) {
       data: { appName, platform, focusedAt: new Date().toISOString() },
     };
   } catch (err) {
+    const msg = String(err.message || err);
+    const needsAutomation = /not authorized to send apple events|apple event/i.test(msg);
     return {
       ok: false,
-      error: { code: "focus_failed", message: err.message },
+      error: {
+        code: "focus_failed",
+        message: msg,
+        hint: needsAutomation
+          ? "macOS: Sistem Ayarları → Gizlilik ve Güvenlik → Otomasyon → node → Finder izni verin"
+          : "Uygulama adını kontrol edin (ör. Finder, Safari, Cursor)",
+      },
     };
   }
 }

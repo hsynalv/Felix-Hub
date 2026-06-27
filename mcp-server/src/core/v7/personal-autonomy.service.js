@@ -75,7 +75,7 @@ const TOOL_RISK_MAP = {
   desktop_scroll: "desktop_control",
   desktop_hotkey: "desktop_control",
   desktop_drag: "desktop_control",
-  desktop_focus_app: "desktop_control",
+  desktop_focus_app: "read",
   desktop_app_focus: "desktop_control",
   clipboard_read: "personal_data",
   clipboard_write: "personal_data",

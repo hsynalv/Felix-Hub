@@ -14,6 +14,7 @@ type ChatAssistantTurnProps = {
 
 export function ChatAssistantTurn({ assistant, tools, isStreaming, runId }: ChatAssistantTurnProps) {
   const hasContent = assistant.content && assistant.content !== "…";
+  const hasAttachments = (assistant.attachments?.length || 0) > 0;
 
   return (
     <div className="flex gap-3">
@@ -25,7 +26,7 @@ export function ChatAssistantTurn({ assistant, tools, isStreaming, runId }: Chat
 
       <div className="flex min-w-0 max-w-[min(85%,42rem)] flex-col gap-2">
         {tools.length > 0 && <ChatToolActivity tools={tools} runId={runId} />}
-        {(hasContent || isStreaming) && (
+        {(hasContent || isStreaming || hasAttachments) && (
           <ChatMessageBubble message={assistant} isStreaming={isStreaming} embedded />
         )}
         {hasContent && <MemoryCitationBar content={assistant.content} />}

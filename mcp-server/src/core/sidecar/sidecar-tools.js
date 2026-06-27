@@ -367,7 +367,7 @@ export function registerSidecarTools() {
     name: "desktop_focus_app",
     description: "Bring an application to the foreground by name",
     plugin: "local-sidecar",
-    tags: [ToolTags.WRITE, ToolTags.LOCAL_FS],
+    tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
     inputSchema: {
       type: "object",
       properties: {

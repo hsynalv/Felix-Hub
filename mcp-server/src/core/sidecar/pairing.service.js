@@ -97,6 +97,26 @@ export function createPairingCode({ createdBy = "admin" } = {}) {
   return { id, code, expiresInSec: CODE_TTL_MS / 1000 };
 }
 
+/**
+ * Sidecar daemon serves plain HTTP; https:// on LAN/static IP breaks hub health probes.
+ * @param {string} baseUrl
+ */
+export function normalizeSidecarBaseUrl(baseUrl) {
+  const trimmed = String(baseUrl || "").trim().replace(/\/$/, "");
+  if (!trimmed) return trimmed;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol === "https:" && (u.port === "9477" || u.port === "")) {
+      u.protocol = "http:";
+      if (!u.port) u.port = "9477";
+      return u.toString().replace(/\/$/, "");
+    }
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return trimmed.replace(/^https:\/\//i, "http://");
+  }
+}
+
 export async function consumePairingCode(code, { deviceName, baseUrl, capabilities = ["fs", "terminal", "desktop", "notify", "browser"] }) {
   await hydrateDevicesFromDb();
   const pending = pendingCodes.get(code);
@@ -110,7 +130,7 @@ export async function consumePairingCode(code, { deviceName, baseUrl, capabiliti
   const device = {
     id: dbUuid(),
     name: deviceName || "sidecar",
-    baseUrl: baseUrl.replace(/\/$/, ""),
+    baseUrl: normalizeSidecarBaseUrl(baseUrl),
     capabilities,
     authToken: generateSidecarAuthToken(),
     pairedAt: new Date().toISOString(),
@@ -183,6 +203,24 @@ export async function updateSidecarDeviceCapabilities(deviceId, capabilities) {
   device.lastSeenAt = new Date().toISOString();
   await persistDevice(device);
   return { ok: true, deviceId, capabilities: device.capabilities };
+}
+
+export async function updateSidecarDevice(deviceId, { baseUrl, capabilities } = {}) {
+  await hydrateDevicesFromDb();
+  const device = devices.get(deviceId);
+  if (!device) return { ok: false, error: "not_found" };
+  if (baseUrl) device.baseUrl = normalizeSidecarBaseUrl(baseUrl);
+  if (Array.isArray(capabilities) && capabilities.length > 0) {
+    device.capabilities = capabilities;
+  }
+  device.lastSeenAt = new Date().toISOString();
+  await persistDevice(device);
+  return {
+    ok: true,
+    deviceId: device.id,
+    baseUrl: device.baseUrl,
+    capabilities: device.capabilities,
+  };
 }
 
 export function resetSidecarPairingForTests() {

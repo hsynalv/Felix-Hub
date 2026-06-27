@@ -102,7 +102,7 @@ export const CHAT_PROFILES = {
       "automation",
     ],
     maxIterations: 8,
-    mode: "agent",
+    mode: "desktop",
     promptBundleId: DEFAULT_PROMPT_BUNDLE_ID,
   },
   high_autonomy: {

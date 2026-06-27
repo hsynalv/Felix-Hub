@@ -43,4 +43,25 @@ describe("tool-result-summarizer", () => {
     const parsed = JSON.parse(formatted);
     expect(parsed.summary).toBeTruthy();
   });
+
+  it("strips screenshot base64 from model summary", () => {
+    const huge = "A".repeat(5000);
+    const r = summarizeToolResult({
+      toolName: "desktop_screenshot",
+      result: {
+        ok: true,
+        data: {
+          format: "png",
+          width: 1920,
+          height: 1080,
+          byteLength: 240000,
+          imageBase64: huge,
+        },
+      },
+    });
+    expect(r.imageAttached).toBe(true);
+    expect(r.summary).toContain("1920×1080");
+    expect(r.summary).not.toContain("AAAA");
+    expect(JSON.stringify(r)).not.toContain(huge);
+  });
 });

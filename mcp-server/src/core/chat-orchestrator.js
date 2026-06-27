@@ -12,6 +12,7 @@ import { checkQuota } from "./usage/quota.service.js";
 import { buildSystemPrompt, buildToolCatalogSummary } from "./chat/chat-system-prompt.js";
 import { buildInstructionsBlock } from "./chat/chat-instructions.js";
 import { getChatContext } from "./chat/chat-context.js";
+import { classifyToolIntentRegex } from "./chat/tool-intent.js";
 import { shortlistToolsForIntent } from "./chat/tool-intent.js";
 import { guardToolCall, markReadToolUsed, recordToolCallSignature } from "./chat/tool-planning.js";
 import {
@@ -411,6 +412,7 @@ async function runToolWithApproval(name, args, context, handlers = {}) {
       tool: name,
       arguments: args,
       message: result.message,
+      preview: result.preview,
       runId: context.runId,
     });
     result = await waitForApproval(result.approval.id, name, args, context);
@@ -835,8 +837,26 @@ export async function runChatTurn({
   const maxIterations = profile.maxIterations ?? MAX_TOOL_ITERATIONS;
 
   const instructionsBlock = buildInstructionsBlock({}, systemPrompt);
+  let telegramDesktopDirective = "";
+  if (channel === "telegram") {
+    const quickIntent = classifyToolIntentRegex(message);
+    if (quickIntent.intent === "desktop_local") {
+      telegramDesktopDirective = `## Bu mesaj — Felix Desktop (zorunlu)
+Kullanıcı Mac masaüstü / pano / uygulama odak istiyor. **Hemen** uygun aracı çağır:
+- Uygulama öne getir → **desktop_focus_app**
+- Pano oku → **clipboard_read** (onay gerekirse Telegram'da Onayla/Reddet gelir)
+- Dosya/klasör → **fs_list** / **fs_read**
+"Asistanın yetkisi yok" deme; önce aracı dene.`;
+    }
+  }
   const systemContent = buildSystemPrompt(
-    instructionsBlock ? `${instructionsBlock}\n\n${chatCtx.contextHints}` : chatCtx.contextHints,
+    [
+      instructionsBlock,
+      chatCtx.contextHints,
+      telegramDesktopDirective,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     {
       toolCatalog: buildToolCatalogSummary(
         selectChatTools(listTools(), {

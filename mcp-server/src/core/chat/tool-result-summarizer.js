@@ -2,6 +2,11 @@
  * Normalize large tool results for LLM context (no LLM call).
  */
 
+import {
+  extractImagePayloadFromToolResult,
+  isScreenshotToolName,
+} from "./tool-result-media.js";
+
 const DEFAULT_MAX = 2_000;
 
 function truncate(str, max) {
@@ -54,6 +59,40 @@ export function summarizeToolResult({ toolName, result, maxChars = DEFAULT_MAX, 
 
   const data = payload.data ?? payload;
   const keyFacts = [];
+
+  if (isScreenshotToolName(toolName)) {
+    if (data.deliveryBlocked || data.sensitiveContext) {
+      const reasons = data.sensitiveReasons || [];
+      return {
+        ok: true,
+        summary:
+          "Screenshot blocked for sensitive context (login/payment). Describe what the user should do locally.",
+        keyFacts: reasons.length ? reasons.map(String) : ["sensitive_context"],
+        truncated: false,
+        imageAttached: false,
+        rawRef: runId ? { runId, toolName } : undefined,
+      };
+    }
+
+    const image = extractImagePayloadFromToolResult(payload);
+    const dims = image?.width && image?.height ? `${image.width}×${image.height}` : null;
+    const format = image?.format || data.format || "png";
+    const sizeKb =
+      image?.byteLength != null ? `${Math.round(image.byteLength / 1024)} KB` : null;
+    const parts = [dims, format.toUpperCase(), sizeKb].filter(Boolean);
+    return {
+      ok: true,
+      summary: `Screenshot captured${parts.length ? ` (${parts.join(", ")})` : ""}. Image delivered to the user — do not output base64 or repeat raw image data.`,
+      keyFacts: [
+        data.window?.app ? `window: ${data.window.app}` : null,
+        data.url ? `url: ${data.url}` : null,
+        dims ? `size: ${dims}` : null,
+      ].filter(Boolean),
+      truncated: false,
+      imageAttached: !!image,
+      rawRef: runId ? { runId, toolName } : undefined,
+    };
+  }
 
   if (toolName === "brain_recall" || toolName === "brain_what_do_you_know_about") {
     const mems = data.memories || data.results || [];

@@ -21,7 +21,16 @@ const TELEGRAM_CHANNEL_SECTION = `## Telegram channel rules
 - For **Notion projects list**: call **notion_list_projects** — do not list projects from memory alone.
 - For **create Notion project**: call **notion_setup_project** (or **notion_add_row** on projects DB) — only say "created" after the tool returns success with id/url.
 - **Never** promise future completion ("bir dakika içinde", "oluşturuyorum" without a tool result). Either run the tool now or explain what blocked you.
-- When a tool returns a **url** or **id**, include it in your reply.`;
+- When a tool returns a **url** or **id**, include it in your reply.
+
+## Felix Desktop on Telegram (mandatory)
+- Mac file/desktop/clipboard requests use sidecar tools — **you have access** when the user has paired Felix Desktop.
+- **Never** say "I don't have permission" / "yetkim yok" without calling the tool first.
+- **App focus** (Finder, Safari, Cursor, …) → call **desktop_focus_app** with \`appName\`.
+- **Clipboard read** → call **clipboard_read** (user gets Onayla/Reddet buttons if approval is needed).
+- **Screenshots** → **desktop_screenshot** / **desktop_window_screenshot** (image is delivered to Telegram automatically).
+- If a tool returns **approval_required**, tell the user: "Onay isteği gönderdim — Onayla veya Reddet." Do **not** claim you lack permission.
+- If a tool **errors**, quote the tool error — do not invent permission limits.`;
 
 /**
  * @param {Record<string, string | undefined | null>} sections

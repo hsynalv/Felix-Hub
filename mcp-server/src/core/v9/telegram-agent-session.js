@@ -32,12 +32,12 @@ export function createTelegramOnApproval(chatId, reply) {
     const explanation = args?.explanation || message || "";
     const previewSummary = preview?.summary || payload.metadata?.preview?.summary;
     const text = [
-      "Onay gerekli",
+      "🔐 Onay gerekli",
       `Araç: ${tool}`,
       previewSummary ? `Önizleme: ${previewSummary}` : "",
       explanation ? `Açıklama: ${String(explanation).slice(0, 500)}` : "",
       "",
-      "Onayla veya reddet:",
+      "Devam etmek için aşağıdan seçin:",
     ]
       .filter(Boolean)
       .join("\n");
@@ -147,6 +147,17 @@ export function registerTelegramSidecarDeliveryHook() {
         lines.join("\n"),
         undefined,
         "telegram_sidecar_fs_stat",
+      ).catch(() => {});
+    }
+
+    if (toolName === "clipboard_read" && result.data?.text != null) {
+      const text = String(result.data.text);
+      const preview = text.length > 3500 ? `${text.slice(0, 3500)}…` : text;
+      await sendTelegramWithMarkup(
+        chatId,
+        `📋 Pano:\n${preview || "(boş)"}`,
+        undefined,
+        "telegram_sidecar_clipboard",
       ).catch(() => {});
     }
   });
