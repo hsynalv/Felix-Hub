@@ -1,142 +1,146 @@
 # Felix Hub
 
-AI ajanları için plugin-tabanlı HTTP servisi (**Felix Hub**). REST API ve MCP (Model Context Protocol) desteği ile Cursor, Claude Desktop, n8n ve özel LLM uygulamalarına entegrasyon sağlar. Yerel masaüstü ajanı: **Felix Desktop**.
+AI ajanları için **plugin-tabanlı araç köprüsü**. Tek bir hub üzerinden REST API, web paneli, MCP (Model Context Protocol) ve Telegram botu ile Cursor, Claude Desktop, n8n ve özel uygulamalarınıza entegrasyon sağlar.
 
-> Repo klasör adı (`mcp-hub`) ve teknik CLI adları (`mcp-hub-stdio`) geriye dönük uyumluluk için korunur.
+> Repo klasör adı (`mcp-hub`) ve CLI adları (`mcp-hub-stdio`) geriye dönük uyumluluk için korunur. Ürün adı: **Felix Hub**.
 
-## Özellikler
+## Ne var?
 
-- **Çift Arayüz**: REST API + MCP Araçları
-- **Plugin Sistemi**: Otomatik keşif ve yükleme
-- **Policy Motoru**: Onay workflow'ları ve rate limiting
-- **Job Kuyruğu**: Async görev yürütme
-- **Çoklu Entegrasyon**: GitHub, Notion, n8n, veritabanları, dosya depolama
+| Katman | Açıklama |
+|--------|----------|
+| **API** | Express tabanlı HTTP servisi (`mcp-server/`, port **8787**) |
+| **Web UI** | React + Vite SPA — landing, chat, settings, admin, observability |
+| **Pluginler** | GitHub, Notion, n8n, DB, RAG, brain, shell, … otomatik keşif |
+| **MCP** | `/mcp` HTTP ve `mcp-hub-stdio` ile Cursor / Claude Desktop |
+| **Kalıcılık** | MSSQL — kullanıcılar, sohbet geçmişi, şifreli settings |
+| **Telegram** | Webhook + bildirim kanalı; hub’a mesajdan agent döngüsü |
+| **Policy** | Onay merkezi, rate limit, audit log |
 
-## Hızlı Başlangıç
+```text
+┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
+│ Web / Chat  │────▶│   Felix Hub API  │────▶│  Pluginler  │
+│ Telegram    │     │  auth · policy   │     │ GitHub · …  │
+└─────────────┘     └────────┬─────────┘     └─────────────┘
+                             │
+                    ┌────────┴────────┐
+                    │ MSSQL settings  │
+                    │ chat · users    │
+                    └─────────────────┘
+```
+
+## Hızlı başlangıç (geliştirme)
+
+Proje kökünde **pnpm** kullanılır (`mcp-server/pnpm-lock.yaml`).
 
 ```bash
 cd mcp-server
-npm install
+pnpm install
+pnpm install --dir frontend
 cp .env.example .env
-# .env dosyasını düzenleyin — ayrıntılı rehber: ../ENV-SETUP.md
-npm run dev
+# .env → bootstrap değerleri (ENV-SETUP.md)
+npm run hub:live
 ```
 
-## Web Panel (/ui)
+| Komut | Ne yapar |
+|--------|----------|
+| `npm run hub:live` | API watch + UI otomatik build (**günlük dev**) |
+| `npm run dev:all` | API watch + Vite dev server (`:5173` proxy) |
+| `npm run ui:build` | Production SPA build → `src/public/app` |
 
-Sunucu çalışırken web panel:
+**Adresler (dev):**
 
-`http://localhost:8787/ui`
+| URL | Açıklama |
+|-----|----------|
+| http://localhost:8787/ | Public landing |
+| http://localhost:8787/login | Oturum aç |
+| http://localhost:8787/today | Ana panel (giriş sonrası) |
+| http://localhost:8787/chat | Agent sohbet |
+| http://localhost:8787/settings | Ayarlar & entegrasyonlar |
+| http://localhost:8787/health | Sağlık kontrolü |
 
-Auth etkinse panel, 6 haneli kısa ömürlü bir UI kodu ile `read` scope yetkisi alabilir (localhost üzerinden `POST /ui/token`). Detaylar: `mcp-server/README.md`.
+## Yapılandırma
 
-## Admin Panel (/admin)
+İki katman vardır; ayrıntı: [`ENV-SETUP.md`](ENV-SETUP.md).
 
-20 plugin (PLAN-V2) yönetimi, detaylı loglar ve plugin kontrolü:
+**1) Bootstrap — `mcp-server/.env` (sunucu açılmadan zorunlu)**
 
-`http://localhost:8787/admin`
+- `HUB_READ_KEY`, `HUB_WRITE_KEY`, `HUB_ADMIN_KEY`
+- `HUB_MSSQL_URL`, `HUB_SETTINGS_MASTER_KEY`, `HUB_PERSISTENCE_ENABLED`
+- İlk kullanıcı: `HUB_SEED_*` (bir kez)
 
-- **20 Plugins:** PLAN-V2 listesi, katman (AI Zeka / Kod & Git / Proje / Altyapı), yüklü mü, tool sayısı, health/audit linkleri.
-- **İşlem audit:** Core audit kayıtları (plugin, işlem, actor, izin, süre); plugin/operation filtre, satıra tıklayınca detay JSON.
-- **İstek logu:** HTTP istek logu (method, path, plugin, status, süre).
-- **Jobs:** Job istatistikleri ve son job listesi.
+**2) Entegrasyonlar — Settings UI veya `.env`**
 
-Aynı Bearer token (read scope) ile erişilir.
+- OpenAI, GitHub, Notion, n8n, **Telegram** (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, …)
+- MSSQL’de şifreli saklanır; çoğu hot-reload
+- Settings → Entegrasyonlar’da göz ikonu ile kayıtlı değerleri görüntüleme
 
-## Plugin Maturity Matrix
+Production’da ek olarak:
 
-### Phase 1 — Core AI Platform (11 plugins ✅)
+```env
+NODE_ENV=production
+CORS_ALLOWED_ORIGINS=https://senin-domainin.com
+```
 
-| Plugin | Status | Auth | MCP Tools | Notes |
-|--------|--------|------|-----------|-------|
-| llm-router | 🟢 stable | ✅ | ✅ | Multi-provider routing, vLLM support |
-| notion | 🟢 stable | ✅ | ✅ | Full DB management, pagination |
-| github | 🟢 stable | ✅ | ✅ | Repos, PRs, branches, comments |
-| database | 🟢 stable | ✅ | ✅ | SQL + MongoDB, safety controls |
-| shell | 🟢 stable | ✅ | ✅ | Allowlist, dangerous pattern blocking |
-| rag | 🟢 stable | ✅ | ✅ | OpenAI embeddings, semantic search |
-| brain | 🟢 stable | ✅ | ✅ (16) | Memory, habits, FS awareness |
-| github-pattern-analyzer | 🟢 stable | ✅ | ✅ | Pattern learning, Redis cache |
-| n8n | 🟢 stable | ✅ | ✅ (9) | Workflow CRUD + execute |
-| repo-intelligence | 🟢 stable | ✅ | ✅ | Git analysis, AI summaries |
-| project-orchestrator | 🟢 stable | ✅ | ✅ | AI planning, Notion, GitHub, Redis |
+## Production (Docker)
 
-### Phase 2 — Infrastructure & Tooling (9/9 complete ✅)
-
-| Plugin | Status | Auth | MCP Tools | Notes |
-|--------|--------|------|-----------|-------|
-| http | 🟢 stable | ✅ | ✅ (3) | SSRF, allowlist, rate limit, cache |
-| secrets | 🟢 stable | ✅ | ✅ (4) | `{{secret:NAME}}` ref system |
-| workspace | 🟢 stable | ✅ | ✅ (8) | Safe file CRUD, path traversal blocked |
-| git | 🟢 stable | ✅ | ✅ (11) | Full git ops, path validation |
-| prompt-registry | 🟢 stable | ✅ | ✅ (9) | Section-based composition, {{slots}}, version history |
-| observability | 🟢 stable | ✅ | ✅ (3) | Aggregate health, Prometheus, error log |
-| tech-detector | 🟢 stable | ✅ | ✅ (3) | ~50 tech patterns, path validation |
-| n8n-workflows | 🟢 stable | ✅ | ✅ (5) | Cached list, audit, graceful n8n-credentials |
-| code-review | 🟢 stable | ✅ | ✅ (4) | Security scan, quality, LLM review, path safety |
-
-**Legend:** 🟢 Stable | 🟡 Beta | 🔴 Experimental
-
-📋 [View Full Plugin Maturity Matrix →](docs/plugin-maturity-matrix.md)
-
-## Configuration
-
-Felix Hub uses a validated configuration system with Zod schema validation.
-
-### Required Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `HUB_READ_KEY` | API key for read operations | Yes |
-| `HUB_WRITE_KEY` | API key for write operations | Yes |
-| `HUB_ADMIN_KEY` | API key for admin operations | Yes |
-
-### Optional Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | 8787 |
-| `NODE_ENV` | Environment mode | development |
-| `REDIS_URL` | Redis connection URL | - |
-| `NOTION_API_KEY` | Notion integration API key | - |
-| `GITHUB_TOKEN` | GitHub API token | - |
-| `N8N_API_KEY` | n8n API key | - |
-| `OPENAI_API_KEY` | OpenAI API key | - |
-
-### Configuration Validation
-
-On startup, the server validates all environment variables against a Zod schema:
-
-- **Fail-fast**: Server exits immediately if required config is missing
-- **Type validation**: Ensures correct types (numbers, booleans, strings)
-- **Sanitized logging**: Secrets are masked in startup logs
-
-### Example .env file
+Sunucuda **Docker** kullanın; lokal makine geliştirme içindir.
 
 ```bash
-# Required
-HUB_READ_KEY=your-read-key-here
-HUB_WRITE_KEY=your-write-key-here
-HUB_ADMIN_KEY=your-admin-key-here
-
-# Optional integrations
-NOTION_API_KEY=secret_xxx
-GITHUB_TOKEN=ghp_xxx
-OPENAI_API_KEY=sk-xxx
-
-# Server settings
-PORT=8787
-NODE_ENV=development
+cd mcp-server
+cp .env.example .env   # production değerleri
+docker compose up -d --build
 ```
 
-## Documentation
+- Rehber: [`mcp-server/docs/DOCKER-DEPLOY.md`](mcp-server/docs/DOCKER-DEPLOY.md)
+- Coolify: Base directory `mcp-server`, port **8787**, env **runtime-only**
+- Telegram webhook: `https://<domain>/notifications/telegram/webhook`
+- Secret döndürme: `node scripts/rotate-telegram-webhook.js`
 
-- [Documentation Index](docs/README.md) — Full docs with architecture, plugin SDK, examples
-- [Server Details](mcp-server/README.md)
-- [Architecture](mcp-server/ARCHITECTURE.md)
-- [Plugin Development](mcp-server/docs/plugin-development.md)
-- [Plugin SDK](mcp-server/docs/plugin-sdk.md)
-- [Example Setups](docs/examples/minimal-local-setup.md)
+## MCP & harici istemciler
+
+```bash
+# HTTP MCP (Bearer HUB_WRITE_KEY)
+curl -H "Authorization: Bearer $HUB_WRITE_KEY" http://localhost:8787/tools
+
+# stdio (Cursor / Claude Desktop)
+npx mcp-hub-stdio
+```
+
+Kurulum notları: [`mcp-server/docs/integrations/`](mcp-server/docs/integrations/)
+
+## Repo yapısı
+
+```text
+mcp-hub/
+├── mcp-server/           # Ana uygulama (API + pluginler + SPA build çıktısı)
+│   ├── frontend/         # React UI kaynakları
+│   ├── src/plugins/      # Plugin modülleri
+│   ├── src/core/         # Auth, chat, policy, persistence, …
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── docs/                 # Yol haritaları, mimari notlar
+├── ENV-SETUP.md          # Ortam değişkenleri rehberi
+└── README.md
+```
+
+## Test
+
+```bash
+cd mcp-server
+npm run test:run
+npm run validate:tools
+```
+
+## Dokümantasyon
+
+| Konu | Dosya |
+|------|--------|
+| ENV / bootstrap | [ENV-SETUP.md](ENV-SETUP.md) |
+| Docker deploy | [mcp-server/docs/DOCKER-DEPLOY.md](mcp-server/docs/DOCKER-DEPLOY.md) |
+| Server API | [mcp-server/README.md](mcp-server/README.md) |
+| Plugin matrisi | [docs/plugin-maturity-matrix.md](docs/plugin-maturity-matrix.md) |
+| Docs indeksi | [docs/README.md](docs/README.md) |
+| Plugin geliştirme | [mcp-server/docs/plugin-development.md](mcp-server/docs/plugin-development.md) |
 
 ## Lisans
 

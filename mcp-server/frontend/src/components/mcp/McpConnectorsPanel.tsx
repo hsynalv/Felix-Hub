@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cable, Eye, EyeOff, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import { Cable, Eye, EyeOff, Loader2, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import {
   type McpConnectorInput,
   type McpConnectorTemplate,
 } from "@/lib/mcp-connectors-api";
-import { fetchEnvCatalog, upsertSetting } from "@/lib/settings-api";
+import { fetchEnvCatalog, fetchSettingReveal, upsertSetting } from "@/lib/settings-api";
 import { useToast } from "@/providers/ToastProvider";
 import { cn } from "@/lib/utils";
 import {
@@ -52,15 +52,50 @@ function ConnectorEnvKeyField({
   onChange: (value: string) => void;
 }) {
   const [show, setShow] = useState(false);
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [revealLoading, setRevealLoading] = useState(false);
   const isEditing = value.length > 0;
-  const canRevealStored = configured && !!maskedValue && !isEditing;
 
   useEffect(() => {
     setShow(false);
+    setRevealed(null);
   }, [envKey, configured, maskedValue, isEditing]);
 
-  const inputValue = isEditing ? value : show && canRevealStored ? maskedValue! : "";
-  const inputType = isEditing ? (show ? "text" : "password") : show && canRevealStored ? "text" : "password";
+  const toggleReveal = async () => {
+    if (isEditing) {
+      setShow((prev) => !prev);
+      return;
+    }
+    if (show) {
+      setShow(false);
+      return;
+    }
+    if (revealed != null) {
+      setShow(true);
+      return;
+    }
+    if (!configured) return;
+    setRevealLoading(true);
+    try {
+      const data = await fetchSettingReveal(envKey);
+      setRevealed(data.value);
+      setShow(true);
+    } catch {
+      setShow(false);
+    } finally {
+      setRevealLoading(false);
+    }
+  };
+
+  const inputValue = isEditing
+    ? value
+    : show && revealed != null
+      ? revealed
+      : configured
+        ? maskedValue || "••••••••"
+        : "";
+
+  const inputType = isEditing ? (show ? "text" : "password") : show ? "text" : "password";
 
   return (
     <div className="grid gap-1">
@@ -80,17 +115,9 @@ function ConnectorEnvKeyField({
         <Input
           id={`env-${envKey}`}
           type={inputType}
-          readOnly={canRevealStored && show}
+          readOnly={!isEditing && configured}
           autoComplete="off"
-          placeholder={
-            configured
-              ? isEditing
-                ? "Yeni değer girerek güncelle"
-                : show
-                  ? ""
-                  : "Görmek için göz ikonuna tıkla"
-              : "API anahtarı"
-          }
+          placeholder={configured ? "Göz ile göster veya yazarak güncelle" : "API anahtarı"}
           value={inputValue}
           onChange={(e) => onChange(e.target.value)}
           className="pr-10 font-mono text-xs"
@@ -101,10 +128,16 @@ function ConnectorEnvKeyField({
           size="icon"
           className="absolute right-0 top-0 h-full w-9 shrink-0"
           disabled={!configured && !isEditing}
-          aria-label={show ? "Anahtarı gizle" : "Anahtarı göster"}
-          onClick={() => setShow((prev) => !prev)}
+          aria-label={show ? "Gizle" : "Göster"}
+          onClick={() => void toggleReveal()}
         >
-          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {revealLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : show ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
         </Button>
       </div>
     </div>

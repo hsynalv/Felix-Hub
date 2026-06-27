@@ -10,6 +10,7 @@ import {
   listSettings,
   upsertSetting,
   deleteSetting,
+  getSettingDecrypted,
   listConnectionProfiles,
   upsertConnectionProfile,
   writeConfigAudit,
@@ -20,6 +21,8 @@ import {
   applyOverlayEntry,
   removeOverlayEntry,
   loadSettingsOverlay,
+  getEnvValue,
+  BOOTSTRAP_KEYS,
   RESTART_REQUIRED_KEYS,
   HOT_RELOAD_KEYS,
 } from "./effective-config.js";
@@ -174,6 +177,52 @@ export function registerSettingsRoutes(app) {
         unassigned: enriched.unassigned,
       },
     });
+  });
+
+  router.get("/:key/reveal", requireScope("admin"), async (req, res) => {
+    try {
+      const keyName = req.params.key;
+      if (BOOTSTRAP_KEYS.has(keyName)) {
+        return res.status(403).json({
+          ok: false,
+          error: { code: "forbidden", message: "Bootstrap keys cannot be revealed via API" },
+        });
+      }
+      const namespace = resolveSettingsNamespace(req);
+      const stored = await getSettingDecrypted(keyName, namespace);
+      if (stored?.value != null) {
+        await writeConfigAudit({
+          operation: "reveal_setting",
+          keyName,
+          actor: settingsActor(req),
+        });
+        return res.json({
+          ok: true,
+          data: { keyName, value: stored.value, source: "overlay" },
+        });
+      }
+      const envVal = getEnvValue(keyName)?.trim();
+      if (envVal) {
+        await writeConfigAudit({
+          operation: "reveal_setting",
+          keyName,
+          actor: settingsActor(req),
+        });
+        return res.json({
+          ok: true,
+          data: { keyName, value: envVal, source: "env" },
+        });
+      }
+      return res.status(404).json({
+        ok: false,
+        error: { code: "not_found", message: "Setting not configured" },
+      });
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        error: { code: "settings_reveal_failed", message: err.message },
+      });
+    }
   });
 
   router.post("/apply-template/:id", requireScope("admin"), async (req, res) => {

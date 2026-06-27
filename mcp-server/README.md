@@ -1,110 +1,97 @@
-# mcp-hub Server
+# Felix Hub — Server
 
-AI ajanları için plugin-tabanlı HTTP servisi.
+`mcp-server/` altındaki Node.js uygulaması: HTTP API, plugin yükleyici, React SPA sunumu, MCP gateway, MSSQL persistence.
 
 ## Kurulum
 
 ```bash
-npm install
+pnpm install
+pnpm install --dir frontend
 cp .env.example .env
-# .env dosyasını yapılandırın
 ```
+
+Bootstrap değerleri için: [`../../ENV-SETUP.md`](../../ENV-SETUP.md)
 
 ## Çalıştırma
 
-```bash
-npm run hub:live   # Geliştirme (API watch + UI rebuild)
-npm start          # API only (UI önceden build edilmiş olmalı)
-```
+| Komut | Kullanım |
+|--------|----------|
+| `npm run hub:live` | **Geliştirme** — `node --watch` + UI `build:watch` |
+| `npm run dev` | Yalnızca API (watch) |
+| `npm run ui:build` | SPA production build |
+| `npm start` | API (UI önceden build edilmiş olmalı) |
 
-## Docker (sunucu production)
+Port varsayılanı: **8787**
+
+## Production
 
 ```bash
-cp .env.example .env   # production değerleri
 docker compose up -d --build
 ```
 
-Ayrıntı: [`docs/DOCKER-DEPLOY.md`](docs/DOCKER-DEPLOY.md)
+- [`docs/DOCKER-DEPLOY.md`](docs/DOCKER-DEPLOY.md) — Docker / Coolify
+- [`docs/PM2-DEPLOY.md`](docs/PM2-DEPLOY.md) — legacy; production için Docker tercih edin
 
-## API Endpoints
+## Kimlik doğrulama
 
-### Core
+Öncelik sırası:
 
-| Endpoint | Method | Açıklama |
-|----------|--------|----------|
-| `/health` | GET | Sağlık kontrolü |
-| `/plugins` | GET | Yüklenen plugin'leri listele |
-| `/whoami` | GET | Auth bilgisi |
-| `/ui` | GET | Web panel (dashboard) |
-| `/ui/token` | POST | Kısa ömürlü UI kodu üret (yalnızca localhost) |
+1. **Session cookie** (`hub_session`) — web UI girişi
+2. **Bearer** `HUB_READ_KEY` / `HUB_WRITE_KEY` / `HUB_ADMIN_KEY`
+3. Geliştirme: `POST /ui/token` (localhost, kısa ömürlü read kodu)
 
-### Jobs
+Kullanıcı oturumu açıkken sohbet ve settings **tenant namespace** (`user:<id>`) ile izole edilir.
 
-| Endpoint | Method | Açıklama |
-|----------|--------|----------|
-| `/jobs` | POST | Yeni job oluştur |
-| `/jobs` | GET | Job'ları listele |
-| `/jobs/:id` | GET | Job detayı |
-| `/jobs/stats` | GET | İstatistikler |
+## Önemli HTTP yolları
 
-### Approvals
+| Yol | Açıklama |
+|-----|----------|
+| `GET /health` | Sağlık |
+| `GET /` | SPA — landing |
+| `GET /today`, `/chat`, `/settings`, … | SPA — korumalı sayfalar |
+| `POST /auth/login`, `/auth/register` | Oturum |
+| `GET /ui/chat/*` | Chat API (sohbet, modeller) |
+| `GET/PUT /settings/*` | Şifreli ayarlar (`/:key/reveal` ile görüntüleme) |
+| `POST /notifications/telegram/webhook` | Telegram bot (public + secret header) |
+| `POST /notifications/send` | Native / Telegram bildirim |
+| `ALL /mcp` | MCP HTTP transport |
+| `GET /admin` | Eski admin SPA (hâlâ mevcut) |
 
-| Endpoint | Method | Açıklama |
-|----------|--------|----------|
-| `/approvals/pending` | GET | Bekleyen onaylar |
-| `/approve` | POST | Onay ver |
+## Pluginler
 
-### MCP Gateway
-
-| Endpoint | Method | Açıklama |
-|----------|--------|----------|
-| `/mcp` | ALL | MCP protokol endpoint |
-
-## Plugin Sistemi
-
-Plugin'ler `src/plugins/<name>/index.js` konumunda olmalıdır. Her plugin export etmeli:
+`src/plugins/<ad>/index.js` — otomatik keşif. Her plugin export eder:
 
 ```javascript
 export const name = "my-plugin";
 export const version = "1.0.0";
-export const register = (app) => { ... };
+export async function register(app) { /* routes + tools */ }
 ```
 
-## Çevre Değişkenleri
+Entegrasyon env anahtarları: Settings → **Entegrasyonlar** veya `plugin.meta.json` + `plugin-env-catalog`.
 
-| Değişken | Varsayılan | Açıklama |
-|----------|-----------|----------|
-| `PORT` | 8787 | HTTP port |
-| `HUB_READ_KEY` | - | Read scope API key |
-| `HUB_WRITE_KEY` | - | Write scope API key |
-| `HUB_ADMIN_KEY` | - | Admin scope API key |
-| `REQUIRE_PROJECT_HEADERS` | false | Proje context header zorunluluğu |
-| `DEFAULT_PROJECT_ID` | default-project | Varsayılan proje ID |
-| `DEFAULT_ENV` | default-env | Varsayılan ortam |
-| `UI_TOKEN_TTL_MS` | 300000 | UI kod geçerlilik süresi (ms) |
+## Ortam değişkenleri (özet)
 
-## Web Panel (/ui)
+| Değişken | Açıklama |
+|----------|----------|
+| `PORT` | HTTP port (8787) |
+| `HUB_*_KEY` | API anahtarları (bootstrap) |
+| `HUB_MSSQL_URL` | Hub persistence |
+| `HUB_SETTINGS_MASTER_KEY` | Settings şifreleme |
+| `CORS_ALLOWED_ORIGINS` | Production zorunlu |
+| `TELEGRAM_*` | Bot & webhook (Settings’te de tutulabilir) |
 
-Sunucu çalışırken şu adresten web paneli açabilirsiniz:
-
-`http://localhost:8787/ui`
-
-### UI Auth (Kısa ömürlü kod)
-
-Auth etkinse (HUB_* key'leri set ise) panelin API çağrıları `read` scope gerektirir. Panel için uzun ömürlü HUB key'lerini tarayıcıya koymak yerine kısa ömürlü bir UI kodu kullanabilirsiniz:
-
-1. `/ui` sayfasını açın.
-2. Panel otomatik olarak `POST /ui/token` çağırıp 6 haneli UI kodu üretir (yalnızca localhost).
-3. Üretilen kodu üstteki alana kaydedin (Save). Panel bundan sonra API çağrılarında `Authorization: Bearer <kod>` kullanır.
-
-Notlar:
-
-- UI kodları sadece `read` scope verir.
-- Kodlar TTL sonunda geçersiz olur. Süreyi `UI_TOKEN_TTL_MS` ile değiştirebilirsiniz.
+Tam liste: [`../../ENV-SETUP.md`](../../ENV-SETUP.md)
 
 ## Test
 
 ```bash
-npm test        # Watch modu
-npm run test:run # Tek seferlik
+npm run test:run
+npm run test:integration:stable
+npm run validate:tools
 ```
+
+## İlgili dosyalar
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — mimari notlar
+- [`docs/codebase-map.md`](docs/codebase-map.md) — kod haritası
+- [`frontend/README.md`](frontend/README.md) — UI geliştirme

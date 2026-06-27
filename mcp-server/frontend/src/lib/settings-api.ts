@@ -51,6 +51,12 @@ export async function upsertSetting(key: string, value: string) {
   }>(`/settings/${encodeURIComponent(key)}`, { value });
 }
 
+export async function fetchSettingReveal(key: string) {
+  return apiGet<{ keyName: string; value: string; source: "overlay" | "env" }>(
+    `/settings/${encodeURIComponent(key)}/reveal`
+  );
+}
+
 export async function deleteSetting(key: string) {
   return apiDelete<{ deleted: string }>(`/settings/${encodeURIComponent(key)}`);
 }

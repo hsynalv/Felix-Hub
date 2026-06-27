@@ -2,16 +2,12 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  Eye,
-  EyeOff,
   Loader2,
   Plus,
   RefreshCw,
-  Save,
   Search,
   Trash2,
   Wrench,
-  X,
   Zap,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,8 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/layout/StatusBadge";
-import { SettingsInfoBox } from "@/components/settings/shared";
-import { cn } from "@/lib/utils";
+import { SettingsInfoBox, SettingSecretField, SecretInput } from "@/components/settings/shared";
 import { ApiError } from "@/lib/api-client";
 import {
   deleteSetting,
@@ -65,69 +60,15 @@ function EnvValueCell({
   onSave: (key: string, value: string) => void;
   saving: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [show, setShow] = useState(false);
-
-  const startEdit = () => {
-    setDraft("");
-    setShow(false);
-    setEditing(true);
-  };
-
-  const cancel = () => {
-    setEditing(false);
-    setDraft("");
-    setShow(false);
-  };
-
-  const save = () => {
-    if (!draft.trim()) return;
-    onSave(envVar.name, draft.trim());
-    setEditing(false);
-    setDraft("");
-    setShow(false);
-  };
-
-  if (editing) {
-    return (
-      <div className="flex min-w-[200px] items-center gap-1">
-        <Input
-          type={show ? "text" : "password"}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={envVar.configured ? "Yeni değer gir…" : "Değer gir…"}
-          className="h-8 font-mono text-xs"
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === "Enter") save();
-            if (e.key === "Escape") cancel();
-          }}
-        />
-        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setShow((s) => !s)}>
-          {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-        </Button>
-        <Button type="button" size="icon" className="h-8 w-8 shrink-0" disabled={!draft.trim() || saving} onClick={save}>
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-        </Button>
-        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={cancel}>
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <button
-      type="button"
-      onClick={startEdit}
-      className={cn(
-        "group flex w-full min-w-[160px] items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left font-mono text-xs transition-colors hover:border-border hover:bg-muted/50",
-        !envVar.configured && "text-muted-foreground italic"
-      )}
-    >
-      <span className="truncate">{envVar.configured ? envVar.maskedValue : "Ayarlanmadı — tıkla"}</span>
-    </button>
+    <SettingSecretField
+      settingKey={envVar.name}
+      configured={envVar.configured}
+      maskedValue={envVar.maskedValue}
+      onSave={(value) => onSave(envVar.name, value)}
+      saving={saving}
+      placeholder={envVar.configured ? "••••••••" : "Ayarlanmadı"}
+    />
   );
 }
 
@@ -291,7 +232,6 @@ export function PluginEnvPanel() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
-  const [showNewValue, setShowNewValue] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [testingPlugin, setTestingPlugin] = useState<string | null>(null);
   const toast = useToast();
@@ -431,9 +371,9 @@ export function PluginEnvPanel() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SettingsInfoBox variant="tip">
-          Bir değere tıklayarak düzenleyebilirsiniz. <strong>Kayıtlı</strong> değerler uygulama
-          üzerinden güvenli şekilde saklanır; <strong>Sistem</strong> değerleri sunucu
-          yapılandırmasından okunur. Her satırın altında ilgili eklentinin araçları listelenir.
+          Göz ikonu kayıtlı değerin gerçek halini gösterir. Kalem ile düzenlersiniz.{" "}
+          <strong>Kayıtlı</strong> değerler MSSQL&apos;de şifreli saklanır; <strong>Sistem</strong> değerleri
+          sunucu ortamından okunur.
         </SettingsInfoBox>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={expandAll}>
@@ -581,18 +521,12 @@ export function PluginEnvPanel() {
             placeholder="Ayar adı (ör. OPENAI_API_KEY)"
             className="font-mono text-sm"
           />
-          <div className="flex gap-2">
-            <Input
-              type={showNewValue ? "text" : "password"}
-              value={newValue}
-              onChange={(e) => setNewValue(e.target.value)}
-              placeholder="Değer"
-              className="font-mono text-sm"
-            />
-            <Button type="button" variant="outline" size="icon" onClick={() => setShowNewValue((s) => !s)}>
-              {showNewValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-          </div>
+          <SecretInput
+            value={newValue}
+            onChange={setNewValue}
+            placeholder="Değer"
+            className="flex-1"
+          />
           <Button
             disabled={!newKey.trim() || !newValue.trim() || saveMutation.isPending}
             onClick={() => {
