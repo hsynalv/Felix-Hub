@@ -41,6 +41,7 @@ WORKDIR /app
 COPY --from=api-deps /build/node_modules ./node_modules
 COPY --from=api-deps /build/package.json ./
 COPY src ./src
+COPY eval ./eval
 COPY --from=ui-builder /build/src/public/app ./src/public/app
 
 RUN mkdir -p cache logs && chown -R nodejs:nodejs /app

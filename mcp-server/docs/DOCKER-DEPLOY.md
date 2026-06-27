@@ -105,7 +105,7 @@ Geliştirmede günlük iş için Docker şart değil; `hub:live` yeterli.
 |------|--------|
 | Base Directory | `mcp-server` |
 | Dockerfile | `Dockerfile` |
-| Port | `8787` |
+| Port | `8787` (Coolify **General → Ports Exposes** da `8787` olmalı; `3000` ise bad gateway) |
 | Health check | `GET /health` |
 
 **Environment variables:** Tüm secret'ları **Runtime only** işaretle (Buildtime kapalı). Özellikle `NODE_ENV=production` buildtime'da açıksa UI build `tsc: not found` ile düşer — Dockerfile bunu artık override ediyor ama yine de runtime-only önerilir.
