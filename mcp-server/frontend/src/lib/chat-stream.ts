@@ -36,6 +36,25 @@ export interface ChatImageAttachment {
   caption?: string;
 }
 
+function parseChatImageAttachment(payload: Record<string, unknown>): ChatImageAttachment | null {
+  if (
+    payload.kind !== "image" ||
+    typeof payload.mimeType !== "string" ||
+    typeof payload.dataUrl !== "string"
+  ) {
+    return null;
+  }
+  return {
+    kind: "image",
+    mimeType: payload.mimeType,
+    dataUrl: payload.dataUrl,
+    toolName: typeof payload.toolName === "string" ? payload.toolName : undefined,
+    width: typeof payload.width === "number" ? payload.width : payload.width === null ? null : undefined,
+    height: typeof payload.height === "number" ? payload.height : payload.height === null ? null : undefined,
+    caption: typeof payload.caption === "string" ? payload.caption : undefined,
+  };
+}
+
 export interface ApprovalPayload {
   approvalId: string;
   tool: string;
@@ -164,9 +183,11 @@ export async function streamChat(
         case "tool":
           callbacks.onTool?.(payload as Parameters<NonNullable<ChatStreamCallbacks["onTool"]>>[0]);
           break;
-        case "attachment":
-          callbacks.onAttachment?.(payload as ChatImageAttachment);
+        case "attachment": {
+          const attachment = parseChatImageAttachment(payload);
+          if (attachment) callbacks.onAttachment?.(attachment);
           break;
+        }
         case "run_step":
           callbacks.onRunStep?.(payload);
           break;
