@@ -22,10 +22,11 @@ export function ProjectsPage() {
   const [activeId, setActiveId] = useState(() => getProjectId());
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["projects-list"],
     queryFn: fetchProjectsList,
     staleTime: 30_000,
+    retry: 2,
   });
 
   const projects = data?.projects ?? [];
@@ -93,6 +94,16 @@ export function ProjectsPage() {
               <Skeleton key={i} className="h-16 rounded-xl" />
             ))}
           </div>
+        ) : isError ? (
+          <Card className="border-destructive/30">
+            <CardContent className="space-y-3 py-8 text-center text-sm">
+              <p className="font-medium text-destructive">Projeler yüklenemedi</p>
+              <p className="text-muted-foreground">{(error as Error).message}</p>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>
+                Tekrar dene
+              </Button>
+            </CardContent>
+          </Card>
         ) : sorted.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-sm text-muted-foreground">

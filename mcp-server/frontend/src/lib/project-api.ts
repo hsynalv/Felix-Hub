@@ -46,6 +46,7 @@ export interface ProjectSummary {
   name: string;
   envs?: string[];
   createdAt?: string;
+  source?: "registry" | "brain";
 }
 
 export interface ProjectRecord {

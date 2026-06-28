@@ -7,8 +7,13 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { resolveTemplate } from "../secrets/secrets.store.js";
 
+function cacheDir() {
+  const raw = process.env.CATALOG_CACHE_DIR || "./cache";
+  return raw.startsWith("/") ? raw : join(process.cwd(), raw);
+}
+
 function storePath() {
-  const dir = process.env.CATALOG_CACHE_DIR || "./cache";
+  const dir = cacheDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return join(dir, "projects.json");
 }
@@ -20,10 +25,10 @@ function load() {
 }
 
 /** Keys created by vitest suites — hidden from UI project picker by default. */
-const TEST_PROJECT_KEY_RE = /^(test[-_]|ask-test|notion-index)/i;
+const TEST_PROJECT_KEY_RE = /^(test[-_]|.*-test-project|ask-test|notion-index)/i;
 
-function isTestProjectKey(key) {
-  return TEST_PROJECT_KEY_RE.test(key);
+export function isTestProjectKey(key) {
+  return TEST_PROJECT_KEY_RE.test(String(key || ""));
 }
 
 function save(data) {
@@ -91,6 +96,24 @@ export function createProject(key, name) {
   };
   save(all);
   return all[key];
+}
+
+/**
+ * Create project record if missing (used when merging brain registry into file store).
+ */
+export function ensureProject(key, name, extra = {}) {
+  const all = load();
+  if (all[key]) {
+    return { created: false, project: all[key] };
+  }
+  all[key] = {
+    name,
+    envs: {},
+    createdAt: new Date().toISOString(),
+    ...extra,
+  };
+  save(all);
+  return { created: true, project: all[key] };
 }
 
 export function upsertProjectEnv(projectKey, env, config) {

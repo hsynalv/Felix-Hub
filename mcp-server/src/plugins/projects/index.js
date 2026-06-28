@@ -9,6 +9,8 @@ import {
   upsertProjectEnv,
   deleteProject,
   updateProjectLinks,
+  ensureProject,
+  isTestProjectKey,
 } from "./projects.store.js";
 import {
   getProjectContext,
@@ -88,6 +90,42 @@ function validate(schema, body, res) {
   return result.data;
 }
 
+async function listProjectsForUi() {
+  const byKey = new Map(
+    listProjects().map((p) => [p.key, { ...p, source: "registry" }])
+  );
+
+  try {
+    const { listProjects: listBrainProjects } = await import("../brain/brain.memory.js");
+    const brainProjects = await listBrainProjects();
+    for (const bp of brainProjects) {
+      const key = String(bp.slug || bp.name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      if (!key || isTestProjectKey(key)) continue;
+      if (byKey.has(key)) continue;
+
+      ensureProject(key, bp.name || key, {
+        description: bp.description || "",
+        syncedFromBrain: true,
+      });
+      byKey.set(key, {
+        key,
+        name: bp.name || key,
+        envs: [],
+        createdAt: bp.createdAt,
+        source: "brain",
+      });
+    }
+  } catch (err) {
+    console.warn("[projects] brain registry merge skipped:", err.message);
+  }
+
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function register(app) {
   const router = Router();
 
@@ -99,9 +137,16 @@ export function register(app) {
    * GET /projects
    * List all projects (summary only).
    */
-  router.get("/", requireScope("read"), (_req, res) => {
-    const projects = listProjects();
-    res.json({ ok: true, count: projects.length, projects });
+  router.get("/", requireScope("read"), async (_req, res) => {
+    try {
+      const projects = await listProjectsForUi();
+      res.json({ ok: true, data: { count: projects.length, projects } });
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        error: { code: "projects_list_failed", message: err.message },
+      });
+    }
   });
 
   /**
