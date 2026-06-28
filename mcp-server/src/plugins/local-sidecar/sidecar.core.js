@@ -6,9 +6,10 @@
 
 import { readdir, readFile, writeFile, stat } from "fs/promises";
 import { createHash } from "crypto";
-import { join, normalize } from "path";
+import { join } from "path";
 import { fsPolicyDecide } from "./fs-path-policy.js";
 import { resolveUserPath } from "./path-resolve.js";
+import { fsDenyEnvelope } from "./fs-access.js";
 
 export { resolveUserPath };
 
@@ -25,19 +26,32 @@ function imageDimensionsFromBuffer(buf, ext) {
 }
 
 /**
- * Check if a path is within whitelisted directories
- * @param {string} targetPath - Path to check
- * @returns {{allowed: boolean, resolvedPath?: string, error?: string}}
+ * Check if a path is allowed for the given operation.
+ * @param {string} targetPath
+ * @param {"list"|"read"|"write"|"hash"} [operation="read"]
+ * @param {{ approvalGranted?: boolean }} [accessOpts]
  */
-export function checkPathAllowed(targetPath, operation = "read") {
+export function checkPathAllowed(targetPath, operation = "read", accessOpts = {}) {
   const policy = fsPolicyDecide(targetPath, operation);
+  const { approvalGranted = false } = accessOpts;
 
   if (policy.blocked || !policy.allowed) {
     return {
       allowed: false,
       error: policy.reason || `Access denied: ${policy.resolvedPath}`,
+      code: "access_denied",
       classification: policy.classification,
       requireApproval: policy.requireApproval,
+    };
+  }
+
+  if (policy.requireApproval && !approvalGranted) {
+    return {
+      allowed: false,
+      error: policy.reason || "Path requires explicit approval",
+      code: "approval_required",
+      classification: policy.classification,
+      requireApproval: true,
     };
   }
 
@@ -45,31 +59,28 @@ export function checkPathAllowed(targetPath, operation = "read") {
     allowed: true,
     resolvedPath: policy.resolvedPath,
     classification: policy.classification,
-    requireApproval: policy.requireApproval,
+    requireApproval: false,
   };
 }
 
 /**
  * List directory contents
- * @param {string} dirPath - Directory path
- * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
+ * @param {string} dirPath
+ * @param {{ approvalGranted?: boolean }} [accessOpts]
  */
-export async function fsList(dirPath) {
-  const check = checkPathAllowed(dirPath, "list");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
+export async function fsList(dirPath, accessOpts = {}) {
+  const check = checkPathAllowed(dirPath, "list", accessOpts);
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   try {
     const entries = await readdir(check.resolvedPath, { withFileTypes: true });
-    
-    const items = entries.map(entry => ({
+
+    const items = entries.map((entry) => ({
       name: entry.name,
       type: entry.isDirectory() ? "directory" : "file",
       path: join(dirPath, entry.name),
     }));
 
-    // Get stats for each item
     const itemsWithStats = await Promise.all(
       items.map(async (item) => {
         try {
@@ -103,25 +114,20 @@ export async function fsList(dirPath) {
 }
 
 /**
- * Read file contents
- * @param {string} filePath - File path
- * @param {Object} options - Options
- * @param {string} options.encoding - File encoding (default: utf8)
- * @param {number} options.maxSize - Max bytes to read (default: 1MB)
- * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
+ * @param {string} filePath
+ * @param {Object} [options]
+ * @param {string} [options.encoding]
+ * @param {number} [options.maxSize]
+ * @param {boolean} [options.approvalGranted]
  */
 export async function fsRead(filePath, options = {}) {
-  const check = checkPathAllowed(filePath, "read");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
-
-  const encoding = options.encoding || "utf8";
-  const maxSize = options.maxSize || 1024 * 1024; // 1MB default
+  const { encoding = "utf8", maxSize = 1024 * 1024, approvalGranted = false } = options;
+  const check = checkPathAllowed(filePath, "read", { approvalGranted });
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   try {
     const fileStat = await stat(check.resolvedPath);
-    
+
     if (!fileStat.isFile()) {
       return { ok: false, error: { code: "not_a_file", message: "Path is not a file" } };
     }
@@ -157,18 +163,13 @@ export async function fsRead(filePath, options = {}) {
 }
 
 /**
- * Write file contents
- * @param {string} filePath - File path
- * @param {string} content - Content to write
- * @param {Object} options - Options
- * @param {boolean} options.createDirs - Create parent directories if missing
- * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
+ * @param {string} filePath
+ * @param {string} content
+ * @param {{ approvalGranted?: boolean }} [options]
  */
 export async function fsWrite(filePath, content, options = {}) {
-  const check = checkPathAllowed(filePath, "write");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
+  const check = checkPathAllowed(filePath, "write", options);
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   try {
     let backup = null;
@@ -215,19 +216,16 @@ export async function fsWrite(filePath, content, options = {}) {
 }
 
 /**
- * Calculate file hash (SHA-256)
- * @param {string} filePath - File path
- * @returns {Promise<{ok: boolean, data?: Object, error?: Object}>}
+ * @param {string} filePath
+ * @param {{ approvalGranted?: boolean }} [accessOpts]
  */
-export async function fsHash(filePath) {
-  const check = checkPathAllowed(filePath, "hash");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
+export async function fsHash(filePath, accessOpts = {}) {
+  const check = checkPathAllowed(filePath, "hash", accessOpts);
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   try {
     const content = await readFile(check.resolvedPath);
-    
+
     const hash = createHash("sha256");
     hash.update(content);
     const digest = hash.digest("hex");

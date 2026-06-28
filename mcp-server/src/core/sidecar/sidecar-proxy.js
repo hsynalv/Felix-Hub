@@ -5,6 +5,7 @@
 import { getDefaultSidecarDevice, touchDevice, isLocalFsOnServer } from "./pairing.service.js";
 import { auditLog } from "../audit/index.js";
 import { signedSidecarHeaders, sidecarSignedRequestsEnabled } from "./sidecar-auth.js";
+import { FS_APPROVAL_HEADER } from "../../plugins/local-sidecar/fs-access.js";
 
 export function requiresSidecarDelegation() {
   return !isLocalFsOnServer();
@@ -33,7 +34,7 @@ function capabilityForOp(op) {
   return null;
 }
 
-async function fetchSidecar(path, { method = "GET", body = null, op = "sidecar" } = {}) {
+async function fetchSidecar(path, { method = "GET", body = null, op = "sidecar", approvalGranted = false } = {}) {
   if (isLocalFsOnServer()) return null;
 
   const device = await getDefaultSidecarDevice();
@@ -58,6 +59,7 @@ async function fetchSidecar(path, { method = "GET", body = null, op = "sidecar" 
     const bodyStr = body ? JSON.stringify(body) : null;
     if (device.authToken) headers.Authorization = `Bearer ${device.authToken}`;
     if (body) headers["Content-Type"] = "application/json";
+    if (approvalGranted) headers[FS_APPROVAL_HEADER] = "1";
     if (sidecarSignedRequestsEnabled() && device.authToken) {
       Object.assign(headers, signedSidecarHeaders(device.authToken, method, path, body));
     }
@@ -106,43 +108,53 @@ async function fetchSidecar(path, { method = "GET", body = null, op = "sidecar" 
 }
 
 export async function delegateToSidecar(op, params) {
+  const approvalGranted = Boolean(params?.approvalGranted);
+  const approvalQuery = approvalGranted ? "&approvalGranted=1" : "";
   const paths = {
-    list: `/fs/list?path=${encodeURIComponent(params.path || ".")}`,
-    read: `/fs/read?path=${encodeURIComponent(params.path)}&maxSize=${params.maxSize || 1048576}`,
+    list: `/fs/list?path=${encodeURIComponent(params.path || ".")}${approvalQuery}`,
+    read: `/fs/read?path=${encodeURIComponent(params.path)}&maxSize=${params.maxSize || 1048576}${approvalQuery}`,
     write: "/fs/write",
-    hash: `/fs/hash?path=${encodeURIComponent(params.path)}`,
-    stat: `/fs/stat?path=${encodeURIComponent(params.path)}`,
-    recent: `/fs/recent?path=${encodeURIComponent(params.path || ".")}&limit=${params.limit || 20}&maxDepth=${params.maxDepth || 3}`,
-    search: `/fs/search?path=${encodeURIComponent(params.path || ".")}&pattern=${encodeURIComponent(params.pattern || "")}&extension=${encodeURIComponent(params.extension || "")}&maxResults=${params.maxResults || 50}&maxDepth=${params.maxDepth || 4}`,
+    hash: `/fs/hash?path=${encodeURIComponent(params.path)}${approvalQuery}`,
+    stat: `/fs/stat?path=${encodeURIComponent(params.path)}${approvalQuery}`,
+    recent: `/fs/recent?path=${encodeURIComponent(params.path || ".")}&limit=${params.limit || 20}&maxDepth=${params.maxDepth || 3}${approvalQuery}`,
+    search: `/fs/search?path=${encodeURIComponent(params.path || ".")}&pattern=${encodeURIComponent(params.pattern || "")}&extension=${encodeURIComponent(params.extension || "")}&maxResults=${params.maxResults || 50}&maxDepth=${params.maxDepth || 4}${approvalQuery}`,
   };
 
   if (op === "write") {
-    return fetchSidecar(paths.write, { method: "POST", body: params, op: "fs_write" });
+    return fetchSidecar(paths.write, {
+      method: "POST",
+      body: { ...params, approvalGranted: approvalGranted || undefined },
+      op: "fs_write",
+      approvalGranted,
+    });
   }
   if (op === "copy") {
     return fetchSidecar("/fs/copy", {
       method: "POST",
-      body: { source: params.source, destination: params.destination },
+      body: { source: params.source, destination: params.destination, approvalGranted: approvalGranted || undefined },
       op: "fs_copy",
+      approvalGranted,
     });
   }
   if (op === "move") {
     return fetchSidecar("/fs/move", {
       method: "POST",
-      body: { source: params.source, destination: params.destination },
+      body: { source: params.source, destination: params.destination, approvalGranted: approvalGranted || undefined },
       op: "fs_move",
+      approvalGranted,
     });
   }
   if (op === "delete_to_trash") {
     return fetchSidecar("/fs/delete-to-trash", {
       method: "POST",
-      body: { path: params.path },
+      body: { path: params.path, approvalGranted: approvalGranted || undefined },
       op: "fs_delete_to_trash",
+      approvalGranted,
     });
   }
   const path = paths[op];
   if (!path) return { ok: false, error: { code: "invalid_op", message: `Unknown op: ${op}` } };
-  return fetchSidecar(path, { op: `fs_${op}` });
+  return fetchSidecar(path, { op: `fs_${op}`, approvalGranted });
 }
 
 export async function delegateTerminalExec(command, opts = {}) {

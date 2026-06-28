@@ -4,7 +4,7 @@
 
 import { homedir } from "os";
 import { normalize, sep } from "path";
-import { resolveUserPath } from "./path-resolve.js";
+import { resolvePathForPolicy } from "./path-resolve.js";
 import { loadWhitelistConfig } from "./whitelist.config.js";
 
 /** @typedef {"normal"|"sensitive"|"critical"|"blocked"} PathClassification */
@@ -20,7 +20,8 @@ const USER_HOME_BUCKETS = [
   "Public",
 ];
 
-const BLOCKED_PREFIXES = [
+/** System paths: approval-required critical, not hard-blocked. */
+const SYSTEM_CRITICAL_PREFIXES = [
   "/etc",
   "/var",
   "/System",
@@ -33,14 +34,15 @@ const BLOCKED_PREFIXES = [
   "/private/var",
 ];
 
-const CRITICAL_DIR_SEGMENTS = [
-  ".ssh",
-  ".gnupg",
-  ".aws",
-  ".config/gh",
-  ".netrc",
-  "Keychains",
-];
+const CRITICAL_CONFIG_SUBDIRS = new Set([
+  "gh",
+  "gcloud",
+  "gitea",
+  "azure",
+  "aws",
+  "docker",
+  "kube",
+]);
 
 const CRITICAL_FILE_PATTERNS = [
   /^\.env(\.|$)/i,
@@ -55,6 +57,11 @@ const CRITICAL_FILE_PATTERNS = [
 
 function pathSegments(resolved) {
   return normalize(resolved).split(sep).filter(Boolean);
+}
+
+function pathWithTrailingSep(resolved) {
+  const p = normalize(resolved);
+  return p.endsWith(sep) ? p : `${p}${sep}`;
 }
 
 function isUnderHome(resolved) {
@@ -75,17 +82,43 @@ function isUserHomeBucket(resolved) {
   });
 }
 
-function matchesBlockedPrefix(resolved) {
+function matchesBlockedRoot(resolved) {
+  return normalize(resolved) === "/";
+}
+
+function matchesSystemCritical(resolved) {
   const p = normalize(resolved);
-  if (p === "/") return true;
-  return BLOCKED_PREFIXES.some(
+  return SYSTEM_CRITICAL_PREFIXES.some(
     (prefix) => p === prefix || p.startsWith(prefix + sep)
   );
 }
 
 function matchesCritical(resolved) {
+  const p = pathWithTrailingSep(resolved);
+  const markers = [
+    `${sep}.ssh${sep}`,
+    `${sep}.gnupg${sep}`,
+    `${sep}.aws${sep}`,
+    `${sep}.kube${sep}`,
+    `${sep}.docker${sep}`,
+    `${sep}Keychains${sep}`,
+    `${sep}Application Support${sep}`,
+  ];
+  if (markers.some((m) => p.includes(m))) return true;
+
   const segments = pathSegments(resolved);
-  if (segments.some((s) => CRITICAL_DIR_SEGMENTS.includes(s))) return true;
+  if (segments.some((s) => [".ssh", ".gnupg", ".aws", ".kube", ".docker"].includes(s))) {
+    return true;
+  }
+  if (segments.includes("Keychains")) return true;
+  if (segments.includes("Application Support")) return true;
+
+  const configIdx = segments.indexOf(".config");
+  if (configIdx >= 0) {
+    const sub = segments[configIdx + 1];
+    if (sub && CRITICAL_CONFIG_SUBDIRS.has(sub)) return true;
+  }
+
   const base = segments[segments.length - 1] || "";
   return CRITICAL_FILE_PATTERNS.some((re) => re.test(base));
 }
@@ -95,13 +128,21 @@ function matchesCritical(resolved) {
  * @returns {{ classification: PathClassification, resolvedPath: string, reason?: string }}
  */
 export function fsClassifyPath(targetPath) {
-  const resolvedPath = resolveUserPath(targetPath);
+  const resolvedPath = resolvePathForPolicy(targetPath);
 
-  if (matchesBlockedPrefix(resolvedPath)) {
+  if (matchesBlockedRoot(resolvedPath)) {
     return {
       classification: "blocked",
       resolvedPath,
-      reason: "System path is not accessible via sidecar",
+      reason: "Filesystem root is not accessible via sidecar",
+    };
+  }
+
+  if (matchesSystemCritical(resolvedPath)) {
+    return {
+      classification: "critical",
+      resolvedPath,
+      reason: "System path requires explicit approval",
     };
   }
 

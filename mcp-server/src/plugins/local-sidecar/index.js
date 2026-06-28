@@ -24,6 +24,7 @@ import { stat } from "fs/promises";
 import { basename } from "path";
 import { requireScopeByMethod } from "../../core/auth.js";
 import { mountPluginHealth } from "../../core/plugin-health.js";
+import { fsAccessOptsFromContext } from "./fs-access.js";
 
 export const name = "local-sidecar";
 export const version = "1.0.0";
@@ -62,9 +63,10 @@ export const tools = [
       required: ["path", "explanation"],
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
-    handler: async ({ path, explanation }) => {
-      const delegated = await delegateToSidecar("list", { path });
-      const result = delegated ?? (await fsList(path));
+    handler: async ({ path, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("list", { path, ...access });
+      const result = delegated ?? (await fsList(path, access));
       if (!result.ok) return result;
       return {
         ok: true,
@@ -98,9 +100,10 @@ export const tools = [
       required: ["path", "explanation"],
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
-    handler: async ({ path, maxSize, explanation }) => {
-      const delegated = await delegateToSidecar("read", { path, maxSize });
-      const result = delegated ?? (await fsRead(path, { maxSize }));
+    handler: async ({ path, maxSize, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("read", { path, maxSize, ...access });
+      const result = delegated ?? (await fsRead(path, { maxSize, ...access }));
       if (!result.ok) return result;
       return {
         ok: true,
@@ -133,9 +136,10 @@ export const tools = [
       required: ["path", "content", "explanation"],
     },
     tags: [ToolTags.WRITE, ToolTags.DESTRUCTIVE, ToolTags.LOCAL_FS],
-    handler: async ({ path, content, explanation }) => {
-      const delegated = await delegateToSidecar("write", { path, content });
-      const result = delegated ?? (await fsWrite(path, content));
+    handler: async ({ path, content, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("write", { path, content, ...access });
+      const result = delegated ?? (await fsWrite(path, content, access));
       if (!result.ok) return result;
       return {
         ok: true,
@@ -164,9 +168,10 @@ export const tools = [
       required: ["path", "explanation"],
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
-    handler: async ({ path, explanation }) => {
-      const delegated = await delegateToSidecar("hash", { path });
-      const result = delegated ?? (await fsHash(path));
+    handler: async ({ path, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("hash", { path, ...access });
+      const result = delegated ?? (await fsHash(path, access));
       if (!result.ok) return result;
       return {
         ok: true,
@@ -189,9 +194,10 @@ export const tools = [
       required: ["path", "explanation"],
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
-    handler: async ({ path, explanation }) => {
-      const delegated = await delegateToSidecar("stat", { path });
-      const result = delegated ?? (await fsStat(path));
+    handler: async ({ path, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("stat", { path, ...access });
+      const result = delegated ?? (await fsStat(path, access));
       if (!result.ok) return result;
       return { ok: true, data: { ...result.data, explanation } };
     },
@@ -209,9 +215,10 @@ export const tools = [
       required: ["path", "explanation"],
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
-    handler: async ({ path, limit, explanation }) => {
-      const delegated = await delegateToSidecar("recent", { path, limit });
-      const result = delegated ?? (await fsRecent(path, { limit }));
+    handler: async ({ path, limit, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("recent", { path, limit, ...access });
+      const result = delegated ?? (await fsRecent(path, { limit, ...access }));
       if (!result.ok) return result;
       return { ok: true, data: { ...result.data, explanation } };
     },
@@ -231,9 +238,10 @@ export const tools = [
       required: ["path", "explanation"],
     },
     tags: [ToolTags.READ_ONLY, ToolTags.LOCAL_FS],
-    handler: async ({ path, pattern, extension, maxResults, explanation }) => {
-      const delegated = await delegateToSidecar("search", { path, pattern, extension, maxResults });
-      const result = delegated ?? (await fsSearch(path, { pattern, extension, maxResults }));
+    handler: async ({ path, pattern, extension, maxResults, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("search", { path, pattern, extension, maxResults, ...access });
+      const result = delegated ?? (await fsSearch(path, { pattern, extension, maxResults, ...access }));
       if (!result.ok) return result;
       return { ok: true, data: { ...result.data, explanation } };
     },
@@ -251,9 +259,10 @@ export const tools = [
       required: ["source", "destination", "explanation"],
     },
     tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.LOCAL_FS],
-    handler: async ({ source, destination, explanation }) => {
-      const delegated = await delegateToSidecar("copy", { source, destination });
-      const result = delegated ?? (await fsCopy(source, destination));
+    handler: async ({ source, destination, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("copy", { source, destination, ...access });
+      const result = delegated ?? (await fsCopy(source, destination, access));
       if (!result.ok) return result;
       return { ok: true, data: { ...result.data, explanation } };
     },
@@ -271,9 +280,10 @@ export const tools = [
       required: ["source", "destination", "explanation"],
     },
     tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.DESTRUCTIVE, ToolTags.LOCAL_FS],
-    handler: async ({ source, destination, explanation }) => {
-      const delegated = await delegateToSidecar("move", { source, destination });
-      const result = delegated ?? (await fsMove(source, destination));
+    handler: async ({ source, destination, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("move", { source, destination, ...access });
+      const result = delegated ?? (await fsMove(source, destination, access));
       if (!result.ok) return result;
       return { ok: true, data: { ...result.data, explanation } };
     },
@@ -290,9 +300,10 @@ export const tools = [
       required: ["path", "explanation"],
     },
     tags: [ToolTags.WRITE, ToolTags.NEEDS_APPROVAL, ToolTags.DESTRUCTIVE, ToolTags.LOCAL_FS],
-    handler: async ({ path, explanation }) => {
-      const delegated = await delegateToSidecar("delete_to_trash", { path });
-      const result = delegated ?? (await fsDeleteToTrash(path));
+    handler: async ({ path, explanation }, context) => {
+      const access = fsAccessOptsFromContext(context);
+      const delegated = await delegateToSidecar("delete_to_trash", { path, ...access });
+      const result = delegated ?? (await fsDeleteToTrash(path, access));
       if (!result.ok) return result;
       return { ok: true, data: { ...result.data, explanation } };
     },

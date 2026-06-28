@@ -63,6 +63,7 @@ import {
   browserType,
 } from "../src/plugins/local-sidecar/browser.core.js";
 import { validateSidecarRequest } from "../src/core/sidecar/sidecar-auth.js";
+import { fsAccessOptsFromRequest } from "../src/plugins/local-sidecar/fs-access.js";
 
 const port = Number(process.env.SIDECAR_PORT || 9477);
 const bind = (process.env.SIDECAR_BIND || "127.0.0.1").trim();
@@ -103,12 +104,17 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/fs/list", async (req, res) => {
-  res.json(await fsList(req.query.path || "."));
+  res.json(await fsList(req.query.path || ".", fsAccessOptsFromRequest(req)));
 });
 
 app.get("/fs/read", async (req, res) => {
   if (!req.query.path) return res.status(400).json({ ok: false, error: "path required" });
-  res.json(await fsRead(req.query.path, { maxSize: parseInt(req.query.maxSize, 10) || 1048576 }));
+  res.json(
+    await fsRead(req.query.path, {
+      maxSize: parseInt(req.query.maxSize, 10) || 1048576,
+      ...fsAccessOptsFromRequest(req),
+    })
+  );
 });
 
 app.post("/fs/write", async (req, res) => {
@@ -116,17 +122,17 @@ app.post("/fs/write", async (req, res) => {
   if (!path || content === undefined) {
     return res.status(400).json({ ok: false, error: "path and content required" });
   }
-  res.json(await fsWrite(path, content));
+  res.json(await fsWrite(path, content, fsAccessOptsFromRequest(req)));
 });
 
 app.get("/fs/hash", async (req, res) => {
   if (!req.query.path) return res.status(400).json({ ok: false, error: "path required" });
-  res.json(await fsHash(req.query.path));
+  res.json(await fsHash(req.query.path, fsAccessOptsFromRequest(req)));
 });
 
 app.get("/fs/stat", async (req, res) => {
   if (!req.query.path) return res.status(400).json({ ok: false, error: "path required" });
-  res.json(await fsStat(req.query.path));
+  res.json(await fsStat(req.query.path, fsAccessOptsFromRequest(req)));
 });
 
 app.get("/fs/recent", async (req, res) => {
@@ -134,6 +140,7 @@ app.get("/fs/recent", async (req, res) => {
     await fsRecent(req.query.path || ".", {
       limit: parseInt(req.query.limit, 10) || 20,
       maxDepth: parseInt(req.query.maxDepth, 10) || 3,
+      ...fsAccessOptsFromRequest(req),
     })
   );
 });
@@ -145,6 +152,7 @@ app.get("/fs/search", async (req, res) => {
       extension: req.query.extension,
       maxResults: parseInt(req.query.maxResults, 10) || 50,
       maxDepth: parseInt(req.query.maxDepth, 10) || 4,
+      ...fsAccessOptsFromRequest(req),
     })
   );
 });
@@ -154,7 +162,7 @@ app.post("/fs/copy", async (req, res) => {
   if (!source || !destination) {
     return res.status(400).json({ ok: false, error: "source and destination required" });
   }
-  res.json(await fsCopy(source, destination));
+  res.json(await fsCopy(source, destination, fsAccessOptsFromRequest(req)));
 });
 
 app.post("/fs/move", async (req, res) => {
@@ -162,13 +170,13 @@ app.post("/fs/move", async (req, res) => {
   if (!source || !destination) {
     return res.status(400).json({ ok: false, error: "source and destination required" });
   }
-  res.json(await fsMove(source, destination));
+  res.json(await fsMove(source, destination, fsAccessOptsFromRequest(req)));
 });
 
 app.post("/fs/delete-to-trash", async (req, res) => {
   const { path } = req.body || {};
   if (!path) return res.status(400).json({ ok: false, error: "path required" });
-  res.json(await fsDeleteToTrash(path));
+  res.json(await fsDeleteToTrash(path, fsAccessOptsFromRequest(req)));
 });
 
 app.post("/terminal/sessions", (req, res) => {

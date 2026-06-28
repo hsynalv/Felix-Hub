@@ -62,9 +62,10 @@ describe("Local Sidecar Plugin", () => {
       expect(result.allowed).toBe(true);
     });
 
-    it("blocks /etc", () => {
+    it("requires approval for /etc without grant", () => {
       const result = checkPathAllowed("/etc/passwd");
       expect(result.allowed).toBe(false);
+      expect(result.code).toBe("approval_required");
     });
   });
 
@@ -82,10 +83,10 @@ describe("Local Sidecar Plugin", () => {
       expect(readdir).toHaveBeenCalledWith(DOCS, { withFileTypes: true });
     });
 
-    it("denies blocked system paths", async () => {
+    it("denies system paths without approval", async () => {
       const result = await fsList("/etc");
       expect(result.ok).toBe(false);
-      expect(result.error.code).toBe("access_denied");
+      expect(result.error.code).toBe("approval_required");
     });
   });
 

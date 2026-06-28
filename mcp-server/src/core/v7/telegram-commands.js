@@ -38,6 +38,15 @@ function parseArgs(text) {
   return { cmd: cmd.toLowerCase(), args: rest };
 }
 
+function formatSidecarFsError(result) {
+  const code = result?.error?.code;
+  const msg = result?.error?.message || "sidecar gerekli";
+  if (code === "approval_required") {
+    return `Bu yol onay gerektiriyor (${msg}). /ask veya web sohbetinde isteyin; onay sonrası erişilebilir.`;
+  }
+  return msg;
+}
+
 export function buildTelegramHelpText() {
   return [
     `${BRAND.assistantName} — ${BRAND.hubName} uzaktan kontrol`,
@@ -242,7 +251,7 @@ async function cmdFile(chatId, args, reply) {
     }
     const result = await readPersonalSidecarFile(path, { maxChars: 2_000_000 });
     if (!result?.ok) {
-      await reply(`Gönderilemedi: ${result?.error?.message || "sidecar gerekli"}`);
+      await reply(`Gönderilemedi: ${formatSidecarFsError(result)}`);
       return;
     }
     const content = result.data?.preview || "";
@@ -268,7 +277,7 @@ async function cmdFile(chatId, args, reply) {
     const dir = trimmed.slice(5).trim() || ".";
     const result = await listPersonalSidecarDir(dir);
     if (!result?.ok) {
-      await reply(`Liste başarısız: ${result?.error?.message || "sidecar gerekli"}`);
+      await reply(`Liste başarısız: ${formatSidecarFsError(result)}`);
       return;
     }
     const items = result.data?.items || result.data?.entries || [];
@@ -278,7 +287,7 @@ async function cmdFile(chatId, args, reply) {
   }
   const result = await readPersonalSidecarFile(trimmed, { maxChars: 3000 });
   if (!result?.ok) {
-    await reply(`Okuma başarısız: ${result?.error?.message || "sidecar gerekli"}`);
+    await reply(`Okuma başarısız: ${formatSidecarFsError(result)}`);
     return;
   }
   const preview = result.data?.preview || "";

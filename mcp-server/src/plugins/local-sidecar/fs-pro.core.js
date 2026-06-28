@@ -6,6 +6,7 @@ import { readdir, stat, cp, rename, mkdir } from "fs/promises";
 import { homedir } from "os";
 import { join, basename, dirname } from "path";
 import { checkPathAllowed } from "./sidecar.core.js";
+import { fsDenyEnvelope } from "./fs-access.js";
 
 const DEFAULT_SEARCH_MAX = 50;
 const DEFAULT_SEARCH_DEPTH = 4;
@@ -63,12 +64,11 @@ async function walkFiles(rootPath, { maxDepth, maxResults, pattern, extension, r
 
 /**
  * @param {string} targetPath
+ * @param {{ approvalGranted?: boolean }} [accessOpts]
  */
-export async function fsStat(targetPath) {
-  const check = checkPathAllowed(targetPath, "read");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
+export async function fsStat(targetPath, accessOpts = {}) {
+  const check = checkPathAllowed(targetPath, "read", accessOpts);
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   try {
     const s = await stat(check.resolvedPath);
@@ -93,13 +93,11 @@ export async function fsStat(targetPath) {
 
 /**
  * @param {string} dirPath
- * @param {{ limit?: number, maxDepth?: number }} [opts]
+ * @param {{ limit?: number, maxDepth?: number, approvalGranted?: boolean }} [opts]
  */
-export async function fsRecent(dirPath, { limit = DEFAULT_RECENT_LIMIT, maxDepth = 3 } = {}) {
-  const check = checkPathAllowed(dirPath, "list");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
+export async function fsRecent(dirPath, { limit = DEFAULT_RECENT_LIMIT, maxDepth = 3, approvalGranted = false } = {}) {
+  const check = checkPathAllowed(dirPath, "list", { approvalGranted });
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   const found = [];
   await walkFiles(check.resolvedPath, {
@@ -126,16 +124,14 @@ export async function fsRecent(dirPath, { limit = DEFAULT_RECENT_LIMIT, maxDepth
 
 /**
  * @param {string} dirPath
- * @param {{ pattern?: string, extension?: string, maxResults?: number, maxDepth?: number }} [opts]
+ * @param {{ pattern?: string, extension?: string, maxResults?: number, maxDepth?: number, approvalGranted?: boolean }} [opts]
  */
 export async function fsSearch(
   dirPath,
-  { pattern, extension, maxResults = DEFAULT_SEARCH_MAX, maxDepth = DEFAULT_SEARCH_DEPTH } = {}
+  { pattern, extension, maxResults = DEFAULT_SEARCH_MAX, maxDepth = DEFAULT_SEARCH_DEPTH, approvalGranted = false } = {}
 ) {
-  const check = checkPathAllowed(dirPath, "list");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
+  const check = checkPathAllowed(dirPath, "list", { approvalGranted });
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   const matches = [];
   await walkFiles(check.resolvedPath, {
@@ -162,16 +158,13 @@ export async function fsSearch(
 /**
  * @param {string} sourcePath
  * @param {string} destPath
+ * @param {{ approvalGranted?: boolean }} [accessOpts]
  */
-export async function fsCopy(sourcePath, destPath) {
-  const srcCheck = checkPathAllowed(sourcePath, "read");
-  if (!srcCheck.allowed) {
-    return { ok: false, error: { code: "access_denied", message: srcCheck.error } };
-  }
-  const destCheck = checkPathAllowed(destPath, "write");
-  if (!destCheck.allowed) {
-    return { ok: false, error: { code: "access_denied", message: destCheck.error } };
-  }
+export async function fsCopy(sourcePath, destPath, accessOpts = {}) {
+  const srcCheck = checkPathAllowed(sourcePath, "read", accessOpts);
+  if (!srcCheck.allowed) return fsDenyEnvelope(srcCheck);
+  const destCheck = checkPathAllowed(destPath, "write", accessOpts);
+  if (!destCheck.allowed) return fsDenyEnvelope(destCheck);
 
   try {
     const srcStat = await stat(srcCheck.resolvedPath);
@@ -201,16 +194,13 @@ export async function fsCopy(sourcePath, destPath) {
 /**
  * @param {string} sourcePath
  * @param {string} destPath
+ * @param {{ approvalGranted?: boolean }} [accessOpts]
  */
-export async function fsMove(sourcePath, destPath) {
-  const srcCheck = checkPathAllowed(sourcePath, "write");
-  if (!srcCheck.allowed) {
-    return { ok: false, error: { code: "access_denied", message: srcCheck.error } };
-  }
-  const destCheck = checkPathAllowed(destPath, "write");
-  if (!destCheck.allowed) {
-    return { ok: false, error: { code: "access_denied", message: destCheck.error } };
-  }
+export async function fsMove(sourcePath, destPath, accessOpts = {}) {
+  const srcCheck = checkPathAllowed(sourcePath, "write", accessOpts);
+  if (!srcCheck.allowed) return fsDenyEnvelope(srcCheck);
+  const destCheck = checkPathAllowed(destPath, "write", accessOpts);
+  if (!destCheck.allowed) return fsDenyEnvelope(destCheck);
 
   try {
     await mkdir(dirname(destCheck.resolvedPath), { recursive: true }).catch(() => {});
@@ -238,12 +228,11 @@ export async function fsMove(sourcePath, destPath) {
 
 /**
  * @param {string} targetPath
+ * @param {{ approvalGranted?: boolean }} [accessOpts]
  */
-export async function fsDeleteToTrash(targetPath) {
-  const check = checkPathAllowed(targetPath, "write");
-  if (!check.allowed) {
-    return { ok: false, error: { code: "access_denied", message: check.error } };
-  }
+export async function fsDeleteToTrash(targetPath, accessOpts = {}) {
+  const check = checkPathAllowed(targetPath, "write", accessOpts);
+  if (!check.allowed) return fsDenyEnvelope(check);
 
   const trashDir = join(homedir(), ".Trash");
   const name = basename(check.resolvedPath);
